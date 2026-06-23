@@ -8,6 +8,8 @@ import SpecialistServices, {
   type CatalogService,
   type OfferedService,
 } from "./specialist-services";
+import SpecialistWorks, { type Work } from "./specialist-works";
+import SpecialistReviews, { type Review } from "./specialist-reviews";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +54,8 @@ export default async function SpecialistPage({
     { data: cats },
     { data: svcs },
     { data: offered },
+    { data: works },
+    { data: reviews },
   ] = await Promise.all([
     supabase
       .from("specialist_schedules")
@@ -68,6 +72,19 @@ export default async function SpecialistPage({
       .from("specialist_services")
       .select("service_id, price")
       .eq("specialist_id", id),
+    supabase
+      .from("specialist_works")
+      .select("id, image_url, caption")
+      .eq("specialist_id", id)
+      .order("sort_order")
+      .order("created_at"),
+    supabase
+      .from("reviews")
+      .select(
+        "id, specialist_rating, service_rating, comment, status, created_at, client:users ( first_name, last_name, username ), service:services ( name )",
+      )
+      .eq("specialist_id", id)
+      .order("created_at", { ascending: false }),
   ]);
 
   const catMap = new Map<string, Cat>(((cats as Cat[]) ?? []).map((c) => [c.id, c]));
@@ -87,6 +104,11 @@ export default async function SpecialistPage({
         specialistId={id}
         catalog={catalog}
         offered={(offered as OfferedService[]) ?? []}
+      />
+      <SpecialistWorks specialistId={id} works={(works as Work[]) ?? []} />
+      <SpecialistReviews
+        specialistId={id}
+        reviews={(reviews as unknown as Review[]) ?? []}
       />
     </ScheduleEditor>
   );

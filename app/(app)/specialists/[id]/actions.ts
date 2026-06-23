@@ -143,3 +143,56 @@ export async function removeSpecialistService(
   revalidatePath(`/specialists/${specialistId}`);
   return { ok: true };
 }
+
+// ---------- портфолио ----------
+
+export async function addWork(
+  specialistId: string,
+  imageUrl: string,
+  caption: string,
+) {
+  if (!imageUrl) return { ok: false, error: "Нет изображения" };
+  const supabase = await guard();
+  if (!supabase) return { ok: false, error: "Нет доступа" };
+
+  const { error } = await supabase.from("specialist_works").insert({
+    specialist_id: specialistId,
+    image_url: imageUrl,
+    caption: caption.trim() || null,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/specialists/${specialistId}`);
+  return { ok: true };
+}
+
+export async function deleteWork(specialistId: string, id: string) {
+  const supabase = await guard();
+  if (!supabase) return { ok: false, error: "Нет доступа" };
+
+  const { error } = await supabase.from("specialist_works").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/specialists/${specialistId}`);
+  return { ok: true };
+}
+
+// ---------- модерация отзывов ----------
+
+export async function setReviewStatus(
+  specialistId: string,
+  reviewId: string,
+  status: "approved" | "rejected" | "pending",
+) {
+  const supabase = await guard();
+  if (!supabase) return { ok: false, error: "Нет доступа" };
+
+  const { error } = await supabase
+    .from("reviews")
+    .update({ status })
+    .eq("id", reviewId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/specialists/${specialistId}`);
+  return { ok: true };
+}
