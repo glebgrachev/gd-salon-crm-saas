@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Star, Upload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,7 @@ export default function SpecialistsManager({
   initial: Specialist[];
 }) {
   const [form, setForm] = useState<FormState | null>(null);
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -152,7 +154,8 @@ export default function SpecialistsManager({
           {initial.map((s) => (
             <div
               key={s.id}
-              className="group relative rounded-xl border border-neutral-200 bg-white p-4"
+              onClick={() => router.push(`/specialists/${s.id}`)}
+              className="group relative cursor-pointer rounded-xl border border-neutral-200 bg-white p-4 transition hover:border-neutral-300 hover:shadow-sm"
             >
               <div className="flex items-center gap-3">
                 {s.photo_url ? (
@@ -203,7 +206,10 @@ export default function SpecialistsManager({
                     Скрыт
                   </Badge>
                 )}
-                <div className="flex gap-0.5 opacity-0 transition group-hover:opacity-100">
+                <div
+                  className="flex gap-0.5 opacity-0 transition group-hover:opacity-100"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <Button
                     variant="ghost"
                     size="icon-sm"
