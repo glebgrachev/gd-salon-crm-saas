@@ -25,16 +25,18 @@ function buildPath(categoryId: string, cats: Map<string, Cat>): string {
 export default async function PromotionsPage() {
   const supabase = await createClient();
 
-  const [{ data: promos }, { data: cats }, { data: svcs }] = await Promise.all([
-    supabase
-      .from("promotions")
-      .select(
-        "id, title, description, banner_url, discount_type, discount_value, target_category_id, target_service_id, valid_from, valid_to, is_active",
-      )
-      .order("created_at", { ascending: false }),
-    supabase.from("categories").select("id, parent_id, name"),
-    supabase.from("services").select("id, name, category_id").order("name"),
-  ]);
+  const [{ data: promos }, { data: cats }, { data: svcs }, { data: trig }] =
+    await Promise.all([
+      supabase
+        .from("promotions")
+        .select(
+          "id, kind, title, description, banner_url, discount_type, discount_value, target_category_id, target_service_id, gift_service_id, gift_discount_percent, valid_from, valid_to, is_active",
+        )
+        .order("created_at", { ascending: false }),
+      supabase.from("categories").select("id, parent_id, name"),
+      supabase.from("services").select("id, name, category_id").order("name"),
+      supabase.from("promotion_triggers").select("promotion_id, service_id"),
+    ]);
 
   const catMap = new Map<string, Cat>(((cats as Cat[]) ?? []).map((c) => [c.id, c]));
 
@@ -49,11 +51,17 @@ export default async function PromotionsPage() {
     label: buildPath(s.category_id, catMap) + " › " + s.name,
   }));
 
+  const triggersByPromo: Record<string, string[]> = {};
+  for (const t of (trig as { promotion_id: string; service_id: string }[]) ?? []) {
+    (triggersByPromo[t.promotion_id] ??= []).push(t.service_id);
+  }
+
   return (
     <PromotionsManager
       initial={(promos as Promotion[]) ?? []}
       categoryOptions={categoryOptions}
       serviceOptions={serviceOptions}
+      triggersByPromo={triggersByPromo}
     />
   );
 }
