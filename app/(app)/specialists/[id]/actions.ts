@@ -100,3 +100,46 @@ export async function deleteException(specialistId: string, id: string) {
   revalidatePath(`/specialists/${specialistId}`);
   return { ok: true };
 }
+
+// ---------- услуги мастера с ценой ----------
+
+export async function setSpecialistService(
+  specialistId: string,
+  serviceId: string,
+  price: number,
+) {
+  if (!serviceId) return { ok: false, error: "Выберите услугу" };
+  if (!Number.isFinite(price) || price < 0)
+    return { ok: false, error: "Некорректная цена" };
+  const supabase = await guard();
+  if (!supabase) return { ok: false, error: "Нет доступа" };
+
+  const { error } = await supabase
+    .from("specialist_services")
+    .upsert(
+      { specialist_id: specialistId, service_id: serviceId, price: Math.round(price) },
+      { onConflict: "specialist_id,service_id" },
+    );
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/specialists/${specialistId}`);
+  return { ok: true };
+}
+
+export async function removeSpecialistService(
+  specialistId: string,
+  serviceId: string,
+) {
+  const supabase = await guard();
+  if (!supabase) return { ok: false, error: "Нет доступа" };
+
+  const { error } = await supabase
+    .from("specialist_services")
+    .delete()
+    .eq("specialist_id", specialistId)
+    .eq("service_id", serviceId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/specialists/${specialistId}`);
+  return { ok: true };
+}

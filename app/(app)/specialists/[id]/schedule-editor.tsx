@@ -76,10 +76,12 @@ export default function ScheduleEditor({
   specialist,
   schedules,
   exceptions,
+  children,
 }: {
   specialist: Specialist;
   schedules: Schedule[];
   exceptions: Exception[];
+  children?: React.ReactNode;
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -130,6 +132,7 @@ export default function ScheduleEditor({
   }
 
   return (
+    <>
     <div className="mx-auto max-w-3xl px-8 py-8">
       <Link
         href="/specialists"
@@ -261,6 +264,8 @@ export default function ScheduleEditor({
         startTransition={startTransition}
       />
     </div>
+    {children}
+    </>
   );
 }
 
