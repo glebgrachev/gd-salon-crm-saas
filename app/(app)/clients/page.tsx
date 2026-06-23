@@ -1,9 +1,35 @@
-import Placeholder from "@/components/placeholder";
-export default function Page() {
-  return (
-    <Placeholder
-      title="Клиенты"
-      description="База клиентов и аналитика по каждому: число записей и сумма."
-    />
+import { createClient } from "@/lib/supabase/server";
+import ClientsClient, { type ClientRow } from "./clients-client";
+
+export const dynamic = "force-dynamic";
+
+export default async function ClientsPage() {
+  const supabase = await createClient();
+
+  const [{ data: users }, { data: bookings }] = await Promise.all([
+    supabase
+      .from("users")
+      .select("telegram_id, first_name, last_name, username, phone, created_at")
+      .order("created_at", { ascending: false }),
+    supabase.from("bookings").select("client_id, status, price_snapshot"),
+  ]);
+
+  const stats = new Map<number, { count: number; spent: number }>();
+  for (const b of (bookings as { client_id: number; status: string; price_snapshot: number | null }[]) ?? []) {
+    const s = stats.get(b.client_id) ?? { count: 0, spent: 0 };
+    s.count++;
+    if (b.status === "completed" || b.status === "paid")
+      s.spent += b.price_snapshot ?? 0;
+    stats.set(b.client_id, s);
+  }
+
+  const rows: ClientRow[] = ((users as Omit<ClientRow, "bookings" | "spent">[]) ?? []).map(
+    (u) => ({
+      ...u,
+      bookings: stats.get(u.telegram_id)?.count ?? 0,
+      spent: stats.get(u.telegram_id)?.spent ?? 0,
+    }),
   );
+
+  return <ClientsClient initial={rows} />;
 }
