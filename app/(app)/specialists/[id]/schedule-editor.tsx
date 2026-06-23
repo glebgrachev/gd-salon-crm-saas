@@ -189,23 +189,38 @@ export default function ScheduleEditor({
                   i > 0 ? "border-t border-neutral-100" : ""
                 } ${r.is_working ? "" : "bg-neutral-50/50"}`}
               >
-                <label className="flex w-36 shrink-0 items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={r.is_working}
-                    onChange={(e) =>
-                      setRow(d.weekday, { is_working: e.target.checked })
-                    }
-                    className="size-4 rounded border-neutral-300"
-                  />
-                  <span
-                    className={
-                      r.is_working ? "text-neutral-800" : "text-neutral-400"
-                    }
+                <span
+                  className={`w-28 shrink-0 text-sm font-medium ${
+                    r.is_working ? "text-neutral-800" : "text-neutral-400"
+                  }`}
+                >
+                  {d.label}
+                </span>
+
+                <div className="inline-flex shrink-0 rounded-lg border border-neutral-200 bg-white p-0.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setRow(d.weekday, { is_working: true })}
+                    className={`rounded-md px-2.5 py-1 transition ${
+                      r.is_working
+                        ? "bg-neutral-900 text-white"
+                        : "text-neutral-500 hover:text-neutral-800"
+                    }`}
                   >
-                    {d.label}
-                  </span>
-                </label>
+                    Рабочий
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRow(d.weekday, { is_working: false })}
+                    className={`rounded-md px-2.5 py-1 transition ${
+                      !r.is_working
+                        ? "bg-neutral-900 text-white"
+                        : "text-neutral-500 hover:text-neutral-800"
+                    }`}
+                  >
+                    Выходной
+                  </button>
+                </div>
 
                 {r.is_working ? (
                   <div className="flex flex-wrap items-center gap-2 text-sm text-neutral-600">
@@ -243,9 +258,7 @@ export default function ScheduleEditor({
                       className="h-8 rounded-lg border border-input bg-transparent px-2"
                     />
                   </div>
-                ) : (
-                  <span className="text-sm text-neutral-400">Выходной</span>
-                )}
+                ) : null}
               </div>
             );
           })}
