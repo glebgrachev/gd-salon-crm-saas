@@ -16,6 +16,8 @@ type Row = {
   status: string;
   price_snapshot: number | null;
   final_price: number | null;
+  promo_id: string | null;
+  discount_amount: number | null;
   specialist: { full_name: string } | null;
   service: { name: string; category_id: string } | null;
 };
@@ -54,15 +56,16 @@ export default async function AnalyticsPage({
   const from = new Date(Date.now() - days * 86400000).toISOString();
 
   const supabase = await createClient();
-  const [{ data: rows }, { data: cats }] = await Promise.all([
+  const [{ data: rows }, { data: cats }, { data: promos }] = await Promise.all([
     supabase
       .from("bookings")
       .select(
-        "status, price_snapshot, final_price, specialist:specialists ( full_name ), service:services ( name, category_id )",
+        "status, price_snapshot, final_price, promo_id, discount_amount, specialist:specialists ( full_name ), service:services ( name, category_id )",
       )
       .gte("starts_at", from)
       .in("status", ["completed", "paid"]),
     supabase.from("categories").select("id, parent_id, name"),
+    supabase.from("promotions").select("id, title, kind, is_active"),
   ]);
 
   const catMap = new Map<string, Cat>(((cats as Cat[]) ?? []).map((c) => [c.id, c]));
@@ -94,6 +97,27 @@ export default async function AnalyticsPage({
 
   const count = data.length;
   const avg = count ? Math.round(revenue / count) : 0;
+
+  // по акциям
+  const byPromo = new Map<string, { count: number; revenue: number; discount: number }>();
+  for (const r of data) {
+    if (!r.promo_id) continue;
+    const p = byPromo.get(r.promo_id) ?? { count: 0, revenue: 0, discount: 0 };
+    p.count++;
+    p.revenue += val(r);
+    p.discount += r.discount_amount ?? 0;
+    byPromo.set(r.promo_id, p);
+  }
+  const promoList = (promos as { id: string; title: string; kind: string; is_active: boolean }[]) ?? [];
+  const promoRows = promoList
+    .map((p) => ({
+      title: p.title,
+      kind: p.kind,
+      is_active: p.is_active,
+      ...(byPromo.get(p.id) ?? { count: 0, revenue: 0, discount: 0 }),
+    }))
+    .sort((a, b) => b.revenue - a.revenue || b.count - a.count);
+  const maxPromo = Math.max(1, ...promoRows.map((x) => x.revenue));
 
   const sort = (m: Map<string, { count: number; sum: number }>) =>
     [...m.entries()].map(([name, v]) => ({ name, ...v })).sort((a, b) => b.sum - a.sum);
@@ -149,6 +173,59 @@ export default async function AnalyticsPage({
           </div>
         </div>
       )}
+
+      {promoRows.length > 0 && (
+        <div className="mt-6">
+          <PromoBlock rows={promoRows} max={maxPromo} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PromoBlock({
+  rows,
+  max,
+}: {
+  rows: { title: string; kind: string; is_active: boolean; count: number; revenue: number; discount: number }[];
+  max: number;
+}) {
+  return (
+    <div className="rounded-xl border border-neutral-200 bg-white p-4">
+      <h2 className="mb-3 text-sm font-semibold text-neutral-900">По акциям</h2>
+      <ul className="space-y-3">
+        {rows.map((r) => (
+          <li key={r.title} className={r.count === 0 ? "opacity-50" : ""}>
+            <div className="flex items-baseline justify-between gap-2 text-sm">
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate text-neutral-700">{r.title}</span>
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${
+                    r.kind === "gift"
+                      ? "bg-violet-100 text-violet-700"
+                      : "bg-rose-100 text-rose-700"
+                  }`}
+                >
+                  {r.kind === "gift" ? "комплекс" : "скидка"}
+                </span>
+              </span>
+              {r.count === 0 ? (
+                <span className="shrink-0 text-xs text-neutral-400">
+                  не применялась
+                </span>
+              ) : (
+                <span className="shrink-0 font-medium text-neutral-900">
+                  {fmtPrice(r.revenue)}
+                  <span className="ml-2 text-xs font-normal text-neutral-400">
+                    {r.count} · скидка {fmtPrice(r.discount)}
+                  </span>
+                </span>
+              )}
+            </div>
+            <Bar value={r.revenue} max={max} />
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -95,11 +95,13 @@ export default function PromotionsManager({
   categoryOptions,
   serviceOptions,
   triggersByPromo,
+  perfByPromo,
 }: {
   initial: Promotion[];
   categoryOptions: TargetOption[];
   serviceOptions: TargetOption[];
   triggersByPromo: Record<string, string[]>;
+  perfByPromo: Record<string, { count: number; revenue: number }>;
 }) {
   const [form, setForm] = useState<Form | null>(null);
   const [pending, startTransition] = useTransition();
@@ -301,6 +303,19 @@ export default function PromotionsManager({
                     </span>
                   )}
                 </div>
+
+                {(() => {
+                  const perf = perfByPromo[p.id];
+                  return perf && perf.count > 0 ? (
+                    <div className="mt-2 text-xs text-emerald-600">
+                      Сработала {perf.count} раз · {perf.revenue.toLocaleString("ru-RU")} ₽
+                    </div>
+                  ) : (
+                    <div className="mt-2 text-xs text-neutral-300">
+                      Ещё не применялась
+                    </div>
+                  );
+                })()}
 
                 <div className="mt-3 flex items-center justify-between">
                   {p.is_active ? (

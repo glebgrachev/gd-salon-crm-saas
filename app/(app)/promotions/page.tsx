@@ -25,7 +25,7 @@ function buildPath(categoryId: string, cats: Map<string, Cat>): string {
 export default async function PromotionsPage() {
   const supabase = await createClient();
 
-  const [{ data: promos }, { data: cats }, { data: svcs }, { data: trig }] =
+  const [{ data: promos }, { data: cats }, { data: svcs }, { data: trig }, { data: perf }] =
     await Promise.all([
       supabase
         .from("promotions")
@@ -36,6 +36,11 @@ export default async function PromotionsPage() {
       supabase.from("categories").select("id, parent_id, name"),
       supabase.from("services").select("id, name, category_id").order("name"),
       supabase.from("promotion_triggers").select("promotion_id, service_id"),
+      supabase
+        .from("bookings")
+        .select("promo_id, final_price, price_snapshot, status")
+        .not("promo_id", "is", null)
+        .in("status", ["completed", "paid"]),
     ]);
 
   const catMap = new Map<string, Cat>(((cats as Cat[]) ?? []).map((c) => [c.id, c]));
@@ -56,12 +61,24 @@ export default async function PromotionsPage() {
     (triggersByPromo[t.promotion_id] ??= []).push(t.service_id);
   }
 
+  const perfByPromo: Record<string, { count: number; revenue: number }> = {};
+  for (const b of (perf as {
+    promo_id: string;
+    final_price: number | null;
+    price_snapshot: number | null;
+  }[]) ?? []) {
+    const p = (perfByPromo[b.promo_id] ??= { count: 0, revenue: 0 });
+    p.count++;
+    p.revenue += b.final_price ?? b.price_snapshot ?? 0;
+  }
+
   return (
     <PromotionsManager
       initial={(promos as Promotion[]) ?? []}
       categoryOptions={categoryOptions}
       serviceOptions={serviceOptions}
       triggersByPromo={triggersByPromo}
+      perfByPromo={perfByPromo}
     />
   );
 }
