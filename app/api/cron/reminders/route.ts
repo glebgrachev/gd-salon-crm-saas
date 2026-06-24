@@ -74,6 +74,13 @@ export async function POST(req: Request) {
       `⏰ Сегодня в ${fmtTimeMsk(b.starts_at)} вы записаны\n\n` +
         `${b.service?.name ?? "Услуга"} · ${b.specialist?.full_name ?? ""}\n` +
         `Ждём вас! 💅`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "Отменить запись", web_app: { url: `${miniApp}/?cancel=${b.id}` } }],
+          ],
+        },
+      },
     );
     await admin.from("bookings").update({ reminded_3h_at: now.toISOString() }).eq("id", b.id);
     three++;
