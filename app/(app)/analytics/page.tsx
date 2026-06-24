@@ -1,25 +1,25 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { fmtPrice } from "@/lib/bookings";
+import {
+  type PeriodType,
+  parseAnchor,
+  toAnchorStr,
+  computeRange,
+  colorAt,
+} from "@/lib/analytics";
+import PeriodPicker from "./period-picker";
+import { Donut, BarList, Card, Kpi, type BarItem, type Slice } from "./charts";
 
 export const dynamic = "force-dynamic";
 
-const PERIODS: Record<string, { label: string; days: number }> = {
-  week: { label: "Неделя", days: 7 },
-  month: { label: "Месяц", days: 30 },
-  quarter: { label: "Квартал", days: 90 },
-  year: { label: "Год", days: 365 },
-};
-
 type Cat = { id: string; parent_id: string | null; name: string };
 type Row = {
-  status: string;
-  price_snapshot: number | null;
-  final_price: number | null;
   promo_id: string | null;
   discount_amount: number | null;
-  specialist: { full_name: string } | null;
-  service: { name: string; category_id: string } | null;
+  price_snapshot: number | null;
+  final_price: number | null;
+  specialist: { id: string; full_name: string } | null;
+  service: { id: string; name: string; category_id: string } | null;
 };
 
 function rootCategory(categoryId: string | undefined, cats: Map<string, Cat>) {
@@ -36,128 +36,144 @@ function rootCategory(categoryId: string | undefined, cats: Map<string, Cat>) {
   return last;
 }
 
-function Bar({ value, max }: { value: number; max: number }) {
-  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
-  return (
-    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
-      <div className="h-full rounded-full bg-neutral-800" style={{ width: `${pct}%` }} />
-    </div>
-  );
-}
-
 export default async function AnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ type?: string; date?: string }>;
 }) {
   const sp = await searchParams;
-  const period = PERIODS[sp.period ?? "month"] ? (sp.period ?? "month") : "month";
-  const days = PERIODS[period].days;
-  const from = new Date(Date.now() - days * 86400000).toISOString();
+  const type: PeriodType = (["week", "month", "quarter", "year"].includes(
+    sp.type ?? "",
+  )
+    ? sp.type
+    : "month") as PeriodType;
+  const anchor = parseAnchor(sp.date);
+  const dateStr = toAnchorStr(anchor);
+  const { fromISO, toISO } = computeRange(type, anchor);
+  const qs = `?type=${type}&date=${dateStr}`;
 
   const supabase = await createClient();
   const [{ data: rows }, { data: cats }, { data: promos }] = await Promise.all([
     supabase
       .from("bookings")
       .select(
-        "status, price_snapshot, final_price, promo_id, discount_amount, specialist:specialists ( full_name ), service:services ( name, category_id )",
+        "promo_id, discount_amount, price_snapshot, final_price, specialist:specialists ( id, full_name ), service:services ( id, name, category_id )",
       )
-      .gte("starts_at", from)
+      .gte("starts_at", fromISO)
+      .lt("starts_at", toISO)
       .in("status", ["completed", "paid"]),
     supabase.from("categories").select("id, parent_id, name"),
-    supabase.from("promotions").select("id, title, kind, is_active"),
+    supabase.from("promotions").select("id, title, kind"),
   ]);
 
   const catMap = new Map<string, Cat>(((cats as Cat[]) ?? []).map((c) => [c.id, c]));
   const data = (rows as unknown as Row[]) ?? [];
-
   const val = (r: Row) => r.final_price ?? r.price_snapshot ?? 0;
 
   let revenue = 0;
-  const bySpec = new Map<string, { count: number; sum: number }>();
+  const bySpec = new Map<string, { name: string; count: number; sum: number }>();
   const byCat = new Map<string, { count: number; sum: number }>();
-  const bySvc = new Map<string, { count: number; sum: number }>();
+  const bySvc = new Map<string, { name: string; count: number; sum: number }>();
+  const byPromo = new Map<string, { count: number; revenue: number; discount: number }>();
 
   for (const r of data) {
     const v = val(r);
     revenue += v;
-    const sp = r.specialist?.full_name ?? "—";
-    const s = bySpec.get(sp) ?? { count: 0, sum: 0 };
-    s.count++; s.sum += v; bySpec.set(sp, s);
 
+    if (r.specialist) {
+      const s = bySpec.get(r.specialist.id) ?? {
+        name: r.specialist.full_name,
+        count: 0,
+        sum: 0,
+      };
+      s.count++; s.sum += v; bySpec.set(r.specialist.id, s);
+    }
     const root = rootCategory(r.service?.category_id, catMap);
     const cn = root?.name ?? "—";
     const c = byCat.get(cn) ?? { count: 0, sum: 0 };
     c.count++; c.sum += v; byCat.set(cn, c);
 
-    const sv = r.service?.name ?? "—";
-    const x = bySvc.get(sv) ?? { count: 0, sum: 0 };
-    x.count++; x.sum += v; bySvc.set(sv, x);
+    if (r.service) {
+      const x = bySvc.get(r.service.id) ?? {
+        name: r.service.name,
+        count: 0,
+        sum: 0,
+      };
+      x.count++; x.sum += v; bySvc.set(r.service.id, x);
+    }
+    if (r.promo_id) {
+      const p = byPromo.get(r.promo_id) ?? { count: 0, revenue: 0, discount: 0 };
+      p.count++; p.revenue += v; p.discount += r.discount_amount ?? 0;
+      byPromo.set(r.promo_id, p);
+    }
   }
 
   const count = data.length;
   const avg = count ? Math.round(revenue / count) : 0;
 
-  // по акциям
-  const byPromo = new Map<string, { count: number; revenue: number; discount: number }>();
-  for (const r of data) {
-    if (!r.promo_id) continue;
-    const p = byPromo.get(r.promo_id) ?? { count: 0, revenue: 0, discount: 0 };
-    p.count++;
-    p.revenue += val(r);
-    p.discount += r.discount_amount ?? 0;
-    byPromo.set(r.promo_id, p);
-  }
-  const promoList = (promos as { id: string; title: string; kind: string; is_active: boolean }[]) ?? [];
-  const promoRows = promoList
-    .map((p) => ({
-      title: p.title,
-      kind: p.kind,
-      is_active: p.is_active,
-      ...(byPromo.get(p.id) ?? { count: 0, revenue: 0, discount: 0 }),
-    }))
-    .sort((a, b) => b.revenue - a.revenue || b.count - a.count);
-  const maxPromo = Math.max(1, ...promoRows.map((x) => x.revenue));
+  const catSlices: Slice[] = [...byCat.entries()]
+    .map(([name, v]) => ({ label: name, value: v.sum }))
+    .sort((a, b) => b.value - a.value)
+    .map((s, i) => ({ ...s, color: colorAt(i) }));
 
-  const sort = (m: Map<string, { count: number; sum: number }>) =>
-    [...m.entries()].map(([name, v]) => ({ name, ...v })).sort((a, b) => b.sum - a.sum);
-  const specs = sort(bySpec);
-  const catsArr = sort(byCat);
-  const svcs = sort(bySvc);
-  const maxSpec = Math.max(1, ...specs.map((x) => x.sum));
-  const maxCat = Math.max(1, ...catsArr.map((x) => x.sum));
-  const maxSvc = Math.max(1, ...svcs.map((x) => x.sum));
+  const specItems: BarItem[] = [...bySpec.entries()]
+    .map(([id, v]) => ({ id, ...v }))
+    .sort((a, b) => b.sum - a.sum)
+    .map((s, i) => ({
+      label: s.name,
+      value: s.sum,
+      meta: `${s.count}`,
+      color: colorAt(i),
+      href: `/analytics/specialist/${s.id}${qs}`,
+    }));
+  const maxSpec = Math.max(1, ...specItems.map((x) => x.value));
+
+  const svcItems: BarItem[] = [...bySvc.entries()]
+    .map(([id, v]) => ({ id, ...v }))
+    .sort((a, b) => b.sum - a.sum)
+    .map((s, i) => ({
+      label: s.name,
+      value: s.sum,
+      meta: `${s.count}`,
+      color: colorAt(i),
+      href: `/analytics/service/${s.id}${qs}`,
+    }));
+  const maxSvc = Math.max(1, ...svcItems.map((x) => x.value));
+
+  const promoList = (promos as { id: string; title: string; kind: string }[]) ?? [];
+  const promoItems: BarItem[] = promoList
+    .map((p, i) => {
+      const a = byPromo.get(p.id) ?? { count: 0, revenue: 0, discount: 0 };
+      return {
+        label: p.title,
+        value: a.revenue,
+        valueLabel: a.count > 0 ? fmtPrice(a.revenue) : "не применялась",
+        meta:
+          a.count > 0 ? `${a.count} · скидка ${fmtPrice(a.discount)}` : undefined,
+        color: p.kind === "gift" ? "#8b5cf6" : "#f43f5e",
+        _sum: a.revenue,
+      };
+    })
+    .sort((x, y) => (y as { _sum: number })._sum - (x as { _sum: number })._sum)
+    .map(({ ...rest }) => rest as BarItem);
+  const maxPromo = Math.max(1, ...promoItems.map((x) => x.value));
 
   return (
     <div className="mx-auto max-w-4xl px-8 py-8">
-      <header className="mb-6 flex items-end justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-neutral-900">Аналитика</h1>
-          <p className="mt-1 text-sm text-neutral-500">
-            По завершённым и оплаченным записям за период.
-          </p>
-        </div>
-        <div className="flex gap-1">
-          {Object.entries(PERIODS).map(([key, p]) => (
-            <Link
-              key={key}
-              href={`/analytics?period=${key}`}
-              className={`rounded-full px-3 py-1.5 text-sm transition ${
-                period === key
-                  ? "bg-neutral-900 text-white"
-                  : "text-neutral-600 hover:bg-neutral-100"
-              }`}
-            >
-              {p.label}
-            </Link>
-          ))}
-        </div>
+      <header className="mb-6">
+        <h1 className="text-xl font-semibold tracking-tight text-neutral-900">
+          Аналитика
+        </h1>
+        <p className="mt-1 mb-4 text-sm text-neutral-500">
+          По завершённым и оплаченным записям за выбранный период.
+        </p>
+        <PeriodPicker type={type} date={dateStr} />
       </header>
 
       <div className="grid grid-cols-3 gap-3">
-        <Kpi label="Выручка" value={fmtPrice(revenue)} />
-        <Kpi label="Приёмов" value={String(count)} />
-        <Kpi label="Средний чек" value={fmtPrice(avg)} />
+        <Kpi label="Выручка" value={fmtPrice(revenue)} accent="#8b5cf6" />
+        <Kpi label="Приёмов" value={String(count)} accent="#3b82f6" />
+        <Kpi label="Средний чек" value={fmtPrice(avg)} accent="#10b981" />
       </div>
 
       {count === 0 ? (
@@ -165,108 +181,27 @@ export default async function AnalyticsPage({
           За выбранный период нет завершённых или оплаченных записей.
         </div>
       ) : (
-        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Block title="По мастерам" rows={specs} max={maxSpec} />
-          <Block title="По категориям" rows={catsArr} max={maxCat} />
+        <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Card title="Выручка по категориям">
+            <Donut items={catSlices} />
+          </Card>
+          <Card title="По мастерам">
+            <BarList items={specItems} max={maxSpec} />
+          </Card>
           <div className="lg:col-span-2">
-            <Block title="По услугам" rows={svcs} max={maxSvc} />
+            <Card title="По услугам">
+              <BarList items={svcItems} max={maxSvc} />
+            </Card>
           </div>
+          {promoItems.length > 0 && (
+            <div className="lg:col-span-2">
+              <Card title="По акциям">
+                <BarList items={promoItems} max={maxPromo} />
+              </Card>
+            </div>
+          )}
         </div>
       )}
-
-      {promoRows.length > 0 && (
-        <div className="mt-6">
-          <PromoBlock rows={promoRows} max={maxPromo} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PromoBlock({
-  rows,
-  max,
-}: {
-  rows: { title: string; kind: string; is_active: boolean; count: number; revenue: number; discount: number }[];
-  max: number;
-}) {
-  return (
-    <div className="rounded-xl border border-neutral-200 bg-white p-4">
-      <h2 className="mb-3 text-sm font-semibold text-neutral-900">По акциям</h2>
-      <ul className="space-y-3">
-        {rows.map((r) => (
-          <li key={r.title} className={r.count === 0 ? "opacity-50" : ""}>
-            <div className="flex items-baseline justify-between gap-2 text-sm">
-              <span className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-neutral-700">{r.title}</span>
-                <span
-                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${
-                    r.kind === "gift"
-                      ? "bg-violet-100 text-violet-700"
-                      : "bg-rose-100 text-rose-700"
-                  }`}
-                >
-                  {r.kind === "gift" ? "комплекс" : "скидка"}
-                </span>
-              </span>
-              {r.count === 0 ? (
-                <span className="shrink-0 text-xs text-neutral-400">
-                  не применялась
-                </span>
-              ) : (
-                <span className="shrink-0 font-medium text-neutral-900">
-                  {fmtPrice(r.revenue)}
-                  <span className="ml-2 text-xs font-normal text-neutral-400">
-                    {r.count} · скидка {fmtPrice(r.discount)}
-                  </span>
-                </span>
-              )}
-            </div>
-            <Bar value={r.revenue} max={max} />
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function Kpi({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-neutral-200 bg-white p-4">
-      <div className="text-xs text-neutral-400">{label}</div>
-      <div className="mt-1 text-xl font-semibold text-neutral-900">{value}</div>
-    </div>
-  );
-}
-
-function Block({
-  title,
-  rows,
-  max,
-}: {
-  title: string;
-  rows: { name: string; count: number; sum: number }[];
-  max: number;
-}) {
-  return (
-    <div className="rounded-xl border border-neutral-200 bg-white p-4">
-      <h2 className="mb-3 text-sm font-semibold text-neutral-900">{title}</h2>
-      <ul className="space-y-3">
-        {rows.map((r) => (
-          <li key={r.name}>
-            <div className="flex items-baseline justify-between gap-2 text-sm">
-              <span className="truncate text-neutral-700">{r.name}</span>
-              <span className="shrink-0 font-medium text-neutral-900">
-                {fmtPrice(r.sum)}
-                <span className="ml-2 text-xs font-normal text-neutral-400">
-                  {r.count}
-                </span>
-              </span>
-            </div>
-            <Bar value={r.sum} max={max} />
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
