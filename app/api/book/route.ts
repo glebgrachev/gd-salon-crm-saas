@@ -2,6 +2,7 @@ import { createAdmin } from "@/lib/supabase/admin";
 import { validateInitData } from "@/lib/telegram";
 import { priceService } from "@/lib/pricing";
 import { json, options } from "@/lib/cors";
+import { tgSend, fmtMsk } from "@/lib/notify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -95,6 +96,24 @@ export async function POST(req: Request) {
     const overlap = bErr?.code === "23P01" || /overlap|exclusion/i.test(bErr?.message ?? "");
     if (overlap) return json({ error: "slot_taken" }, 409);
     return json({ error: bErr?.message ?? "booking_failed" }, 500);
+  }
+
+  // мгновенное подтверждение в Telegram (не валит запись при сбое)
+  try {
+    const [{ data: s2 }, { data: sp2 }] = await Promise.all([
+      admin.from("services").select("name").eq("id", service_id).maybeSingle(),
+      admin.from("specialists").select("full_name").eq("id", specialist_id).maybeSingle(),
+    ]);
+    const when = fmtMsk(booking.starts_at);
+    await tgSend(
+      user.id,
+      `✅ <b>Вы записаны!</b>\n\n` +
+        `${s2?.name ?? "Услуга"} · ${sp2?.full_name ?? ""}\n` +
+        `🗓 ${when}\n` +
+        `💰 К оплате: ${priced.final_price} ₽`,
+    );
+  } catch {
+    /* noop */
   }
 
   return json({
