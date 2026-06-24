@@ -31,7 +31,8 @@ export async function POST(req: Request) {
   let three = 0;
   let review = 0;
 
-  // напоминание за сутки
+  // напоминание за сутки (с кнопкой «Приду»)
+  const miniApp = process.env.MINIAPP_URL ?? "https://beauty-miniapp-tawny.vercel.app";
   const { data: dayRows } = await admin
     .from("bookings")
     .select(SELECT)
@@ -46,13 +47,19 @@ export async function POST(req: Request) {
       `📅 Напоминание: завтра вы записаны\n\n` +
         `${b.service?.name ?? "Услуга"} · ${b.specialist?.full_name ?? ""}\n` +
         `🗓 ${fmtMsk(b.starts_at)}`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "✅ Приду", web_app: { url: `${miniApp}/?confirm=${b.id}` } }],
+          ],
+        },
+      },
     );
     await admin.from("bookings").update({ reminded_day_at: now.toISOString() }).eq("id", b.id);
     day++;
   }
 
-  // напоминание за 3 часа
-  const miniApp = process.env.MINIAPP_URL ?? "https://beauty-miniapp-tawny.vercel.app";
+  // напоминание за 3 часа (просто текст)
   const { data: threeRows } = await admin
     .from("bookings")
     .select(SELECT)
@@ -67,19 +74,12 @@ export async function POST(req: Request) {
       `⏰ Сегодня в ${fmtTimeMsk(b.starts_at)} вы записаны\n\n` +
         `${b.service?.name ?? "Услуга"} · ${b.specialist?.full_name ?? ""}\n` +
         `Ждём вас! 💅`,
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "✅ Приду", web_app: { url: `${miniApp}/?confirm=${b.id}` } }],
-          ],
-        },
-      },
     );
     await admin.from("bookings").update({ reminded_3h_at: now.toISOString() }).eq("id", b.id);
     three++;
   }
 
-  // запрос отзыва после визита
+  // запрос отзыва после визита (с кнопкой «Оставить отзыв»)
   const { data: reviewRows } = await admin
     .from("bookings")
     .select(SELECT)
@@ -94,6 +94,13 @@ export async function POST(req: Request) {
       `Спасибо, что были у нас! 💖\n\n` +
         `Как прошёл визит — ${b.service?.name ?? "услуга"} у ${b.specialist?.full_name ?? "мастера"}? ` +
         `Будем благодарны за отзыв.`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "⭐ Оставить отзыв", web_app: { url: `${miniApp}/?review=${b.id}` } }],
+          ],
+        },
+      },
     );
     await admin.from("bookings").update({ review_requested_at: now.toISOString() }).eq("id", b.id);
     review++;
