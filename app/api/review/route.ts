@@ -85,6 +85,13 @@ export async function POST(req: Request) {
 
   const comment = (body.comment ?? "").trim().slice(0, 1000) || null;
 
+  // имя автора: «Имя Ф.» — храним прямо в отзыве, чтобы не раскрывать таблицу users
+  const fn = (user.first_name ?? "").trim();
+  const ln = (user.last_name ?? "").trim();
+  const clientName =
+    (fn + (ln ? ` ${ln[0]}.` : "")).trim() ||
+    (user.username ? `@${user.username}` : "Клиент");
+
   // upsert по уникальному booking_id — повторная отправка перезапишет и вернёт на модерацию
   const { error } = await admin.from("reviews").upsert(
     {
@@ -95,6 +102,7 @@ export async function POST(req: Request) {
       specialist_rating: sr,
       service_rating: vr,
       comment,
+      client_name: clientName,
       status: "pending",
     },
     { onConflict: "booking_id" },
