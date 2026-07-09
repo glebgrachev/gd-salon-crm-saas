@@ -41,13 +41,15 @@ export default function StatusSelect({
 
   return (
     <Select value={status} onValueChange={(v) => onChange(v as BookingStatus)} disabled={pending}>
-      <SelectTrigger className="h-7 w-36 text-xs">
+      <SelectTrigger className={`h-7 w-40 border text-xs font-medium ${STATUS[status].className}`}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
         {STATUS_FLOW.map((s) => (
           <SelectItem key={s} value={s}>
-            {STATUS[s].label}
+            <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-medium ${STATUS[s].className}`}>
+              {STATUS[s].label}
+            </span>
           </SelectItem>
         ))}
       </SelectContent>

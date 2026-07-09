@@ -73,13 +73,15 @@ export default function OrderDetail({ order }: { order: OrderRow }) {
           onValueChange={(v) => onStatusChange(v as BookingStatus)}
           disabled={pending}
         >
-          <SelectTrigger className="w-44">
+          <SelectTrigger className={`w-44 border font-medium ${STATUS[status].className}`}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {STATUS_FLOW.map((s) => (
               <SelectItem key={s} value={s}>
-                {STATUS[s].label}
+                <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-medium ${STATUS[s].className}`}>
+                  {STATUS[s].label}
+                </span>
               </SelectItem>
             ))}
           </SelectContent>
