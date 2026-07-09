@@ -17,6 +17,7 @@ export async function POST(req: Request) {
     service_id?: string;
     specialist_id?: string;
     starts_at?: string;
+    points?: number;
   };
   try {
     body = await req.json();
@@ -58,6 +59,23 @@ export async function POST(req: Request) {
   if (isNaN(start.getTime())) return json({ error: "bad_time" }, 400);
   const end = new Date(start.getTime() + svc.duration_min * 60000);
 
+  // применение баллов: не больше запрошенного, лимита redeem_max_percent и баланса
+  const reqPoints = Math.max(0, Math.floor(Number(body.points ?? 0)));
+  let redeem = 0;
+  let pointValue = 1;
+  if (reqPoints > 0) {
+    const [{ data: cfg }, { data: acc }] = await Promise.all([
+      admin.from("loyalty_settings").select("redeem_max_percent, point_value").eq("id", 1).maybeSingle(),
+      admin.from("loyalty_accounts").select("balance").eq("client_id", user.id).maybeSingle(),
+    ]);
+    pointValue = Number(cfg?.point_value ?? 1) || 1;
+    const maxPct = Number(cfg?.redeem_max_percent ?? 0);
+    const maxByPct = Math.floor((priced.final_price * maxPct) / 100 / pointValue);
+    const balance = Number(acc?.balance ?? 0);
+    redeem = Math.max(0, Math.min(reqPoints, maxByPct, balance));
+  }
+  const moneyDue = Math.max(0, priced.final_price - redeem * pointValue);
+
   // заказ
   const { data: order, error: oErr } = await admin
     .from("orders")
@@ -87,6 +105,7 @@ export async function POST(req: Request) {
       final_price: priced.final_price,
       price_snapshot: priced.final_price,
       promo_id: priced.promo_id,
+      points_to_redeem: redeem,
     })
     .select("id, starts_at, ends_at")
     .single();
@@ -110,7 +129,8 @@ export async function POST(req: Request) {
       `✅ <b>Вы записаны!</b>\n\n` +
         `${s2?.name ?? "Услуга"} · ${sp2?.full_name ?? ""}\n` +
         `🗓 ${when}\n` +
-        `💰 К оплате: ${priced.final_price} ₽`,
+        (redeem > 0 ? `⭐ Списываем баллов: ${redeem}\n` : "") +
+        `💰 К оплате: ${moneyDue} ₽`,
     );
   } catch {
     /* noop */
@@ -125,6 +145,8 @@ export async function POST(req: Request) {
     full_price: priced.full_price,
     discount_amount: priced.discount_amount,
     final_price: priced.final_price,
+    points_redeemed: redeem,
+    money_due: moneyDue,
     promo_title: priced.promo_title,
   });
 }

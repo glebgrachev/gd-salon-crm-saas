@@ -20,7 +20,7 @@ type InItem = {
 };
 
 export async function POST(req: Request) {
-  let body: { initData?: string; items?: InItem[] };
+  let body: { initData?: string; items?: InItem[]; points?: number };
   try {
     body = await req.json();
   } catch {
@@ -100,6 +100,41 @@ export async function POST(req: Request) {
     }
   }
 
+  // ---- распределение баллов по позициям (пропорционально цене) ----
+  const reqPoints = Math.max(0, Math.floor(Number(body.points ?? 0)));
+  let pointValue = 1;
+  let redeemTotal = 0;
+  const cartTotal = rpcItems.reduce((s, r) => s + Number(r.final_price), 0);
+  if (reqPoints > 0 && cartTotal > 0) {
+    const [{ data: cfg }, { data: acc }] = await Promise.all([
+      admin.from("loyalty_settings").select("redeem_max_percent, point_value").eq("id", 1).maybeSingle(),
+      admin.from("loyalty_accounts").select("balance").eq("client_id", user.id).maybeSingle(),
+    ]);
+    pointValue = Number(cfg?.point_value ?? 1) || 1;
+    const maxPct = Number(cfg?.redeem_max_percent ?? 0);
+    const maxByPct = Math.floor((cartTotal * maxPct) / 100 / pointValue);
+    const balance = Number(acc?.balance ?? 0);
+    redeemTotal = Math.max(0, Math.min(reqPoints, maxByPct, balance));
+
+    if (redeemTotal > 0) {
+      // метод наибольшего остатка: раздаём целые баллы пропорционально цене позиции
+      const raw = rpcItems.map((r) => (redeemTotal * Number(r.final_price)) / cartTotal);
+      const alloc = raw.map((x) => Math.floor(x));
+      let left = redeemTotal - alloc.reduce((a, b) => a + b, 0);
+      const byFrac = raw
+        .map((x, i) => ({ i, frac: x - Math.floor(x) }))
+        .sort((a, b) => b.frac - a.frac);
+      for (let k = 0; k < byFrac.length && left > 0; k++) {
+        alloc[byFrac[k].i]++;
+        left--;
+      }
+      rpcItems.forEach((r, i) => {
+        r.points_to_redeem = alloc[i];
+      });
+    }
+  }
+  if (redeemTotal === 0) rpcItems.forEach((r) => (r.points_to_redeem = 0));
+
   // пользователь
   await admin.from("users").upsert(
     {
@@ -132,6 +167,7 @@ export async function POST(req: Request) {
     const svcName = new Map(((svcNames as { id: string; name: string }[]) ?? []).map((s) => [s.id, s.name]));
     const spName = new Map(((spNames as { id: string; full_name: string }[]) ?? []).map((s) => [s.id, s.full_name]));
     const total = rpcItems.reduce((s, r) => s + Number(r.final_price), 0);
+    const moneyDue = Math.max(0, total - redeemTotal * pointValue);
     const lines = items
       .map((it, idx) => {
         const gift = rpcItems[idx].is_gift ? " 🎁" : "";
@@ -140,11 +176,13 @@ export async function POST(req: Request) {
       .join("\n");
     await tgSend(
       user.id,
-      `✅ <b>Заказ оформлен!</b>\n\n${lines}\n\n💰 К оплате: ${total} ₽`,
+      `✅ <b>Заказ оформлен!</b>\n\n${lines}\n\n` +
+        (redeemTotal > 0 ? `⭐ Списываем баллов: ${redeemTotal}\n` : "") +
+        `💰 К оплате: ${moneyDue} ₽`,
     );
   } catch {
     /* noop */
   }
 
-  return json({ ok: true, order_id: result.order_id });
+  return json({ ok: true, order_id: result.order_id, points_redeemed: redeemTotal });
 }
