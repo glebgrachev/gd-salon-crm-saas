@@ -9,6 +9,7 @@ import {
   LayoutGrid,
   Megaphone,
   BarChart3,
+  Gift,
   LogOut,
 } from "lucide-react";
 
@@ -18,6 +19,7 @@ const NAV = [
   { href: "/clients", label: "Клиенты", icon: Users },
   { href: "/services", label: "Услуги", icon: LayoutGrid },
   { href: "/promotions", label: "Акции", icon: Megaphone },
+  { href: "/loyalty", label: "Лояльность", icon: Gift },
   { href: "/analytics", label: "Аналитика", icon: BarChart3 },
 ];
 
