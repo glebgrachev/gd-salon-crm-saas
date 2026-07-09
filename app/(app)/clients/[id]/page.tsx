@@ -2,9 +2,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { Badge } from "@/components/ui/badge";
+import StatusSelect from "./status-select";
 import {
-  STATUS,
   fmtDateTime,
   fmtPrice,
   type BookingStatus,
@@ -125,9 +124,7 @@ export default async function ClientPage({
                   {b.specialist?.full_name ?? "—"}
                 </div>
               </div>
-              <Badge variant="outline" className={STATUS[b.status].className}>
-                {STATUS[b.status].label}
-              </Badge>
+              <StatusSelect bookingId={b.id} status={b.status} />
               <span className="w-20 shrink-0 text-right text-neutral-600">
                 {fmtPrice(b.price_snapshot)}
               </span>
