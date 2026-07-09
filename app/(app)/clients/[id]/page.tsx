@@ -45,6 +45,13 @@ export default async function ClientPage({
     .eq("client_id", id)
     .order("starts_at", { ascending: false });
 
+  const { data: loyalty } = await supabase
+    .from("loyalty_accounts")
+    .select("balance, total_earned, total_spent")
+    .eq("client_id", id)
+    .maybeSingle();
+  const points = Number(loyalty?.balance ?? 0);
+
   const bookings = (bookingsData as unknown as B[]) ?? [];
   const total = bookings.length;
   const done = bookings.filter(
@@ -81,6 +88,18 @@ export default async function ClientPage({
         <Stat label="Всего записей" value={String(total)} />
         <Stat label="Завершено/оплачено" value={String(done.length)} />
         <Stat label="Потрачено" value={fmtPrice(spent)} />
+      </div>
+
+      {/* баллы лояльности */}
+      <div className="mt-3 flex items-center justify-between rounded-xl border border-pink-200 bg-pink-50 p-4">
+        <div>
+          <div className="text-xs text-pink-500">Баллы лояльности</div>
+          <div className="mt-1 text-xl font-semibold text-pink-700">{points} б.</div>
+        </div>
+        <div className="text-right text-xs text-pink-500">
+          начислено {Number(loyalty?.total_earned ?? 0)} · потрачено{" "}
+          {Number(loyalty?.total_spent ?? 0)}
+        </div>
       </div>
 
       {/* история */}
