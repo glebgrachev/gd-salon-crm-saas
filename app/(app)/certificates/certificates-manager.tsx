@@ -50,9 +50,16 @@ export default function CertificatesManager({ rows, stats }: { rows: Row[]; stat
     });
   }
 
+  const amountNum = Number(amount.replace(",", "."));
+  const amountValid = Number.isFinite(amountNum) && amountNum > 0;
+
   function issue() {
+    if (!amountValid) {
+      toast.error("Номинал должен быть больше 0");
+      return;
+    }
     startTransition(async () => {
-      const r = await issueCertificate({ amount: Number(amount.replace(",", ".")), note, expires_at: expires });
+      const r = await issueCertificate({ amount: amountNum, note, expires_at: expires });
       if (r.ok && r.code) {
         setIssued(r.code);
         setAmount("");
@@ -96,11 +103,21 @@ export default function CertificatesManager({ rows, stats }: { rows: Row[]; stat
             <input
               type="number"
               inputMode="numeric"
+              min={1}
+              step={1}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "-" || e.key === "e" || e.key === "+") e.preventDefault();
+              }}
               placeholder="3000"
-              className="mt-1 w-32 rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+              className={`mt-1 w-32 rounded-lg border px-3 py-2 text-sm outline-none focus:border-neutral-900 ${
+                amount && !amountValid ? "border-red-400" : "border-neutral-300"
+              }`}
             />
+            {amount && !amountValid && (
+              <p className="mt-1 text-xs text-red-500">Больше 0</p>
+            )}
           </div>
           <div>
             <label className="block text-xs text-neutral-500">Действует до (необязательно)</label>
@@ -122,7 +139,7 @@ export default function CertificatesManager({ rows, stats }: { rows: Row[]; stat
           </div>
           <button
             onClick={issue}
-            disabled={pending}
+            disabled={pending || !amountValid}
             className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:opacity-50"
           >
             {pending ? "Выпускаем…" : "Выпустить"}
