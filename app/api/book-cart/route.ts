@@ -20,7 +20,7 @@ type InItem = {
 };
 
 export async function POST(req: Request) {
-  let body: { initData?: string; items?: InItem[]; points?: number };
+  let body: { initData?: string; items?: InItem[]; points?: number; cert?: number };
   try {
     body = await req.json();
   } catch {
@@ -135,6 +135,38 @@ export async function POST(req: Request) {
   }
   if (redeemTotal === 0) rpcItems.forEach((r) => (r.points_to_redeem = 0));
 
+  // ---- распределение сертификата (в рублях), после баллов ----
+  const reqCert = Math.max(0, Math.floor(Number(body.cert ?? 0)));
+  let certTotal = 0;
+  const moneyAfterPoints = Math.max(0, cartTotal - redeemTotal * pointValue);
+  if (reqCert > 0 && moneyAfterPoints > 0) {
+    const { data: cacc } = await admin
+      .from("certificate_accounts")
+      .select("balance")
+      .eq("client_id", user.id)
+      .maybeSingle();
+    const certBal = Number(cacc?.balance ?? 0);
+    certTotal = Math.max(0, Math.min(reqCert, certBal, moneyAfterPoints));
+
+    if (certTotal > 0) {
+      // распределяем рубли сертификата пропорционально цене позиции (наиб. остаток)
+      const raw = rpcItems.map((r) => (certTotal * Number(r.final_price)) / cartTotal);
+      const alloc = raw.map((x) => Math.floor(x));
+      let left = certTotal - alloc.reduce((a, b) => a + b, 0);
+      const byFrac = raw
+        .map((x, i) => ({ i, frac: x - Math.floor(x) }))
+        .sort((a, b) => b.frac - a.frac);
+      for (let k = 0; k < byFrac.length && left > 0; k++) {
+        alloc[byFrac[k].i]++;
+        left--;
+      }
+      rpcItems.forEach((r, i) => {
+        r.cert_to_redeem = alloc[i];
+      });
+    }
+  }
+  if (certTotal === 0) rpcItems.forEach((r) => (r.cert_to_redeem = 0));
+
   // пользователь
   await admin.from("users").upsert(
     {
@@ -167,7 +199,7 @@ export async function POST(req: Request) {
     const svcName = new Map(((svcNames as { id: string; name: string }[]) ?? []).map((s) => [s.id, s.name]));
     const spName = new Map(((spNames as { id: string; full_name: string }[]) ?? []).map((s) => [s.id, s.full_name]));
     const total = rpcItems.reduce((s, r) => s + Number(r.final_price), 0);
-    const moneyDue = Math.max(0, total - redeemTotal * pointValue);
+    const moneyDue = Math.max(0, total - redeemTotal * pointValue - certTotal);
     const lines = items
       .map((it, idx) => {
         const gift = rpcItems[idx].is_gift ? " 🎁" : "";
@@ -178,11 +210,12 @@ export async function POST(req: Request) {
       user.id,
       `✅ <b>Заказ оформлен!</b>\n\n${lines}\n\n` +
         (redeemTotal > 0 ? `⭐ Списываем баллов: ${redeemTotal}\n` : "") +
+        (certTotal > 0 ? `🎟 Сертификат: −${certTotal} ₽\n` : "") +
         `💰 К оплате: ${moneyDue} ₽`,
     );
   } catch {
     /* noop */
   }
 
-  return json({ ok: true, order_id: result.order_id, points_redeemed: redeemTotal });
+  return json({ ok: true, order_id: result.order_id, points_redeemed: redeemTotal, cert_redeemed: certTotal });
 }

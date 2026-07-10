@@ -18,6 +18,7 @@ export async function POST(req: Request) {
     specialist_id?: string;
     starts_at?: string;
     points?: number;
+    cert?: number;
   };
   try {
     body = await req.json();
@@ -74,7 +75,21 @@ export async function POST(req: Request) {
     const balance = Number(acc?.balance ?? 0);
     redeem = Math.max(0, Math.min(reqPoints, maxByPct, balance));
   }
-  const moneyDue = Math.max(0, priced.final_price - redeem * pointValue);
+  const afterPoints = Math.max(0, priced.final_price - redeem * pointValue);
+
+  // применение сертификата (в рублях): не больше запрошенного, остатка и суммы после баллов
+  const reqCert = Math.max(0, Math.floor(Number(body.cert ?? 0)));
+  let cert = 0;
+  if (reqCert > 0) {
+    const { data: cacc } = await admin
+      .from("certificate_accounts")
+      .select("balance")
+      .eq("client_id", user.id)
+      .maybeSingle();
+    const certBal = Number(cacc?.balance ?? 0);
+    cert = Math.max(0, Math.min(reqCert, certBal, afterPoints));
+  }
+  const moneyDue = Math.max(0, afterPoints - cert);
 
   // заказ
   const { data: order, error: oErr } = await admin
@@ -106,6 +121,7 @@ export async function POST(req: Request) {
       price_snapshot: priced.final_price,
       promo_id: priced.promo_id,
       points_to_redeem: redeem,
+      cert_to_redeem: cert,
     })
     .select("id, starts_at, ends_at")
     .single();
@@ -130,6 +146,7 @@ export async function POST(req: Request) {
         `${s2?.name ?? "Услуга"} · ${sp2?.full_name ?? ""}\n` +
         `🗓 ${when}\n` +
         (redeem > 0 ? `⭐ Списываем баллов: ${redeem}\n` : "") +
+        (cert > 0 ? `🎟 Сертификат: −${cert} ₽\n` : "") +
         `💰 К оплате: ${moneyDue} ₽`,
     );
   } catch {
@@ -146,6 +163,7 @@ export async function POST(req: Request) {
     discount_amount: priced.discount_amount,
     final_price: priced.final_price,
     points_redeemed: redeem,
+    cert_redeemed: cert,
     money_due: moneyDue,
     promo_title: priced.promo_title,
   });
