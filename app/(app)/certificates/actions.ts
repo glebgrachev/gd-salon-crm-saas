@@ -16,7 +16,7 @@ function genCode() {
   return `BS-${randomBlock(4)}-${randomBlock(4)}`;
 }
 
-export async function issueCertificate(input: { amount: number; note?: string }) {
+export async function issueCertificate(input: { amount: number; note?: string; expires_at?: string }) {
   const supabase = await createClient();
   const { data: isAdmin } = await supabase.rpc("is_admin");
   if (!isAdmin) return { ok: false, error: "Нет доступа" };
@@ -24,20 +24,28 @@ export async function issueCertificate(input: { amount: number; note?: string })
   const amount = Math.round(Number(input.amount));
   if (!Number.isFinite(amount) || amount <= 0) return { ok: false, error: "Укажите номинал" };
 
+  // срок действия: пустая строка → бессрочно; иначе YYYY-MM-DD, не в прошлом
+  let expires_at: string | null = null;
+  if (input.expires_at && input.expires_at.trim()) {
+    const d = input.expires_at.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return { ok: false, error: "Неверная дата" };
+    const today = new Date().toISOString().slice(0, 10);
+    if (d < today) return { ok: false, error: "Дата в прошлом" };
+    expires_at = d;
+  }
+
   const admin = createAdmin();
-  // до 5 попыток на случай коллизии кода
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = genCode();
     const { data, error } = await admin
       .from("certificates")
-      .insert({ code, amount, balance: amount, status: "issued", note: input.note?.trim() || null })
+      .insert({ code, amount, balance: amount, status: "issued", note: input.note?.trim() || null, expires_at })
       .select("code")
       .single();
     if (!error && data) {
       revalidatePath("/certificates");
       return { ok: true, code: data.code };
     }
-    // 23505 — unique_violation по коду: пробуем ещё раз
     if (error && error.code !== "23505") {
       return { ok: false, error: error.message };
     }

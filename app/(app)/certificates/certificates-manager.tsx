@@ -13,6 +13,7 @@ type Row = {
   status: string;
   activated_at: string | null;
   activated_name: string | null;
+  expires_at: string | null;
   note: string | null;
   created_at: string;
 };
@@ -23,6 +24,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   active: { label: "Активирован", cls: "bg-emerald-100 text-emerald-700" },
   used: { label: "Использован", cls: "bg-neutral-100 text-neutral-500" },
   disabled: { label: "Отключён", cls: "bg-red-100 text-red-600" },
+  expired: { label: "Просрочен", cls: "bg-amber-100 text-amber-700" },
 };
 
 function fmtRub(n: number) {
@@ -36,6 +38,7 @@ function fmtDate(iso: string | null) {
 export default function CertificatesManager({ rows, stats }: { rows: Row[]; stats: Stats }) {
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
+  const [expires, setExpires] = useState("");
   const [issued, setIssued] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -49,11 +52,12 @@ export default function CertificatesManager({ rows, stats }: { rows: Row[]; stat
 
   function issue() {
     startTransition(async () => {
-      const r = await issueCertificate({ amount: Number(amount.replace(",", ".")), note });
+      const r = await issueCertificate({ amount: Number(amount.replace(",", ".")), note, expires_at: expires });
       if (r.ok && r.code) {
         setIssued(r.code);
         setAmount("");
         setNote("");
+        setExpires("");
         toast.success("Сертификат выпущен: " + r.code);
       } else {
         toast.error(r.error ?? "Не удалось выпустить");
@@ -96,6 +100,15 @@ export default function CertificatesManager({ rows, stats }: { rows: Row[]; stat
               onChange={(e) => setAmount(e.target.value)}
               placeholder="3000"
               className="mt-1 w-32 rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-neutral-500">Действует до (необязательно)</label>
+            <input
+              type="date"
+              value={expires}
+              onChange={(e) => setExpires(e.target.value)}
+              className="mt-1 w-40 rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
             />
           </div>
           <div className="flex-1 min-w-48">
@@ -141,6 +154,7 @@ export default function CertificatesManager({ rows, stats }: { rows: Row[]; stat
               <th className="px-4 py-3">Остаток</th>
               <th className="px-4 py-3">Статус</th>
               <th className="px-4 py-3">Активировал</th>
+              <th className="px-4 py-3">Действует до</th>
               <th className="px-4 py-3">Выпущен</th>
               <th className="px-4 py-3"></th>
             </tr>
@@ -148,7 +162,7 @@ export default function CertificatesManager({ rows, stats }: { rows: Row[]; stat
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-neutral-400">
+                <td colSpan={8} className="px-4 py-8 text-center text-neutral-400">
                   Пока нет сертификатов. Выпустите первый выше.
                 </td>
               </tr>
@@ -175,6 +189,15 @@ export default function CertificatesManager({ rows, stats }: { rows: Row[]; stat
                   <td className="px-4 py-3 text-neutral-600">
                     {c.activated_name ?? "—"}
                     {c.activated_at && <span className="block text-xs text-neutral-400">{fmtDate(c.activated_at)}</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    {c.expires_at ? (
+                      <span className={c.status === "expired" ? "text-amber-600 font-medium" : "text-neutral-600"}>
+                        {fmtDate(c.expires_at)}
+                      </span>
+                    ) : (
+                      <span className="text-neutral-400">бессрочно</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-neutral-500">{fmtDate(c.created_at)}</td>
                   <td className="px-4 py-3 text-right">

@@ -11,6 +11,7 @@ type CertRow = {
   status: string;
   activated_by: number | null;
   activated_at: string | null;
+  expires_at: string | null;
   note: string | null;
   created_at: string;
 };
@@ -20,7 +21,7 @@ export default async function CertificatesPage() {
 
   const { data } = await supabase
     .from("certificates")
-    .select("id, code, amount, balance, status, activated_by, activated_at, note, created_at")
+    .select("id, code, amount, balance, status, activated_by, activated_at, expires_at, note, created_at")
     .order("created_at", { ascending: false })
     .limit(500);
 
