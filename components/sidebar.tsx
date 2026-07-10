@@ -10,6 +10,7 @@ import {
   Megaphone,
   BarChart3,
   Gift,
+  Ticket,
   LogOut,
 } from "lucide-react";
 
@@ -20,6 +21,7 @@ const NAV = [
   { href: "/services", label: "Услуги", icon: LayoutGrid },
   { href: "/promotions", label: "Акции", icon: Megaphone },
   { href: "/loyalty", label: "Лояльность", icon: Gift },
+  { href: "/certificates", label: "Сертификаты", icon: Ticket },
   { href: "/analytics", label: "Аналитика", icon: BarChart3 },
 ];
 
