@@ -9,28 +9,42 @@ export function OPTIONS() {
   return options();
 }
 
-// GET — сертификатный баланс клиента + последние операции.
+// GET — список сертификатов клиента (по отдельности) + общий остаток.
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const user = validateInitData(url.searchParams.get("initData") ?? "", process.env.TELEGRAM_BOT_TOKEN!);
   if (!user) return json({ error: "unauthorized" }, 401);
 
   const admin = createAdmin();
-  const [acc, tx] = await Promise.all([
-    admin.from("certificate_accounts").select("balance").eq("client_id", user.id).maybeSingle(),
-    admin
-      .from("certificate_transactions")
-      .select("kind, amount, note, created_at")
-      .eq("client_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(20),
-  ]);
+  const today = new Date().toISOString().slice(0, 10);
 
-  return json({
-    ok: true,
-    balance: Number(acc.data?.balance ?? 0),
-    transactions: tx.data ?? [],
+  const { data } = await admin
+    .from("certificates")
+    .select("id, code, balance, status, expires_at")
+    .eq("activated_by", user.id)
+    .order("expires_at", { ascending: true, nullsFirst: false })
+    .order("activated_at", { ascending: true });
+
+  type C = { id: string; code: string; balance: number; status: string; expires_at: string | null };
+  const all = (data as C[]) ?? [];
+
+  // доступны к оплате: активные, с остатком, не просроченные
+  const certificates = all.map((c) => {
+    const expired = c.status === "expired" || (c.expires_at != null && c.expires_at < today);
+    const usable = c.status === "active" && Number(c.balance) > 0 && !expired;
+    return {
+      id: c.id,
+      code: c.code,
+      balance: Number(c.balance),
+      status: expired && c.status === "active" ? "expired" : c.status,
+      expires_at: c.expires_at,
+      usable,
+    };
   });
+
+  const balance = certificates.filter((c) => c.usable).reduce((s, c) => s + c.balance, 0);
+
+  return json({ ok: true, balance, certificates });
 }
 
 // POST — активация сертификата по коду. Тело: { initData, code }

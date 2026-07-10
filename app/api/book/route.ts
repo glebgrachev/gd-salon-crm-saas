@@ -19,6 +19,7 @@ export async function POST(req: Request) {
     starts_at?: string;
     points?: number;
     cert?: number;
+    cert_id?: string;
   };
   try {
     body = await req.json();
@@ -77,17 +78,24 @@ export async function POST(req: Request) {
   }
   const afterPoints = Math.max(0, priced.final_price - redeem * pointValue);
 
-  // применение сертификата (в рублях): не больше запрошенного, остатка и суммы после баллов
+  // применение сертификата: конкретный сертификат (cert_id), в пределах его остатка/срока
   const reqCert = Math.max(0, Math.floor(Number(body.cert ?? 0)));
+  const certId = body.cert_id ?? null;
   let cert = 0;
-  if (reqCert > 0) {
-    const { data: cacc } = await admin
-      .from("certificate_accounts")
-      .select("balance")
-      .eq("client_id", user.id)
+  let certIdToStore: string | null = null;
+  if (reqCert > 0 && certId) {
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: crow } = await admin
+      .from("certificates")
+      .select("id, balance, status, expires_at")
+      .eq("id", certId)
+      .eq("activated_by", user.id)
       .maybeSingle();
-    const certBal = Number(cacc?.balance ?? 0);
-    cert = Math.max(0, Math.min(reqCert, certBal, afterPoints));
+    const notExpired = !crow?.expires_at || crow.expires_at >= today;
+    if (crow && crow.status === "active" && notExpired && Number(crow.balance) > 0) {
+      cert = Math.max(0, Math.min(reqCert, Number(crow.balance), afterPoints));
+      if (cert > 0) certIdToStore = crow.id;
+    }
   }
   const moneyDue = Math.max(0, afterPoints - cert);
 
@@ -122,6 +130,7 @@ export async function POST(req: Request) {
       promo_id: priced.promo_id,
       points_to_redeem: redeem,
       cert_to_redeem: cert,
+      cert_id: certIdToStore,
     })
     .select("id, starts_at, ends_at")
     .single();

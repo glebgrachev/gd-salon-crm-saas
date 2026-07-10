@@ -20,7 +20,7 @@ type InItem = {
 };
 
 export async function POST(req: Request) {
-  let body: { initData?: string; items?: InItem[]; points?: number; cert?: number };
+  let body: { initData?: string; items?: InItem[]; points?: number; cert?: number; cert_id?: string };
   try {
     body = await req.json();
   } catch {
@@ -135,37 +135,43 @@ export async function POST(req: Request) {
   }
   if (redeemTotal === 0) rpcItems.forEach((r) => (r.points_to_redeem = 0));
 
-  // ---- распределение сертификата (в рублях), после баллов ----
+  // ---- распределение сертификата (конкретного, по cert_id), после баллов ----
   const reqCert = Math.max(0, Math.floor(Number(body.cert ?? 0)));
+  const certId = body.cert_id ?? null;
   let certTotal = 0;
   const moneyAfterPoints = Math.max(0, cartTotal - redeemTotal * pointValue);
-  if (reqCert > 0 && moneyAfterPoints > 0) {
-    const { data: cacc } = await admin
-      .from("certificate_accounts")
-      .select("balance")
-      .eq("client_id", user.id)
+  if (reqCert > 0 && certId && moneyAfterPoints > 0) {
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: crow } = await admin
+      .from("certificates")
+      .select("id, balance, status, expires_at")
+      .eq("id", certId)
+      .eq("activated_by", user.id)
       .maybeSingle();
-    const certBal = Number(cacc?.balance ?? 0);
-    certTotal = Math.max(0, Math.min(reqCert, certBal, moneyAfterPoints));
+    const notExpired = !crow?.expires_at || crow.expires_at >= today;
+    if (crow && crow.status === "active" && notExpired && Number(crow.balance) > 0) {
+      certTotal = Math.max(0, Math.min(reqCert, Number(crow.balance), moneyAfterPoints));
 
-    if (certTotal > 0) {
-      // распределяем рубли сертификата пропорционально цене позиции (наиб. остаток)
-      const raw = rpcItems.map((r) => (certTotal * Number(r.final_price)) / cartTotal);
-      const alloc = raw.map((x) => Math.floor(x));
-      let left = certTotal - alloc.reduce((a, b) => a + b, 0);
-      const byFrac = raw
-        .map((x, i) => ({ i, frac: x - Math.floor(x) }))
-        .sort((a, b) => b.frac - a.frac);
-      for (let k = 0; k < byFrac.length && left > 0; k++) {
-        alloc[byFrac[k].i]++;
-        left--;
+      if (certTotal > 0) {
+        // распределяем рубли сертификата пропорционально цене позиции (наиб. остаток)
+        const raw = rpcItems.map((r) => (certTotal * Number(r.final_price)) / cartTotal);
+        const alloc = raw.map((x) => Math.floor(x));
+        let left = certTotal - alloc.reduce((a, b) => a + b, 0);
+        const byFrac = raw
+          .map((x, i) => ({ i, frac: x - Math.floor(x) }))
+          .sort((a, b) => b.frac - a.frac);
+        for (let k = 0; k < byFrac.length && left > 0; k++) {
+          alloc[byFrac[k].i]++;
+          left--;
+        }
+        rpcItems.forEach((r, i) => {
+          r.cert_to_redeem = alloc[i];
+          r.cert_id = alloc[i] > 0 ? crow.id : null;
+        });
       }
-      rpcItems.forEach((r, i) => {
-        r.cert_to_redeem = alloc[i];
-      });
     }
   }
-  if (certTotal === 0) rpcItems.forEach((r) => (r.cert_to_redeem = 0));
+  if (certTotal === 0) rpcItems.forEach((r) => { r.cert_to_redeem = 0; r.cert_id = null; });
 
   // пользователь
   await admin.from("users").upsert(
