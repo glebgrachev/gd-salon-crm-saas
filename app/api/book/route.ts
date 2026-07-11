@@ -61,6 +61,29 @@ export async function POST(req: Request) {
   if (isNaN(start.getTime())) return json({ error: "bad_time" }, 400);
   const end = new Date(start.getTime() + svc.duration_min * 60000);
 
+  // если у клиента есть активный перенос — учитываем срок и связываем позже
+  const { data: oldB } = await admin
+    .from("bookings")
+    .select("id, orig_starts_at, starts_at")
+    .eq("client_id", user.id)
+    .eq("status", "new")
+    .not("rescheduling_started_at", "is", null)
+    .order("rescheduling_started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (oldB) {
+    const { data: cfg } = await admin
+      .from("reschedule_settings")
+      .select("max_forward_days")
+      .eq("id", 1)
+      .maybeSingle();
+    const orig = new Date(oldB.orig_starts_at ?? oldB.starts_at);
+    const maxDays = Number(cfg?.max_forward_days ?? 30);
+    const limit = new Date(orig.getTime() + maxDays * 86400000);
+    if (start > limit) return json({ error: "reschedule_too_far" }, 400);
+  }
+
   // применение баллов: не больше запрошенного, лимита redeem_max_percent и баланса
   const reqPoints = Math.max(0, Math.floor(Number(body.points ?? 0)));
   let redeem = 0;
@@ -142,6 +165,17 @@ export async function POST(req: Request) {
     return json({ error: bErr?.message ?? "booking_failed" }, 500);
   }
 
+  // финализация переноса (если был активный)
+  let wasReschedule = false;
+  if (oldB) {
+    const { data: fin } = await admin.rpc("finalize_reschedule", {
+      p_old_booking: oldB.id,
+      p_new_booking: booking.id,
+      p_client: user.id,
+    });
+    wasReschedule = (fin as { ok?: boolean } | null)?.ok === true;
+  }
+
   // мгновенное подтверждение в Telegram (не валит запись при сбое)
   try {
     const [{ data: s2 }, { data: sp2 }] = await Promise.all([
@@ -151,7 +185,7 @@ export async function POST(req: Request) {
     const when = fmtMsk(booking.starts_at);
     await tgSend(
       user.id,
-      `✅ <b>Вы записаны!</b>\n\n` +
+      (wasReschedule ? `🔄 <b>Запись перенесена!</b>\n\n` : `✅ <b>Вы записаны!</b>\n\n`) +
         `${s2?.name ?? "Услуга"} · ${sp2?.full_name ?? ""}\n` +
         `🗓 ${when}\n` +
         (redeem > 0 ? `⭐ Списываем баллов: ${redeem}\n` : "") +
