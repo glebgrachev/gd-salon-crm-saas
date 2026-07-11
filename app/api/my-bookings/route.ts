@@ -17,6 +17,8 @@ type Row = {
   status: string;
   starts_at: string;
   ends_at: string;
+  rescheduling_started_at: string | null;
+  is_synthetic: boolean | null;
   service: { name: string } | null;
   specialist: { full_name: string } | null;
 };
@@ -34,12 +36,20 @@ export async function POST(req: Request) {
 
   const admin = createAdmin();
 
-  const { data: rows } = await admin
-    .from("bookings")
-    .select("id, status, starts_at, ends_at, service:services ( name ), specialist:specialists ( full_name )")
-    .eq("client_id", user.id)
-    .order("starts_at", { ascending: false })
-    .limit(100);
+  const [{ data: rows }, { data: cfg }] = await Promise.all([
+    admin
+      .from("bookings")
+      .select(
+        "id, status, starts_at, ends_at, rescheduling_started_at, is_synthetic, service:services ( name ), specialist:specialists ( full_name )",
+      )
+      .eq("client_id", user.id)
+      .order("starts_at", { ascending: false })
+      .limit(100),
+    admin.from("reschedule_settings").select("min_hours_before").eq("id", 1).maybeSingle(),
+  ]);
+
+  const minHoursBefore = Number(cfg?.min_hours_before ?? 2);
+  const RESCHEDULE_THRESHOLD_MS = minHoursBefore * 3600_000;
 
   // какие брони уже имеют отзыв
   const ids = ((rows as unknown as Row[]) ?? []).map((r) => r.id);
@@ -64,6 +74,12 @@ export async function POST(req: Request) {
       service: b.service?.name ?? "Услуга",
       specialist: b.specialist?.full_name ?? "",
       can_cancel: ACTIVE.includes(b.status) && startMs - now >= CANCEL_THRESHOLD_MS,
+      can_reschedule:
+        b.status === "new" &&
+        !b.is_synthetic &&
+        b.rescheduling_started_at == null &&
+        startMs - now >= RESCHEDULE_THRESHOLD_MS,
+      rescheduling: b.rescheduling_started_at != null,
       can_review: endMs <= now && b.status !== "cancelled" && b.status !== "no_show",
       reviewed: reviewed.has(b.id),
     };
@@ -75,5 +91,17 @@ export async function POST(req: Request) {
   // upcoming по возрастанию времени
   upcoming.sort((a, b) => +new Date((a as Row).starts_at) - +new Date((b as Row).starts_at));
 
-  return json({ ok: true, upcoming, past });
+  // активный перенос (если есть) — для баннера на главной
+  const active = ((rows as unknown as Row[]) ?? []).find(
+    (b) => b.rescheduling_started_at != null && b.status === "new",
+  );
+
+  return json({
+    ok: true,
+    upcoming,
+    past,
+    active_reschedule: active
+      ? { booking_id: active.id, service: active.service?.name ?? "Услуга", starts_at: active.starts_at }
+      : null,
+  });
 }
