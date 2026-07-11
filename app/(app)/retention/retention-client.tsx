@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useTransition, useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { updateRetentionSettings } from "./actions";
@@ -51,16 +51,26 @@ export default function RetentionClient({
   const [l, setL] = useState(String(settings.lost_days));
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const pathname = usePathname();
+
+  // при обновлении props (после сохранения / серверного refresh) синхронизируем поля
+  useEffect(() => {
+    setN(String(settings.new_days));
+    setR(String(settings.regular_days));
+    setL(String(settings.lost_days));
+  }, [settings.new_days, settings.regular_days, settings.lost_days]);
 
   function save() {
+    const payload = {
+      new_days: parseInt(n, 10),
+      regular_days: parseInt(r, 10),
+      lost_days: parseInt(l, 10),
+    };
     startTransition(async () => {
-      const res = await updateRetentionSettings({
-        new_days: parseInt(n, 10),
-        regular_days: parseInt(r, 10),
-        lost_days: parseInt(l, 10),
-      });
+      const res = await updateRetentionSettings(payload);
       if (res.ok) {
-        toast.success("Пороги обновлены");
+        toast.success(`Пороги сохранены: ${payload.new_days} / ${payload.regular_days} / ${payload.lost_days}`);
+        router.replace(pathname);
         router.refresh();
       } else {
         toast.error(res.error ?? "Не удалось сохранить");

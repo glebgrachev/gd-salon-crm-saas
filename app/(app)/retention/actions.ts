@@ -26,7 +26,7 @@ export async function updateRetentionSettings(input: {
     .eq("id", 1);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/retention");
-  revalidatePath("/clients");
+  revalidatePath("/retention", "layout");
+  revalidatePath("/clients", "layout");
   return { ok: true };
 }
