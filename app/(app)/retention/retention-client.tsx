@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { updateRetentionSettings } from "./actions";
@@ -49,16 +50,21 @@ export default function RetentionClient({
   const [r, setR] = useState(String(settings.regular_days));
   const [l, setL] = useState(String(settings.lost_days));
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
 
   function save() {
     startTransition(async () => {
       const res = await updateRetentionSettings({
-        new_days: Number(n),
-        regular_days: Number(r),
-        lost_days: Number(l),
+        new_days: parseInt(n, 10),
+        regular_days: parseInt(r, 10),
+        lost_days: parseInt(l, 10),
       });
-      if (res.ok) toast.success("Пороги обновлены");
-      else toast.error(res.error ?? "Не удалось сохранить");
+      if (res.ok) {
+        toast.success("Пороги обновлены");
+        router.refresh();
+      } else {
+        toast.error(res.error ?? "Не удалось сохранить");
+      }
     });
   }
 
