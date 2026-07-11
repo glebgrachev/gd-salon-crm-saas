@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 
 export async function updateRetentionSettings(input: {
@@ -20,11 +21,14 @@ export async function updateRetentionSettings(input: {
     return { ok: false, error: "Пороги должны идти по возрастанию: Новый < Постоянный < Потерянный" };
   }
 
-  const { error } = await supabase
+  const admin = createAdmin();
+  const { data, error } = await admin
     .from("retention_settings")
     .update({ new_days: n, regular_days: r, lost_days: l, updated_at: new Date().toISOString() })
-    .eq("id", 1);
+    .eq("id", 1)
+    .select();
   if (error) return { ok: false, error: error.message };
+  if (!data || data.length === 0) return { ok: false, error: "Строка настроек не найдена" };
 
   revalidatePath("/retention", "layout");
   revalidatePath("/clients", "layout");

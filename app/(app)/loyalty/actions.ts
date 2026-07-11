@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 
 export async function updateLoyaltySettings(input: {
@@ -23,9 +24,15 @@ export async function updateLoyaltySettings(input: {
     updated_at: new Date().toISOString(),
   };
 
-  const { error } = await supabase.from("loyalty_settings").update(payload).eq("id", 1);
+  const admin = createAdmin();
+  const { data, error } = await admin
+    .from("loyalty_settings")
+    .update(payload)
+    .eq("id", 1)
+    .select();
   if (error) return { ok: false, error: error.message };
+  if (!data || data.length === 0) return { ok: false, error: "Строка настроек не найдена" };
 
-  revalidatePath("/loyalty");
+  revalidatePath("/loyalty", "layout");
   return { ok: true };
 }
