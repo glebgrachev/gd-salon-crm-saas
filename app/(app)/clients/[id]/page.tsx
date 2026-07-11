@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import StatusSelect from "./status-select";
+import RetentionResetButton from "./retention-reset";
 import {
   fmtDateTime,
   fmtPrice,
@@ -50,6 +51,12 @@ export default async function ClientPage({
     .eq("client_id", id)
     .maybeSingle();
   const points = Number(loyalty?.balance ?? 0);
+
+  const { data: seg } = await supabase
+    .from("v_client_segments")
+    .select("segment, last_visit, days_since_last, visits, retention_notified_at")
+    .eq("client_id", id)
+    .maybeSingle();
 
   const bookings = (bookingsData as unknown as B[]) ?? [];
   const total = bookings.length;
@@ -100,6 +107,44 @@ export default async function ClientPage({
           {Number(loyalty?.total_spent ?? 0)}
         </div>
       </div>
+
+      {/* сегмент возвращаемости */}
+      {seg && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-white p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <span
+              className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${
+                seg.segment === "new" ? "bg-emerald-100 text-emerald-700" :
+                seg.segment === "regular" ? "bg-blue-100 text-blue-700" :
+                seg.segment === "sleeping" ? "bg-amber-100 text-amber-700" :
+                seg.segment === "lost" ? "bg-red-100 text-red-600" :
+                "bg-neutral-100 text-neutral-500"
+              }`}
+            >
+              {seg.segment === "new" ? "Новый" :
+               seg.segment === "regular" ? "Постоянный" :
+               seg.segment === "sleeping" ? "Спящий" :
+               seg.segment === "lost" ? "Потерянный" :
+               "Без визитов"}
+            </span>
+            <span className="text-xs text-neutral-500">
+              {seg.last_visit
+                ? `последний визит ${new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit" }).format(new Date(seg.last_visit))} (${seg.days_since_last} дн. назад)`
+                : "ещё не приходил"}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-neutral-500">
+              {seg.retention_notified_at
+                ? `напоминание отправлено ${new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit" }).format(new Date(seg.retention_notified_at))}`
+                : "напоминание ещё не отправлялось"}
+            </span>
+            {seg.retention_notified_at && (
+              <RetentionResetButton clientId={id} />
+            )}
+          </div>
+        </div>
+      )}
 
       {/* история */}
       <h2 className="mt-8 mb-3 text-sm font-semibold text-neutral-900">
