@@ -34,30 +34,6 @@ export async function POST(req: Request) {
 
   const admin = createAdmin();
 
-  // активный перенос (если есть)
-  const { data: oldB } = await admin
-    .from("bookings")
-    .select("id, orig_starts_at, starts_at")
-    .eq("client_id", user.id)
-    .eq("status", "new")
-    .not("rescheduling_started_at", "is", null)
-    .order("rescheduling_started_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (oldB) {
-    const { data: cfg } = await admin
-      .from("reschedule_settings")
-      .select("max_forward_days")
-      .eq("id", 1)
-      .maybeSingle();
-    const orig = new Date(oldB.orig_starts_at ?? oldB.starts_at);
-    const maxDays = Number(cfg?.max_forward_days ?? 30);
-    const limitAt = new Date(orig.getTime() + maxDays * 86400000);
-    const beyond = items.some((it) => new Date(it.starts_at) > limitAt);
-    if (beyond) return json({ error: "reschedule_too_far" }, 400);
-  }
-
   // длительности услуг (для ends_at)
   const serviceIds = [...new Set(items.map((i) => i.service_id))];
   const { data: svcRows } = await admin
@@ -220,26 +196,6 @@ export async function POST(req: Request) {
     return json({ ok: false, busy: result.busy ?? [] }, 409);
   }
 
-  // финализация переноса (если был активный) — привязываем к самой ранней брони заказа
-  let wasReschedule = false;
-  if (oldB && result.order_id) {
-    const { data: firstB } = await admin
-      .from("bookings")
-      .select("id")
-      .eq("order_id", result.order_id)
-      .order("starts_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    if (firstB) {
-      const { data: fin } = await admin.rpc("finalize_reschedule", {
-        p_old_booking: oldB.id,
-        p_new_booking: firstB.id,
-        p_client: user.id,
-      });
-      wasReschedule = (fin as { ok?: boolean } | null)?.ok === true;
-    }
-  }
-
   // сводное уведомление
   try {
     const [{ data: svcNames }, { data: spNames }] = await Promise.all([
@@ -258,7 +214,7 @@ export async function POST(req: Request) {
       .join("\n");
     await tgSend(
       user.id,
-      (wasReschedule ? `🔄 <b>Запись перенесена!</b>\n\n${lines}\n\n` : `✅ <b>Заказ оформлен!</b>\n\n${lines}\n\n`) +
+      `✅ <b>Заказ оформлен!</b>\n\n${lines}\n\n` +
         (redeemTotal > 0 ? `⭐ Списываем баллов: ${redeemTotal}\n` : "") +
         (certTotal > 0 ? `🎟 Сертификат: −${certTotal} ₽\n` : "") +
         `💰 К оплате: ${moneyDue} ₽`,

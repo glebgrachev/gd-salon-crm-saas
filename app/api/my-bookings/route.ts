@@ -19,6 +19,8 @@ type Row = {
   ends_at: string;
   rescheduling_started_at: string | null;
   is_synthetic: boolean | null;
+  service_id: string;
+  specialist_id: string;
   service: { name: string } | null;
   specialist: { full_name: string } | null;
 };
@@ -40,7 +42,7 @@ export async function POST(req: Request) {
     admin
       .from("bookings")
       .select(
-        "id, status, starts_at, ends_at, rescheduling_started_at, is_synthetic, service:services ( name ), specialist:specialists ( full_name )",
+        "id, status, starts_at, ends_at, rescheduling_started_at, is_synthetic, service_id, specialist_id, service:services ( name ), specialist:specialists ( full_name )",
       )
       .eq("client_id", user.id)
       .order("starts_at", { ascending: false })
@@ -71,6 +73,8 @@ export async function POST(req: Request) {
       status: b.status,
       starts_at: b.starts_at,
       ends_at: b.ends_at,
+      service_id: b.service_id,
+      specialist_id: b.specialist_id,
       service: b.service?.name ?? "Услуга",
       specialist: b.specialist?.full_name ?? "",
       can_cancel: ACTIVE.includes(b.status) && startMs - now >= CANCEL_THRESHOLD_MS,
@@ -101,7 +105,14 @@ export async function POST(req: Request) {
     upcoming,
     past,
     active_reschedule: active
-      ? { booking_id: active.id, service: active.service?.name ?? "Услуга", starts_at: active.starts_at }
+      ? {
+          booking_id: active.id,
+          service: active.service?.name ?? "Услуга",
+          service_id: active.service_id,
+          specialist_id: active.specialist_id,
+          starts_at: active.starts_at,
+          orig_starts_at: active.starts_at,
+        }
       : null,
   });
 }
