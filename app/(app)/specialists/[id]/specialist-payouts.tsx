@@ -43,6 +43,7 @@ export default function SpecialistPayouts({
   const [salary, setSalary] = useState(String(rules.salary_month));
   const [mode, setMode] = useState<PayoutRules["salary_mode"]>(rules.salary_mode);
   const [shift, setShift] = useState(String(rules.shift_rate));
+  const [prodPct, setProdPct] = useState(String(rules.product_percent ?? 0));
 
   const ovMap = new Map(overrides.map((o) => [o.service_id, o]));
 
@@ -54,6 +55,7 @@ export default function SpecialistPayouts({
         salary_month: Number(salary) || 0,
         salary_mode: mode,
         shift_rate: Number(shift) || 0,
+        product_percent: Number(prodPct) || 0,
       });
       if (r.ok) {
         toast.success("Правила оплаты сохранены");
@@ -149,6 +151,22 @@ export default function SpecialistPayouts({
             ))}
           </select>
         </div>
+      </div>
+
+      {/* процент с продажи товаров */}
+      <div className="mt-6 border-t border-neutral-200 pt-5">
+        <label className="block text-xs text-neutral-500">Процент с продажи товаров, %</label>
+        <input
+          type="number"
+          min={0}
+          max={100}
+          value={prodPct}
+          onChange={(e) => setProdPct(e.target.value)}
+          className="mt-1 w-40 rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+        />
+        <p className="mt-1 text-xs text-neutral-400">
+          Считается от цены продажи. 0 — мастер не получает с товаров.
+        </p>
       </div>
 
       <div className="mt-5">

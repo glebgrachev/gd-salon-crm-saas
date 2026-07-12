@@ -206,6 +206,7 @@ export type PayoutRules = {
   salary_month: number;
   salary_mode: "full_month" | "by_days" | "by_shifts";
   shift_rate: number;
+  product_percent: number;
 };
 
 export async function savePayoutRules(specialistId: string, rules: PayoutRules) {
@@ -229,6 +230,7 @@ export async function savePayoutRules(specialistId: string, rules: PayoutRules) 
       ? rules.salary_mode
       : "by_days",
     shift_rate: num(rules.shift_rate, 0, 1_000_000),
+    product_percent: num(rules.product_percent, 0, 100),
   };
 
   const admin = createAdmin();

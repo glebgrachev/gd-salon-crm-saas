@@ -317,3 +317,167 @@ export async function fetchMovements(productId: string | null, limit = 100) {
 
   return { ok: true as const, rows };
 }
+
+/* ---------- нормы расхода на услугу ---------- */
+
+export type ConsumableRow = {
+  service_id: string;
+  product_id: string;
+  qty_base: number;
+};
+
+export async function setConsumable(serviceId: string, productId: string, qtyBase: number) {
+  const supabase = await guard();
+  if (!supabase) return { ok: false, error: "Нет доступа" };
+  if (qtyBase <= 0) return { ok: false, error: "Количество должно быть больше нуля" };
+
+  const admin = createAdmin();
+  const { error } = await admin.from("service_consumables").upsert(
+    { service_id: serviceId, product_id: productId, qty_base: qtyBase },
+    { onConflict: "service_id,product_id" },
+  );
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/stock", "layout");
+  return { ok: true };
+}
+
+export async function removeConsumable(serviceId: string, productId: string) {
+  const supabase = await guard();
+  if (!supabase) return { ok: false, error: "Нет доступа" };
+
+  const admin = createAdmin();
+  const { error } = await admin
+    .from("service_consumables")
+    .delete()
+    .eq("service_id", serviceId)
+    .eq("product_id", productId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/stock", "layout");
+  return { ok: true };
+}
+
+/* ---------- продажа товара ---------- */
+
+export async function sellProduct(input: {
+  product_id: string;
+  qty: number;
+  client_id: number | null;
+  specialist_id: string | null;
+  booking_id: string | null;
+}) {
+  const supabase = await guard();
+  if (!supabase) return { ok: false, error: "Нет доступа" };
+  if (input.qty <= 0) return { ok: false, error: "Количество должно быть больше нуля" };
+
+  const admin = createAdmin();
+  const { data, error } = await admin.rpc("sell_product", {
+    p_product: input.product_id,
+    p_qty: input.qty,
+    p_client: input.client_id,
+    p_specialist: input.specialist_id,
+    p_booking: input.booking_id,
+    p_status: "paid",
+  });
+
+  if (error) return { ok: false, error: error.message };
+
+  const res = data as { ok?: boolean; error?: string; stock?: number; total?: number };
+  if (!res?.ok) {
+    return {
+      ok: false,
+      error:
+        res?.error === "out_of_stock"
+          ? `Не хватает на складе (остаток ${res.stock ?? 0})`
+          : res?.error === "no_price"
+          ? "У товара не задана цена"
+          : res?.error ?? "Не удалось продать",
+    };
+  }
+
+  revalidatePath("/stock", "layout");
+  revalidatePath("/", "layout");
+  revalidatePath("/payouts", "layout");
+  return { ok: true, total: res.total };
+}
+
+export async function cancelSale(saleId: string) {
+  const supabase = await guard();
+  if (!supabase) return { ok: false, error: "Нет доступа" };
+
+  const admin = createAdmin();
+  const { error } = await admin.rpc("cancel_product_sale", { p_sale: saleId });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/stock", "layout");
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+export type SaleRow = {
+  id: string;
+  created_at: string;
+  paid_at: string | null;
+  qty: number;
+  price: number;
+  total: number;
+  cost: number;
+  status: string;
+  product_name: string;
+  client_name: string | null;
+  specialist_name: string | null;
+};
+
+export async function fetchSales(limit = 100) {
+  const supabase = await guard();
+  if (!supabase) return { ok: false as const, error: "Нет доступа" };
+
+  const admin = createAdmin();
+  const { data, error } = await admin
+    .from("product_sales")
+    .select(
+      "id, created_at, paid_at, qty, price, total, cost, status, product:products ( name ), client:users ( first_name, last_name, username ), specialist:specialists ( full_name )",
+    )
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) return { ok: false as const, error: error.message };
+
+  type Raw = {
+    id: string;
+    created_at: string;
+    paid_at: string | null;
+    qty: number;
+    price: number;
+    total: number;
+    cost: number;
+    status: string;
+    product: { name: string } | null;
+    client: { first_name: string | null; last_name: string | null; username: string | null } | null;
+    specialist: { full_name: string } | null;
+  };
+
+  const rows: SaleRow[] = ((data as unknown as Raw[]) ?? []).map((s) => {
+    const cl = s.client;
+    const name = cl
+      ? [cl.first_name, cl.last_name].filter(Boolean).join(" ") ||
+        (cl.username ? `@${cl.username}` : null)
+      : null;
+    return {
+      id: s.id,
+      created_at: s.created_at,
+      paid_at: s.paid_at,
+      qty: Number(s.qty),
+      price: Number(s.price),
+      total: Number(s.total),
+      cost: Number(s.cost),
+      status: s.status,
+      product_name: s.product?.name ?? "—",
+      client_name: name,
+      specialist_name: s.specialist?.full_name ?? null,
+    };
+  });
+
+  return { ok: true as const, rows };
+}

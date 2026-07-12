@@ -44,7 +44,7 @@ export default async function SpecialistPage({
   const { data: specialist } = await supabase
     .from("specialists")
     .select(
-      "id, full_name, photo_url, experience_years, rating, payout_type, payout_value, salary_month, salary_mode, shift_rate, telegram_id, phone, link_code, link_code_expires_at",
+      "id, full_name, photo_url, experience_years, rating, payout_type, payout_value, salary_month, salary_mode, shift_rate, product_percent, telegram_id, phone, link_code, link_code_expires_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -123,6 +123,7 @@ export default async function SpecialistPage({
           salary_month: Number(specialist.salary_month ?? 0),
           salary_mode: (specialist.salary_mode ?? "by_days") as "full_month" | "by_days" | "by_shifts",
           shift_rate: Number(specialist.shift_rate ?? 0),
+          product_percent: Number(specialist.product_percent ?? 0),
         }}
         overrides={(payoutOverrides as ServicePayout[]) ?? []}
         offered={offeredForPayouts}

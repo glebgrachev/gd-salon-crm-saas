@@ -14,6 +14,9 @@ export type PayoutRow = {
   shifts: number;
   shifts_payout: number;
   salary_payout: number;
+  products_count: number;
+  products_revenue: number;
+  products_payout: number;
   total_payout: number;
   salon_share: number;
 };
@@ -100,7 +103,7 @@ export default function PayoutsClient({
 
   const totals = rows.reduce(
     (acc, r) => ({
-      revenue: acc.revenue + Number(r.revenue),
+      revenue: acc.revenue + Number(r.revenue) + Number(r.products_revenue ?? 0),
       payout: acc.payout + Number(r.total_payout),
       salon: acc.salon + Number(r.salon_share),
     }),
@@ -187,6 +190,7 @@ export default function PayoutsClient({
               <th className="px-4 py-3 text-right">Смен</th>
               <th className="px-4 py-3 text-right">За смены</th>
               <th className="px-4 py-3 text-right">Оклад</th>
+              <th className="px-4 py-3 text-right">Товары</th>
               <th className="px-4 py-3 text-right">Итого</th>
               <th className="px-4 py-3 text-right">Салону</th>
             </tr>
@@ -194,7 +198,7 @@ export default function PayoutsClient({
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-neutral-400">
+                <td colSpan={10} className="px-4 py-8 text-center text-neutral-400">
                   Нет данных за выбранный период.
                 </td>
               </tr>
@@ -217,6 +221,18 @@ export default function PayoutsClient({
                   <td className="px-4 py-3 text-right text-neutral-500">{r.shifts}</td>
                   <td className="px-4 py-3 text-right text-neutral-700">{rub(r.shifts_payout)}</td>
                   <td className="px-4 py-3 text-right text-neutral-700">{rub(r.salary_payout)}</td>
+                  <td className="px-4 py-3 text-right text-neutral-700">
+                    {Number(r.products_payout) > 0 ? (
+                      <>
+                        {rub(r.products_payout)}
+                        <div className="text-xs text-neutral-400">
+                          {Number(r.products_count)} шт · {rub(r.products_revenue)}
+                        </div>
+                      </>
+                    ) : (
+                      <span className="text-neutral-300">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-right font-semibold text-neutral-900">
                     {rub(r.total_payout)}
                   </td>
@@ -225,7 +241,7 @@ export default function PayoutsClient({
 
                 {openId === r.specialist_id && (
                   <tr className="border-b border-neutral-100 bg-neutral-50/60">
-                    <td colSpan={9} className="px-4 py-3">
+                    <td colSpan={10} className="px-4 py-3">
                       {detailLoading && <div className="text-xs text-neutral-400">Загружаем…</div>}
                       {detail && detail.length === 0 && (
                         <div className="text-xs text-neutral-400">Нет оплаченных услуг за период.</div>

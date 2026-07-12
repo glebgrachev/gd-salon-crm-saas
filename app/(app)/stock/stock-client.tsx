@@ -3,7 +3,9 @@
 import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Loader2, Pencil, Trash2, TrendingUp, X, PackagePlus, History } from "lucide-react";
+import {
+  Plus, Loader2, Pencil, Trash2, TrendingUp, X, PackagePlus, History, ShoppingCart, Beaker,
+} from "lucide-react";
 import { uploadImage } from "@/lib/upload";
 import {
   saveProduct,
@@ -13,13 +15,21 @@ import {
   createPurchase,
   adjustStock,
   fetchMovements,
+  setConsumable,
+  removeConsumable,
+  sellProduct,
+  cancelSale,
+  fetchSales,
   type ProductRow,
   type SupplierRow,
   type ProductKind,
   type BaseUnit,
   type PurchaseLine,
   type MovementRow,
+  type ConsumableRow,
+  type SaleRow,
 } from "./actions";
+import type { SvcOpt, SpecOpt, ClientOpt } from "./page";
 
 const UNIT: Record<BaseUnit, string> = { pcs: "шт", ml: "мл", g: "г" };
 
@@ -46,18 +56,27 @@ const dt = (iso: string) =>
     minute: "2-digit",
   }).format(new Date(iso));
 
-type Tab = "sale" | "supply" | "suppliers";
+type Tab = "sale" | "supply" | "consumables" | "sales" | "suppliers";
 
 export default function StockClient({
   products,
   suppliers,
+  services,
+  consumables,
+  specialists,
+  clients,
 }: {
   products: ProductRow[];
   suppliers: SupplierRow[];
+  services: SvcOpt[];
+  consumables: ConsumableRow[];
+  specialists: SpecOpt[];
+  clients: ClientOpt[];
 }) {
   const [tab, setTab] = useState<Tab>("sale");
   const [editing, setEditing] = useState<ProductRow | "new" | null>(null);
   const [purchasing, setPurchasing] = useState(false);
+  const [selling, setSelling] = useState(false);
   const [historyFor, setHistoryFor] = useState<ProductRow | "all" | null>(null);
 
   const list = products.filter((p) => p.kind === tab);
@@ -88,6 +107,13 @@ export default function StockClient({
             Приход
           </button>
           <button
+            onClick={() => setSelling(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
+          >
+            <ShoppingCart className="h-4 w-4" />
+            Продать
+          </button>
+          <button
             onClick={() => setEditing("new")}
             className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
           >
@@ -111,6 +137,12 @@ export default function StockClient({
         <TabBtn on={tab === "supply"} onClick={() => setTab("supply")}>
           Расходники
         </TabBtn>
+        <TabBtn on={tab === "consumables"} onClick={() => setTab("consumables")}>
+          Нормы расхода
+        </TabBtn>
+        <TabBtn on={tab === "sales"} onClick={() => setTab("sales")}>
+          Продажи
+        </TabBtn>
         <TabBtn on={tab === "suppliers"} onClick={() => setTab("suppliers")}>
           Поставщики
         </TabBtn>
@@ -118,6 +150,14 @@ export default function StockClient({
 
       {tab === "suppliers" ? (
         <SuppliersTab suppliers={suppliers} />
+      ) : tab === "consumables" ? (
+        <ConsumablesTab
+          services={services}
+          products={products.filter((p) => p.kind === "supply" && p.is_active)}
+          consumables={consumables}
+        />
+      ) : tab === "sales" ? (
+        <SalesTab />
       ) : (
         <div className="mt-4 overflow-hidden rounded-xl border border-neutral-200 bg-white">
           <table className="w-full text-sm">
@@ -166,6 +206,15 @@ export default function StockClient({
           products={products.filter((p) => p.is_active)}
           suppliers={suppliers}
           onClose={() => setPurchasing(false)}
+        />
+      )}
+
+      {selling && (
+        <SellModal
+          products={products.filter((p) => p.kind === "sale" && p.is_active && p.stock > 0)}
+          specialists={specialists}
+          clients={clients}
+          onClose={() => setSelling(false)}
         />
       )}
 
@@ -1073,6 +1122,441 @@ function SupplierModal({
           >
             {pending && <Loader2 className="h-4 w-4 animate-spin" />}
             Сохранить
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/* ---------- нормы расхода ---------- */
+
+function ConsumablesTab({
+  services,
+  products,
+  consumables,
+}: {
+  services: SvcOpt[];
+  products: ProductRow[];
+  consumables: ConsumableRow[];
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [svcId, setSvcId] = useState(services[0]?.id ?? "");
+  const [addProduct, setAddProduct] = useState("");
+  const [addQty, setAddQty] = useState("");
+
+  const rows = consumables.filter((c) => c.service_id === svcId);
+  const used = new Set(rows.map((r) => r.product_id));
+  const free = products.filter((p) => !used.has(p.id));
+
+  function add() {
+    if (!addProduct || !addQty) {
+      toast.error("Выберите расходник и укажите количество");
+      return;
+    }
+    startTransition(async () => {
+      const r = await setConsumable(svcId, addProduct, Number(addQty));
+      if (r.ok) {
+        toast.success("Норма добавлена");
+        setAddProduct("");
+        setAddQty("");
+        router.refresh();
+      } else {
+        toast.error(r.error ?? "Ошибка");
+      }
+    });
+  }
+
+  function remove(productId: string) {
+    startTransition(async () => {
+      const r = await removeConsumable(svcId, productId);
+      if (r.ok) {
+        toast.success("Норма убрана");
+        router.refresh();
+      } else {
+        toast.error(r.error ?? "Ошибка");
+      }
+    });
+  }
+
+  if (services.length === 0) {
+    return (
+      <div className="mt-4 rounded-xl border border-dashed border-neutral-300 bg-white px-8 py-12 text-center text-sm text-neutral-500">
+        Сначала добавьте услуги.
+      </div>
+    );
+  }
+
+  const svcName = services.find((s) => s.id === svcId)?.name ?? "";
+  const totalCost = rows.reduce((sum, r) => {
+    const p = products.find((x) => x.id === r.product_id);
+    return sum + (p ? Number(p.avg_cost) * Number(r.qty_base) : 0);
+  }, 0);
+
+  return (
+    <div className="mt-4 space-y-4">
+      <div className="rounded-xl border border-neutral-200 bg-white p-4">
+        <label className="mb-1 block text-xs text-neutral-500">Услуга</label>
+        <select
+          value={svcId}
+          onChange={(e) => setSvcId(e.target.value)}
+          className="w-full max-w-md rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+        >
+          {services.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+        <p className="mt-2 text-xs text-neutral-400">
+          Эти расходники спишутся автоматически, когда запись переведут в статус «Оплачено».
+        </p>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+        <div className="flex items-center gap-2 border-b border-neutral-200 px-4 py-3">
+          <Beaker className="h-4 w-4 text-neutral-400" />
+          <span className="text-sm font-medium text-neutral-900">
+            Расход на услугу «{svcName}»
+          </span>
+          {totalCost > 0 && (
+            <span className="ml-auto text-xs text-neutral-500">
+              Себестоимость расходников: <b className="text-neutral-800">{rub(totalCost)}</b>
+            </span>
+          )}
+        </div>
+
+        <table className="w-full text-sm">
+          <tbody>
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={3} className="px-4 py-8 text-center text-neutral-400">
+                  Расходники не заданы — при оплате ничего не спишется.
+                </td>
+              </tr>
+            )}
+            {rows.map((r) => {
+              const p = products.find((x) => x.id === r.product_id);
+              if (!p) return null;
+              const cost = Number(p.avg_cost) * Number(r.qty_base);
+              return (
+                <tr key={r.product_id} className="border-b border-neutral-100 last:border-0">
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-neutral-900">{p.name}</div>
+                    <div className="text-xs text-neutral-400">
+                      на складе: {num(p.stock)} {UNIT[p.base_unit]}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <span className="font-medium text-neutral-800">
+                      {num(r.qty_base)} {UNIT[p.base_unit]}
+                    </span>
+                    <div className="text-xs text-neutral-400">≈ {rub(cost)}</div>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={() => remove(r.product_id)}
+                      disabled={pending}
+                      className="rounded-md p-1.5 text-neutral-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        {free.length > 0 && (
+          <div className="flex flex-wrap items-end gap-2 border-t border-neutral-200 bg-neutral-50 px-4 py-3">
+            <select
+              value={addProduct}
+              onChange={(e) => setAddProduct(e.target.value)}
+              className="min-w-52 flex-1 rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+            >
+              <option value="">— расходник —</option>
+              {free.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({UNIT[p.base_unit]})
+                </option>
+              ))}
+            </select>
+            <input
+              type="number"
+              min={0}
+              step="any"
+              value={addQty}
+              onChange={(e) => setAddQty(e.target.value)}
+              placeholder="Сколько"
+              className="w-28 rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+            />
+            <button
+              onClick={add}
+              disabled={pending}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:opacity-50"
+            >
+              <Plus className="h-4 w-4" />
+              Добавить
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- продажи ---------- */
+
+function SalesTab() {
+  const router = useRouter();
+  const [rows, setRows] = useState<SaleRow[] | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    fetchSales().then((r) => {
+      if (r.ok) setRows(r.rows);
+      else toast.error(r.error);
+    });
+  }, []);
+
+  function cancel(id: string) {
+    if (!confirm("Отменить продажу? Товар вернётся на склад.")) return;
+    startTransition(async () => {
+      const r = await cancelSale(id);
+      if (r.ok) {
+        toast.success("Продажа отменена, товар возвращён");
+        const f = await fetchSales();
+        if (f.ok) setRows(f.rows);
+        router.refresh();
+      } else {
+        toast.error(r.error ?? "Ошибка");
+      }
+    });
+  }
+
+  if (!rows) {
+    return <div className="mt-4 py-10 text-center text-sm text-neutral-400">Загружаем…</div>;
+  }
+
+  const revenue = rows.filter((r) => r.status === "paid").reduce((s, r) => s + r.total, 0);
+  const profit = rows
+    .filter((r) => r.status === "paid")
+    .reduce((s, r) => s + (r.total - r.cost * r.qty), 0);
+
+  return (
+    <div className="mt-4 space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-neutral-200 bg-white p-4">
+          <div className="text-xs text-neutral-500">Выручка с товаров</div>
+          <div className="mt-1 text-xl font-semibold text-neutral-900">{rub(revenue)}</div>
+        </div>
+        <div className="rounded-xl border border-neutral-200 bg-white p-4">
+          <div className="text-xs text-neutral-500">Прибыль</div>
+          <div className="mt-1 text-xl font-semibold text-emerald-700">{rub(profit)}</div>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-neutral-200 text-left text-xs text-neutral-500">
+              <th className="px-4 py-3">Когда</th>
+              <th className="px-4 py-3">Товар</th>
+              <th className="px-4 py-3">Клиент</th>
+              <th className="px-4 py-3">Продал</th>
+              <th className="px-4 py-3 text-right">Кол-во</th>
+              <th className="px-4 py-3 text-right">Сумма</th>
+              <th className="px-4 py-3 text-right">Прибыль</th>
+              <th className="px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={8} className="px-4 py-10 text-center text-neutral-400">
+                  Продаж пока нет.
+                </td>
+              </tr>
+            )}
+            {rows.map((s) => (
+              <tr
+                key={s.id}
+                className={`border-b border-neutral-100 last:border-0 ${
+                  s.status === "cancelled" ? "opacity-40" : ""
+                }`}
+              >
+                <td className="px-4 py-3 text-neutral-600">{dt(s.paid_at ?? s.created_at)}</td>
+                <td className="px-4 py-3 font-medium text-neutral-900">{s.product_name}</td>
+                <td className="px-4 py-3 text-neutral-600">{s.client_name ?? "—"}</td>
+                <td className="px-4 py-3 text-neutral-600">{s.specialist_name ?? "—"}</td>
+                <td className="px-4 py-3 text-right text-neutral-700">{num(s.qty)}</td>
+                <td className="px-4 py-3 text-right font-medium text-neutral-900">{rub(s.total)}</td>
+                <td className="px-4 py-3 text-right text-emerald-700">
+                  {rub(s.total - s.cost * s.qty)}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  {s.status === "cancelled" ? (
+                    <span className="text-xs text-neutral-400">отменена</span>
+                  ) : (
+                    <button
+                      onClick={() => cancel(s.id)}
+                      disabled={pending}
+                      className="text-xs text-neutral-400 underline underline-offset-2 hover:text-red-600 disabled:opacity-50"
+                    >
+                      Отменить
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- модалка продажи ---------- */
+
+function SellModal({
+  products,
+  specialists,
+  clients,
+  onClose,
+}: {
+  products: ProductRow[];
+  specialists: SpecOpt[];
+  clients: ClientOpt[];
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  const [productId, setProductId] = useState(products[0]?.id ?? "");
+  const [qty, setQty] = useState("1");
+  const [clientId, setClientId] = useState<string>("");
+  const [specId, setSpecId] = useState<string>("");
+
+  const p = products.find((x) => x.id === productId);
+  const total = p && p.price ? Number(p.price) * (Number(qty) || 0) : 0;
+  const enough = p ? Number(p.stock) >= (Number(qty) || 0) : false;
+
+  function save() {
+    if (!productId) {
+      toast.error("Выберите товар");
+      return;
+    }
+    startTransition(async () => {
+      const r = await sellProduct({
+        product_id: productId,
+        qty: Number(qty) || 0,
+        client_id: clientId ? Number(clientId) : null,
+        specialist_id: specId || null,
+        booking_id: null,
+      });
+      if (r.ok) {
+        toast.success(`Продано на ${rub(r.total)}`);
+        onClose();
+        router.refresh();
+      } else {
+        toast.error(r.error ?? "Ошибка");
+      }
+    });
+  }
+
+  if (products.length === 0) {
+    return (
+      <Modal title="Продажа товара" onClose={onClose}>
+        <div className="py-6 text-center text-sm text-neutral-500">
+          Нет товаров в наличии.
+        </div>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal title="Продажа товара" onClose={onClose}>
+      <div className="space-y-4">
+        <Field label="Товар">
+          <select
+            value={productId}
+            onChange={(e) => setProductId(e.target.value)}
+            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+          >
+            {products.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.name} — {rub(x.price)} (остаток {num(x.stock)})
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Количество">
+            <input
+              type="number"
+              min={1}
+              step="any"
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              className={`w-full rounded-lg border px-3 py-2 text-sm outline-none ${
+                enough ? "border-neutral-300 focus:border-neutral-900" : "border-red-300"
+              }`}
+            />
+            {!enough && p && (
+              <p className="mt-1 text-xs text-red-600">На складе только {num(p.stock)}</p>
+            )}
+          </Field>
+          <Field label="Сумма">
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm font-semibold text-neutral-900">
+              {rub(total)}
+            </div>
+          </Field>
+        </div>
+
+        <Field label="Клиент (необязательно)">
+          <select
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
+            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+          >
+            <option value="">— без привязки —</option>
+            {clients.map((c) => (
+              <option key={c.telegram_id} value={c.telegram_id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Продал мастер (для начисления процента)">
+          <select
+            value={specId}
+            onChange={(e) => setSpecId(e.target.value)}
+            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+          >
+            <option value="">— салон —</option>
+            {specialists.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.full_name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-neutral-600 hover:bg-neutral-100">
+            Отмена
+          </button>
+          <button
+            onClick={save}
+            disabled={pending || !enough}
+            className="inline-flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:opacity-50"
+          >
+            {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Провести продажу
           </button>
         </div>
       </div>
