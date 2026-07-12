@@ -292,3 +292,108 @@ export async function removeServicePayout(specialistId: string, serviceId: strin
   revalidatePath("/payouts", "layout");
   return { ok: true };
 }
+
+/* ---------- документы мастера ---------- */
+
+export type DocType = "diploma" | "certificate" | "license" | "medical" | "contract" | "other";
+
+export async function addDocument(input: {
+  specialistId: string;
+  docType: DocType;
+  title: string;
+  filePath: string;
+  mimeType: string;
+  sizeBytes: number;
+  expiresAt: string | null;
+  isPublic: boolean;
+}) {
+  const supabase = await guard();
+  if (!supabase) return { ok: false, error: "Нет доступа" };
+
+  const title = input.title.trim();
+  if (!title) return { ok: false, error: "Укажите название документа" };
+  if (!input.filePath) return { ok: false, error: "Файл не загружен" };
+
+  const admin = createAdmin();
+  const { error } = await admin.from("specialist_documents").insert({
+    specialist_id: input.specialistId,
+    doc_type: input.docType,
+    title,
+    file_path: input.filePath,
+    mime_type: input.mimeType,
+    size_bytes: input.sizeBytes,
+    expires_at: input.expiresAt || null,
+    is_public: input.isPublic,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/specialists/${input.specialistId}`, "layout");
+  return { ok: true };
+}
+
+export async function deleteDocument(specialistId: string, id: string) {
+  const supabase = await guard();
+  if (!supabase) return { ok: false, error: "Нет доступа" };
+
+  const admin = createAdmin();
+
+  const { data: doc } = await admin
+    .from("specialist_documents")
+    .select("file_path")
+    .eq("id", id)
+    .eq("specialist_id", specialistId)
+    .maybeSingle();
+
+  if (doc?.file_path) {
+    await admin.storage.from("docs").remove([doc.file_path]);
+  }
+
+  const { error } = await admin
+    .from("specialist_documents")
+    .delete()
+    .eq("id", id)
+    .eq("specialist_id", specialistId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/specialists/${specialistId}`, "layout");
+  return { ok: true };
+}
+
+export async function toggleDocumentPublic(specialistId: string, id: string, isPublic: boolean) {
+  const supabase = await guard();
+  if (!supabase) return { ok: false, error: "Нет доступа" };
+
+  const admin = createAdmin();
+  const { error } = await admin
+    .from("specialist_documents")
+    .update({ is_public: isPublic })
+    .eq("id", id)
+    .eq("specialist_id", specialistId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/specialists/${specialistId}`, "layout");
+  return { ok: true };
+}
+
+// Ссылка на скачивание для админа (signed URL, живёт 5 минут)
+export async function getDocumentUrl(specialistId: string, id: string) {
+  const supabase = await guard();
+  if (!supabase) return { ok: false as const, error: "Нет доступа" };
+
+  const admin = createAdmin();
+  const { data: doc } = await admin
+    .from("specialist_documents")
+    .select("file_path")
+    .eq("id", id)
+    .eq("specialist_id", specialistId)
+    .maybeSingle();
+
+  if (!doc?.file_path) return { ok: false as const, error: "Документ не найден" };
+
+  const { data, error } = await admin.storage
+    .from("docs")
+    .createSignedUrl(doc.file_path, 300);
+  if (error || !data) return { ok: false as const, error: error?.message ?? "Ошибка ссылки" };
+
+  return { ok: true as const, url: data.signedUrl };
+}

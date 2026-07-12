@@ -10,6 +10,7 @@ import SpecialistServices, {
 } from "./specialist-services";
 import SpecialistWorks, { type Work } from "./specialist-works";
 import SpecialistPayouts, { type ServicePayout, type OfferedSvc } from "./specialist-payouts";
+import SpecialistDocuments, { type SpecDocument } from "./specialist-documents";
 import SpecialistReviews, { type Review } from "./specialist-reviews";
 
 export const dynamic = "force-dynamic";
@@ -90,10 +91,19 @@ export default async function SpecialistPage({
       .order("created_at", { ascending: false }),
   ]);
 
-  const { data: payoutOverrides } = await supabase
-    .from("specialist_service_payouts")
-    .select("service_id, payout_type, payout_value")
-    .eq("specialist_id", id);
+  const [{ data: payoutOverrides }, { data: docs }] = await Promise.all([
+    supabase
+      .from("specialist_service_payouts")
+      .select("service_id, payout_type, payout_value")
+      .eq("specialist_id", id),
+    supabase
+      .from("v_specialist_documents")
+      .select(
+        "id, doc_type, title, file_path, mime_type, size_bytes, expires_at, is_public, created_at, expiry_status, days_left",
+      )
+      .eq("specialist_id", id)
+      .order("created_at", { ascending: false }),
+  ]);
 
   const catMap = new Map<string, Cat>(((cats as Cat[]) ?? []).map((c) => [c.id, c]));
   const catalog: CatalogService[] = ((svcs as Svc[]) ?? []).map((s) => ({
@@ -132,6 +142,7 @@ export default async function SpecialistPage({
         overrides={(payoutOverrides as ServicePayout[]) ?? []}
         offered={offeredForPayouts}
       />
+      <SpecialistDocuments specialistId={id} documents={(docs as SpecDocument[]) ?? []} />
       <SpecialistWorks specialistId={id} works={(works as Work[]) ?? []} />
       <SpecialistReviews
         specialistId={id}
