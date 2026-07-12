@@ -15,6 +15,10 @@ export type OrderRow = {
   price_snapshot: number | null;
   client_confirmed_at: string | null;
   created_at: string;
+  reschedule_count: number | null;
+  orig_starts_at: string | null;
+  rescheduled_from: string | null;
+  rescheduled_to: string | null;
   client: {
     telegram_id: number;
     first_name: string | null;

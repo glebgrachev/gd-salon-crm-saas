@@ -121,6 +121,20 @@ export default function OrdersClient({
                 >
                   <TableCell className="font-medium text-neutral-900">
                     {fmtDateTime(o.starts_at)}
+                    {(o.reschedule_count ?? 0) > 0 && o.orig_starts_at && (
+                      <div
+                        className="mt-0.5 text-xs font-normal text-amber-600"
+                        title={`Изначально: ${fmtDateTime(o.orig_starts_at)}`}
+                      >
+                        🔄 перенесено{(o.reschedule_count ?? 0) > 1 ? ` ×${o.reschedule_count}` : ""} · было{" "}
+                        {fmtDateTime(o.orig_starts_at)}
+                      </div>
+                    )}
+                    {o.rescheduled_to && (
+                      <div className="mt-0.5 text-xs font-normal text-neutral-400">
+                        отменено при переносе
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell className="text-neutral-600">
                     {clientName(o.client)}

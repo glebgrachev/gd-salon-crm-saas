@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic";
 
 const SELECT = `
   id, starts_at, ends_at, status, price_snapshot, client_confirmed_at, created_at,
+  reschedule_count, orig_starts_at, rescheduled_from, rescheduled_to,
   client:users ( telegram_id, first_name, last_name, username, phone ),
   specialist:specialists ( id, full_name ),
   service:services ( id, name )
