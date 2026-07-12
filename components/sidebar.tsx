@@ -14,12 +14,14 @@ import {
   UserCheck,
   Send,
   Wallet,
+  CalendarDays,
   LogOut,
 } from "lucide-react";
 
 const NAV = [
   { href: "/", label: "Заказы", icon: CalendarCheck },
   { href: "/specialists", label: "Специалисты", icon: Scissors },
+  { href: "/schedule", label: "График работы", icon: CalendarDays },
   { href: "/clients", label: "Клиенты", icon: Users },
   { href: "/services", label: "Услуги", icon: LayoutGrid },
   { href: "/promotions", label: "Акции", icon: Megaphone },
