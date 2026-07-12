@@ -9,6 +9,7 @@ import SpecialistServices, {
   type OfferedService,
 } from "./specialist-services";
 import SpecialistWorks, { type Work } from "./specialist-works";
+import SpecialistPayouts, { type ServicePayout, type OfferedSvc } from "./specialist-payouts";
 import SpecialistReviews, { type Review } from "./specialist-reviews";
 
 export const dynamic = "force-dynamic";
@@ -42,7 +43,9 @@ export default async function SpecialistPage({
 
   const { data: specialist } = await supabase
     .from("specialists")
-    .select("id, full_name, photo_url, experience_years, rating")
+    .select(
+      "id, full_name, photo_url, experience_years, rating, payout_type, payout_value, salary_month, salary_mode, shift_rate",
+    )
     .eq("id", id)
     .maybeSingle();
 
@@ -87,11 +90,23 @@ export default async function SpecialistPage({
       .order("created_at", { ascending: false }),
   ]);
 
+  const { data: payoutOverrides } = await supabase
+    .from("specialist_service_payouts")
+    .select("service_id, payout_type, payout_value")
+    .eq("specialist_id", id);
+
   const catMap = new Map<string, Cat>(((cats as Cat[]) ?? []).map((c) => [c.id, c]));
   const catalog: CatalogService[] = ((svcs as Svc[]) ?? []).map((s) => ({
     id: s.id,
     name: s.name,
     path: buildPath(s.category_id, catMap),
+  }));
+
+  // услуги, которые мастер реально оказывает — для исключений по оплате
+  const svcNames = new Map<string, string>(((svcs as Svc[]) ?? []).map((s) => [s.id, s.name]));
+  const offeredForPayouts: OfferedSvc[] = ((offered as OfferedService[]) ?? []).map((o) => ({
+    service_id: o.service_id,
+    name: svcNames.get(o.service_id) ?? "Услуга",
   }));
 
   return (
@@ -104,6 +119,18 @@ export default async function SpecialistPage({
         specialistId={id}
         catalog={catalog}
         offered={(offered as OfferedService[]) ?? []}
+      />
+      <SpecialistPayouts
+        specialistId={id}
+        rules={{
+          payout_type: (specialist.payout_type ?? "percent") as "percent" | "fixed",
+          payout_value: Number(specialist.payout_value ?? 0),
+          salary_month: Number(specialist.salary_month ?? 0),
+          salary_mode: (specialist.salary_mode ?? "by_days") as "full_month" | "by_days" | "by_shifts",
+          shift_rate: Number(specialist.shift_rate ?? 0),
+        }}
+        overrides={(payoutOverrides as ServicePayout[]) ?? []}
+        offered={offeredForPayouts}
       />
       <SpecialistWorks specialistId={id} works={(works as Work[]) ?? []} />
       <SpecialistReviews

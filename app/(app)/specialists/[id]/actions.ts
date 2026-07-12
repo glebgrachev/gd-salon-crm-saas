@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 
 async function guard() {
@@ -194,5 +195,100 @@ export async function setReviewStatus(
   if (error) return { ok: false, error: error.message };
 
   revalidatePath(`/specialists/${specialistId}`);
+  return { ok: true };
+}
+
+/* ---------- оплата труда ---------- */
+
+export type PayoutRules = {
+  payout_type: "percent" | "fixed";
+  payout_value: number;
+  salary_month: number;
+  salary_mode: "full_month" | "by_days" | "by_shifts";
+  shift_rate: number;
+};
+
+export async function savePayoutRules(specialistId: string, rules: PayoutRules) {
+  const supabase = await guard();
+  if (!supabase) return { ok: false, error: "Нет доступа" };
+
+  const num = (v: unknown, lo: number, hi: number) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return lo;
+    return Math.min(hi, Math.max(lo, n));
+  };
+
+  const payload = {
+    payout_type: rules.payout_type === "fixed" ? "fixed" : "percent",
+    payout_value:
+      rules.payout_type === "percent"
+        ? num(rules.payout_value, 0, 100)
+        : num(rules.payout_value, 0, 1_000_000),
+    salary_month: num(rules.salary_month, 0, 10_000_000),
+    salary_mode: ["full_month", "by_days", "by_shifts"].includes(rules.salary_mode)
+      ? rules.salary_mode
+      : "by_days",
+    shift_rate: num(rules.shift_rate, 0, 1_000_000),
+  };
+
+  const admin = createAdmin();
+  const { data, error } = await admin
+    .from("specialists")
+    .update(payload)
+    .eq("id", specialistId)
+    .select("id");
+  if (error) return { ok: false, error: error.message };
+  if (!data || data.length === 0) return { ok: false, error: "Мастер не найден" };
+
+  revalidatePath(`/specialists/${specialistId}`, "layout");
+  revalidatePath("/payouts", "layout");
+  return { ok: true };
+}
+
+export async function setServicePayout(
+  specialistId: string,
+  serviceId: string,
+  payoutType: "percent" | "fixed",
+  payoutValue: number,
+) {
+  const supabase = await guard();
+  if (!supabase) return { ok: false, error: "Нет доступа" };
+
+  const v = Number(payoutValue);
+  if (!Number.isFinite(v) || v < 0) return { ok: false, error: "Некорректное значение" };
+  if (payoutType === "percent" && v > 100) return { ok: false, error: "Процент не может быть больше 100" };
+
+  const admin = createAdmin();
+  const { error } = await admin.from("specialist_service_payouts").upsert(
+    {
+      specialist_id: specialistId,
+      service_id: serviceId,
+      payout_type: payoutType,
+      payout_value: v,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "specialist_id,service_id" },
+  );
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/specialists/${specialistId}`, "layout");
+  revalidatePath("/payouts", "layout");
+  return { ok: true };
+}
+
+export async function removeServicePayout(specialistId: string, serviceId: string) {
+  const supabase = await guard();
+  if (!supabase) return { ok: false, error: "Нет доступа" };
+
+  const admin = createAdmin();
+  const { error } = await admin
+    .from("specialist_service_payouts")
+    .delete()
+    .eq("specialist_id", specialistId)
+    .eq("service_id", serviceId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/specialists/${specialistId}`, "layout");
+  revalidatePath("/payouts", "layout");
   return { ok: true };
 }

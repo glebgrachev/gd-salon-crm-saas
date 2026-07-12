@@ -13,6 +13,7 @@ import {
   Ticket,
   UserCheck,
   Send,
+  Wallet,
   LogOut,
 } from "lucide-react";
 
@@ -26,6 +27,7 @@ const NAV = [
   { href: "/certificates", label: "Сертификаты", icon: Ticket },
   { href: "/retention", label: "Возвращаемость", icon: UserCheck },
   { href: "/broadcasts", label: "Рассылки", icon: Send },
+  { href: "/payouts", label: "Зарплаты", icon: Wallet },
   { href: "/analytics", label: "Аналитика", icon: BarChart3 },
 ];
 
