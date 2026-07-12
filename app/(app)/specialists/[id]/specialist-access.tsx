@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Smartphone, KeyRound, Check, Unlink, Copy } from "lucide-react";
+import PhoneInput from "@/components/phone-input";
 import { saveSpecialistPhone, generateLinkCode, unlinkSpecialist } from "./actions";
 
 export type AccessInfo = {
@@ -24,7 +25,8 @@ export default function SpecialistAccess({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [phone, setPhone] = useState(access.phone ?? "");
+  const [phone, setPhone] = useState<string | null>(access.phone ?? null);
+  const [phoneValid, setPhoneValid] = useState(true);
   const [code, setCode] = useState<string | null>(
     access.link_code && access.link_code_expires_at && new Date(access.link_code_expires_at) > new Date()
       ? access.link_code
@@ -34,8 +36,12 @@ export default function SpecialistAccess({
   const linked = access.telegram_id != null;
 
   function savePhone() {
+    if (!phoneValid) {
+      toast.error("Проверьте номер телефона");
+      return;
+    }
     startTransition(async () => {
-      const r = await saveSpecialistPhone(specialistId, phone);
+      const r = await saveSpecialistPhone(specialistId, phone ?? "");
       if (r.ok) {
         toast.success("Телефон сохранён");
         router.refresh();
@@ -112,20 +118,22 @@ export default function SpecialistAccess({
             <p className="mt-1 text-xs text-neutral-400">
               Мастер открывает приложение и делится контактом. Если номер совпадёт — доступ откроется сам.
             </p>
-            <div className="mt-3 flex flex-wrap items-end gap-3">
+            <div className="mt-3 flex flex-wrap items-start gap-3">
               <div>
-                <label className="block text-xs text-neutral-500">Телефон мастера</label>
-                <input
+                <label className="mb-1 block text-xs text-neutral-500">Телефон мастера</label>
+                <PhoneInput
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+7 999 123-45-67"
-                  className="mt-1 w-52 rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+                  onChange={(e164, valid) => {
+                    setPhone(e164);
+                    setPhoneValid(valid);
+                  }}
+                  disabled={pending}
                 />
               </div>
               <button
                 onClick={savePhone}
-                disabled={pending}
-                className="rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50"
+                disabled={pending || !phoneValid}
+                className="mt-5 rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50"
               >
                 Сохранить
               </button>

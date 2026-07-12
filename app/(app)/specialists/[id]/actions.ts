@@ -406,7 +406,10 @@ export async function saveSpecialistPhone(specialistId: string, phone: string) {
 
   const clean = phone.trim();
   const digits = clean.replace(/\D/g, "");
-  if (clean && digits.length < 10) return { ok: false, error: "Слишком короткий номер" };
+  // E.164: код страны (1–3) + национальная часть (8–10) → 9–13 цифр
+  if (clean && (digits.length < 9 || digits.length > 13)) {
+    return { ok: false, error: "Некорректный номер" };
+  }
 
   const admin = createAdmin();
   const { error } = await admin
