@@ -11,6 +11,7 @@ import SpecialistServices, {
 import SpecialistWorks, { type Work } from "./specialist-works";
 import SpecialistPayouts, { type ServicePayout, type OfferedSvc } from "./specialist-payouts";
 import SpecialistDocuments, { type SpecDocument } from "./specialist-documents";
+import SpecialistAccess, { type AccessInfo } from "./specialist-access";
 import SpecialistReviews, { type Review } from "./specialist-reviews";
 
 export const dynamic = "force-dynamic";
@@ -45,7 +46,7 @@ export default async function SpecialistPage({
   const { data: specialist } = await supabase
     .from("specialists")
     .select(
-      "id, full_name, photo_url, experience_years, rating, payout_type, payout_value, salary_month, salary_mode, shift_rate",
+      "id, full_name, photo_url, experience_years, rating, payout_type, payout_value, salary_month, salary_mode, shift_rate, telegram_id, phone, link_code, link_code_expires_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -141,6 +142,16 @@ export default async function SpecialistPage({
         }}
         overrides={(payoutOverrides as ServicePayout[]) ?? []}
         offered={offeredForPayouts}
+      />
+      <SpecialistAccess
+        specialistId={id}
+        access={{
+          telegram_id: specialist.telegram_id ?? null,
+          phone: specialist.phone ?? null,
+          link_code: specialist.link_code ?? null,
+          link_code_expires_at: specialist.link_code_expires_at ?? null,
+        } as AccessInfo}
+        botName="@beautyapp_salon_bot"
       />
       <SpecialistDocuments specialistId={id} documents={(docs as SpecDocument[]) ?? []} />
       <SpecialistWorks specialistId={id} works={(works as Work[]) ?? []} />

@@ -397,3 +397,66 @@ export async function getDocumentUrl(specialistId: string, id: string) {
 
   return { ok: true as const, url: data.signedUrl };
 }
+
+/* ---------- доступ мастера в Mini App ---------- */
+
+export async function saveSpecialistPhone(specialistId: string, phone: string) {
+  const supabase = await guard();
+  if (!supabase) return { ok: false, error: "Нет доступа" };
+
+  const clean = phone.trim();
+  const digits = clean.replace(/\D/g, "");
+  if (clean && digits.length < 10) return { ok: false, error: "Слишком короткий номер" };
+
+  const admin = createAdmin();
+  const { error } = await admin
+    .from("specialists")
+    .update({ phone: clean || null })
+    .eq("id", specialistId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/specialists/${specialistId}`, "layout");
+  return { ok: true };
+}
+
+function genCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // без 0/O/1/I
+  let out = "";
+  for (let i = 0; i < 6; i++) {
+    out += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return out;
+}
+
+export async function generateLinkCode(specialistId: string) {
+  const supabase = await guard();
+  if (!supabase) return { ok: false as const, error: "Нет доступа" };
+
+  const code = genCode();
+  const expires = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+
+  const admin = createAdmin();
+  const { error } = await admin
+    .from("specialists")
+    .update({ link_code: code, link_code_expires_at: expires })
+    .eq("id", specialistId);
+  if (error) return { ok: false as const, error: error.message };
+
+  revalidatePath(`/specialists/${specialistId}`, "layout");
+  return { ok: true as const, code, expires };
+}
+
+export async function unlinkSpecialist(specialistId: string) {
+  const supabase = await guard();
+  if (!supabase) return { ok: false, error: "Нет доступа" };
+
+  const admin = createAdmin();
+  const { error } = await admin
+    .from("specialists")
+    .update({ telegram_id: null, link_code: null, link_code_expires_at: null })
+    .eq("id", specialistId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/specialists/${specialistId}`, "layout");
+  return { ok: true };
+}
