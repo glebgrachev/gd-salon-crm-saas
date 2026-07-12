@@ -1,9 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import ScheduleEditor, {
-  type Schedule,
-  type Exception,
-} from "./schedule-editor";
+import ScheduleEditor from "./schedule-editor";
 import SpecialistServices, {
   type CatalogService,
   type OfferedService,
@@ -12,6 +9,7 @@ import SpecialistWorks, { type Work } from "./specialist-works";
 import SpecialistPayouts, { type ServicePayout, type OfferedSvc } from "./specialist-payouts";
 import SpecialistDocuments, { type SpecDocument } from "./specialist-documents";
 import SpecialistAccess, { type AccessInfo } from "./specialist-access";
+import ScheduleCalendar from "@/components/schedule-calendar";
 import SpecialistReviews, { type Review } from "./specialist-reviews";
 
 export const dynamic = "force-dynamic";
@@ -54,23 +52,12 @@ export default async function SpecialistPage({
   if (!specialist) notFound();
 
   const [
-    { data: schedules },
-    { data: exceptions },
     { data: cats },
     { data: svcs },
     { data: offered },
     { data: works },
     { data: reviews },
   ] = await Promise.all([
-    supabase
-      .from("specialist_schedules")
-      .select("weekday, is_working, start_time, end_time, break_start, break_end")
-      .eq("specialist_id", id),
-    supabase
-      .from("schedule_exceptions")
-      .select("id, date, is_working, start_time, end_time, break_start, break_end")
-      .eq("specialist_id", id)
-      .order("date"),
     supabase.from("categories").select("id, parent_id, name"),
     supabase.from("services").select("id, name, category_id").order("name"),
     supabase
@@ -121,11 +108,8 @@ export default async function SpecialistPage({
   }));
 
   return (
-    <ScheduleEditor
-      specialist={specialist}
-      schedules={(schedules as Schedule[]) ?? []}
-      exceptions={(exceptions as Exception[]) ?? []}
-    >
+    <ScheduleEditor specialist={specialist}>
+      <ScheduleCalendar specialistId={id} />
       <SpecialistServices
         specialistId={id}
         catalog={catalog}
