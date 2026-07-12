@@ -75,3 +75,104 @@ export async function saveScheduleMonth(
   revalidatePath(`/specialists/${specialistId}`, "layout");
   return { ok: true };
 }
+
+/**
+ * Продлить график вперёд: берём рисунок недели из указанного месяца
+ * (что за день недели — рабочий/выходной/не задан, с каким временем)
+ * и применяем к следующим N месяцам.
+ */
+export async function extendSchedule(
+  specialistId: string,
+  fromMonth: string, // YYYY-MM-01 — месяц-образец
+  months: number,
+) {
+  const supabase = await guard();
+  if (!supabase) return { ok: false, error: "Нет доступа" };
+  if (months < 1 || months > 6) return { ok: false, error: "Можно продлить на 1–6 месяцев" };
+
+  const admin = createAdmin();
+
+  const base = new Date(`${fromMonth}T00:00:00Z`);
+  const y = base.getUTCFullYear();
+  const m = base.getUTCMonth();
+  const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  const srcFrom = `${y}-${String(m + 1).padStart(2, "0")}-01`;
+  const srcTo = `${y}-${String(m + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+  // образец
+  const { data: src, error: srcErr } = await admin
+    .from("schedule_days")
+    .select("date, day_type, start_time, end_time, break_start, break_end")
+    .eq("specialist_id", specialistId)
+    .gte("date", srcFrom)
+    .lte("date", srcTo);
+
+  if (srcErr) return { ok: false, error: srcErr.message };
+  if (!src || src.length === 0) {
+    return { ok: false, error: "Месяц-образец пуст — сначала разметьте его" };
+  }
+
+  // рисунок недели: для каждого дня недели берём самый частый вариант
+  type Slot = Omit<ScheduleDay, "date">;
+  const buckets = new Map<number, Map<string, { n: number; slot: Slot }>>();
+
+  for (const d of src as ScheduleDay[]) {
+    const dow = (new Date(`${d.date}T00:00:00Z`).getUTCDay() + 6) % 7; // пн = 0
+    const slot: Slot = {
+      day_type: d.day_type,
+      start_time: d.start_time,
+      end_time: d.end_time,
+      break_start: d.break_start,
+      break_end: d.break_end,
+    };
+    const key = JSON.stringify(slot);
+    if (!buckets.has(dow)) buckets.set(dow, new Map());
+    const b = buckets.get(dow)!;
+    const cur = b.get(key);
+    if (cur) cur.n += 1;
+    else b.set(key, { n: 1, slot });
+  }
+
+  const week = new Map<number, Slot>();
+  for (const [dow, variants] of buckets) {
+    let best: { n: number; slot: Slot } | null = null;
+    for (const v of variants.values()) {
+      if (!best || v.n > best.n) best = v;
+    }
+    if (best) week.set(dow, best.slot);
+  }
+
+  // раскатываем на следующие месяцы
+  let written = 0;
+  for (let i = 1; i <= months; i++) {
+    const ty = new Date(Date.UTC(y, m + i, 1)).getUTCFullYear();
+    const tm = new Date(Date.UTC(y, m + i, 1)).getUTCMonth();
+    const tLast = new Date(Date.UTC(ty, tm + 1, 0)).getUTCDate();
+    const tFrom = `${ty}-${String(tm + 1).padStart(2, "0")}-01`;
+    const tTo = `${ty}-${String(tm + 1).padStart(2, "0")}-${String(tLast).padStart(2, "0")}`;
+
+    const days: ScheduleDay[] = [];
+    for (let d = 1; d <= tLast; d++) {
+      const dow = (new Date(Date.UTC(ty, tm, d)).getUTCDay() + 6) % 7;
+      const slot = week.get(dow);
+      if (!slot) continue; // этот день недели не задан — оставляем серым
+      days.push({
+        date: `${ty}-${String(tm + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`,
+        ...slot,
+      });
+    }
+
+    const { error } = await admin.rpc("save_schedule_days", {
+      p_specialist: specialistId,
+      p_from: tFrom,
+      p_to: tTo,
+      p_days: days,
+    });
+    if (error) return { ok: false, error: error.message };
+    written += days.length;
+  }
+
+  revalidatePath("/schedule", "layout");
+  revalidatePath(`/specialists/${specialistId}`, "layout");
+  return { ok: true, months, written };
+}

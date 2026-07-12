@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import {
   loadScheduleMonth,
   saveScheduleMonth,
+  extendSchedule,
   type ScheduleDay,
   type DayType,
 } from "@/app/(app)/schedule/actions";
@@ -66,6 +67,8 @@ export default function ScheduleCalendar({
   const [loading, setLoading] = useState(true);
   const [dirty, setDirty] = useState(false);
   const [saving, startSaving] = useTransition();
+  const [extending, startExtending] = useTransition();
+  const [extMonths, setExtMonths] = useState(3);
 
   const from = iso(year, month, 1);
   const to = iso(year, month, new Date(year, month + 1, 0).getDate());
@@ -185,6 +188,33 @@ export default function ScheduleCalendar({
         load();
       } else {
         toast.error(r.error ?? "Не удалось сохранить");
+      }
+    });
+  }
+
+  function extend() {
+    if (dirty) {
+      toast.error("Сначала сохраните изменения текущего месяца");
+      return;
+    }
+    if (workCount === 0 && offCount === 0) {
+      toast.error("Разметьте месяц — он станет образцом");
+      return;
+    }
+    if (
+      !confirm(
+        `Скопировать рисунок недели этого месяца на следующие ${extMonths} мес.? ` +
+          `Существующая разметка в этих месяцах будет перезаписана.`,
+      )
+    )
+      return;
+
+    startExtending(async () => {
+      const r = await extendSchedule(specialistId, from, extMonths);
+      if (r.ok) {
+        toast.success(`График продлён на ${extMonths} мес.`);
+      } else {
+        toast.error(r.error ?? "Не удалось продлить");
       }
     });
   }
@@ -373,6 +403,35 @@ export default function ScheduleCalendar({
               {saving ? "Сохраняем…" : "Сохранить"}
             </button>
           </div>
+        </div>
+
+        {/* продление графика вперёд */}
+        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2.5">
+          <span className="text-xs text-neutral-600">
+            Продлить рисунок этого месяца вперёд на
+          </span>
+          <select
+            value={extMonths}
+            onChange={(e) => setExtMonths(Number(e.target.value))}
+            className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs outline-none focus:border-neutral-900"
+          >
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <option key={n} value={n}>
+                {n} мес.
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={extend}
+            disabled={extending || dirty}
+            className="inline-flex items-center gap-1.5 rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition hover:bg-neutral-100 disabled:opacity-50"
+          >
+            {extending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {extending ? "Продлеваем…" : "Продлить"}
+          </button>
+          <span className="text-xs text-neutral-400">
+            Дни недели скопируются с тем же временем
+          </span>
         </div>
       </div>
     </section>
