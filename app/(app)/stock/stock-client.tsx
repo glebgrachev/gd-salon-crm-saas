@@ -19,6 +19,7 @@ import {
   removeConsumable,
   sellProduct,
   cancelSale,
+  markSalePaid,
   fetchSales,
   type ProductRow,
   type SupplierRow,
@@ -157,7 +158,7 @@ export default function StockClient({
           consumables={consumables}
         />
       ) : tab === "sales" ? (
-        <SalesTab />
+        <SalesTab specialists={specialists} />
       ) : (
         <div className="mt-4 overflow-hidden rounded-xl border border-neutral-200 bg-white">
           <table className="w-full text-sm">
@@ -1309,10 +1310,28 @@ function ConsumablesTab({
 
 /* ---------- продажи ---------- */
 
-function SalesTab() {
+function SalesTab({ specialists }: { specialists: SpecOpt[] }) {
   const router = useRouter();
   const [rows, setRows] = useState<SaleRow[] | null>(null);
   const [pending, startTransition] = useTransition();
+  const [payingId, setPayingId] = useState<string | null>(null);
+  const [paySpec, setPaySpec] = useState("");
+
+  function markPaid(id: string) {
+    startTransition(async () => {
+      const r = await markSalePaid(id, paySpec || null);
+      if (r.ok) {
+        toast.success("Оплачено");
+        setPayingId(null);
+        setPaySpec("");
+        const f = await fetchSales();
+        if (f.ok) setRows(f.rows);
+        router.refresh();
+      } else {
+        toast.error(r.error ?? "Ошибка");
+      }
+    });
+  }
 
   useEffect(() => {
     fetchSales().then((r) => {
@@ -1388,7 +1407,14 @@ function SalesTab() {
                 }`}
               >
                 <td className="px-4 py-3 text-neutral-600">{dt(s.paid_at ?? s.created_at)}</td>
-                <td className="px-4 py-3 font-medium text-neutral-900">{s.product_name}</td>
+                <td className="px-4 py-3">
+                  <span className="font-medium text-neutral-900">{s.product_name}</span>
+                  {s.status === "reserved" && (
+                    <span className="ml-2 rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                      отложен
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-neutral-600">{s.client_name ?? "—"}</td>
                 <td className="px-4 py-3 text-neutral-600">{s.specialist_name ?? "—"}</td>
                 <td className="px-4 py-3 text-right text-neutral-700">{num(s.qty)}</td>
@@ -1399,6 +1425,55 @@ function SalesTab() {
                 <td className="px-4 py-3 text-right">
                   {s.status === "cancelled" ? (
                     <span className="text-xs text-neutral-400">отменена</span>
+                  ) : s.status === "reserved" ? (
+                    payingId === s.id ? (
+                      <div className="flex items-center justify-end gap-1.5">
+                        <select
+                          value={paySpec}
+                          onChange={(e) => setPaySpec(e.target.value)}
+                          className="rounded-md border border-neutral-300 px-2 py-1 text-xs outline-none focus:border-neutral-900"
+                        >
+                          <option value="">— салон —</option>
+                          {specialists.map((sp) => (
+                            <option key={sp.id} value={sp.id}>
+                              {sp.full_name}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => markPaid(s.id)}
+                          disabled={pending}
+                          className="rounded-md bg-neutral-900 px-2 py-1 text-xs font-medium text-white disabled:opacity-50"
+                        >
+                          Ок
+                        </button>
+                        <button
+                          onClick={() => setPayingId(null)}
+                          className="text-xs text-neutral-500 hover:text-neutral-900"
+                        >
+                          Отмена
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => {
+                            setPaySpec("");
+                            setPayingId(s.id);
+                          }}
+                          className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-emerald-700"
+                        >
+                          Оплачено
+                        </button>
+                        <button
+                          onClick={() => cancel(s.id)}
+                          disabled={pending}
+                          className="text-xs text-neutral-400 underline underline-offset-2 hover:text-red-600 disabled:opacity-50"
+                        >
+                          Отменить
+                        </button>
+                      </div>
+                    )
                   ) : (
                     <button
                       onClick={() => cancel(s.id)}

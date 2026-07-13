@@ -481,3 +481,28 @@ export async function fetchSales(limit = 100) {
 
   return { ok: true as const, rows };
 }
+
+/** Отметить отложенный товар как оплаченный (клиент забрал при визите) */
+export async function markSalePaid(saleId: string, specialistId: string | null) {
+  const supabase = await guard();
+  if (!supabase) return { ok: false, error: "Нет доступа" };
+
+  const admin = createAdmin();
+  const { data, error } = await admin
+    .from("product_sales")
+    .update({
+      status: "paid",
+      paid_at: new Date().toISOString(),
+      ...(specialistId ? { specialist_id: specialistId } : {}),
+    })
+    .eq("id", saleId)
+    .eq("status", "reserved")
+    .select("id");
+
+  if (error) return { ok: false, error: error.message };
+  if (!data || data.length === 0) return { ok: false, error: "Резерв не найден или уже закрыт" };
+
+  revalidatePath("/stock", "layout");
+  revalidatePath("/payouts", "layout");
+  return { ok: true };
+}
