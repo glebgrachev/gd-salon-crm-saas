@@ -48,6 +48,11 @@ const rub = (v: number | null | undefined) =>
 const num = (v: number) =>
   new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(Number(v));
 
+function daysAgo(iso: string) {
+  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  return d;
+}
+
 const dt = (iso: string) =>
   new Intl.DateTimeFormat("ru-RU", {
     timeZone: "Europe/Moscow",
@@ -1364,8 +1369,17 @@ function SalesTab({ specialists }: { specialists: SpecOpt[] }) {
     .filter((r) => r.status === "paid")
     .reduce((s, r) => s + (r.total - r.cost * r.qty), 0);
 
+  const reservedRows = rows.filter((r) => r.status === "reserved");
+  const staleRows = reservedRows.filter((r) => daysAgo(r.created_at) >= 14);
+
   return (
     <div className="mt-4 space-y-4">
+      {staleRows.length > 0 && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-800">
+          Залежались резервы: <b>{staleRows.length}</b> — висят дольше двух недель.
+          Если клиент не придёт, верните товар на склад кнопкой «Отменить».
+        </div>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-neutral-200 bg-white p-4">
           <div className="text-xs text-neutral-500">Выручка с товаров</div>
@@ -1409,11 +1423,20 @@ function SalesTab({ specialists }: { specialists: SpecOpt[] }) {
                 <td className="px-4 py-3 text-neutral-600">{dt(s.paid_at ?? s.created_at)}</td>
                 <td className="px-4 py-3">
                   <span className="font-medium text-neutral-900">{s.product_name}</span>
-                  {s.status === "reserved" && (
-                    <span className="ml-2 rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                      отложен
-                    </span>
-                  )}
+                  {s.status === "reserved" && (() => {
+                    const d = daysAgo(s.created_at);
+                    const stale = d >= 14;
+                    return (
+                      <span
+                        className={`ml-2 rounded-md px-2 py-0.5 text-xs font-medium ${
+                          stale ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                        }`}
+                        title={stale ? "Висит давно — возможно, стоит вернуть на склад" : undefined}
+                      >
+                        отложен{d > 0 ? ` · ${d} дн.` : ""}
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td className="px-4 py-3 text-neutral-600">{s.client_name ?? "—"}</td>
                 <td className="px-4 py-3 text-neutral-600">{s.specialist_name ?? "—"}</td>

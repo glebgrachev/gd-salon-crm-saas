@@ -20,7 +20,14 @@ type InItem = {
 };
 
 export async function POST(req: Request) {
-  let body: { initData?: string; items?: InItem[]; points?: number; cert?: number; cert_id?: string };
+  let body: {
+    initData?: string;
+    items?: InItem[];
+    points?: number;
+    cert?: number;
+    cert_id?: string;
+    products?: { product_id: string; qty: number }[];
+  };
   try {
     body = await req.json();
   } catch {
@@ -196,6 +203,30 @@ export async function POST(req: Request) {
     return json({ ok: false, busy: result.busy ?? [] }, 409);
   }
 
+  // ---- товары из той же корзины: откладываем в салоне ----
+  const wanted = (body.products ?? []).filter((p) => p.product_id && p.qty > 0);
+  const reservedIds: string[] = [];
+  const soldOut: string[] = [];
+
+  for (const it of wanted) {
+    const { data: sale, error: saleErr } = await admin.rpc("sell_product", {
+      p_product: it.product_id,
+      p_qty: it.qty,
+      p_client: user.id,
+      p_specialist: null,
+      p_booking: null,
+      p_status: "reserved",
+    });
+
+    if (saleErr) {
+      soldOut.push(it.product_id);
+      continue;
+    }
+    const r = sale as { ok?: boolean; sale_id?: string };
+    if (r?.ok && r.sale_id) reservedIds.push(r.sale_id);
+    else soldOut.push(it.product_id);
+  }
+
   // сводное уведомление
   try {
     const [{ data: svcNames }, { data: spNames }] = await Promise.all([
@@ -212,16 +243,54 @@ export async function POST(req: Request) {
         return `• ${svcName.get(it.service_id) ?? "Услуга"}${gift} — ${spName.get(it.specialist_id) ?? ""}\n   ${fmtMsk(it.starts_at)}`;
       })
       .join("\n");
+
+    // блок товаров
+    let productBlock = "";
+    let productsTotal = 0;
+
+    if (reservedIds.length > 0) {
+      const { data: sales } = await admin
+        .from("product_sales")
+        .select("qty, total, product:products ( name )")
+        .in("id", reservedIds);
+
+      type SaleRow = { qty: number; total: number; product: { name: string } | null };
+      const rows = (sales as unknown as SaleRow[]) ?? [];
+      productsTotal = rows.reduce((sum, r) => sum + Number(r.total), 0);
+
+      const pLines = rows
+        .map((r) => `• ${r.product?.name ?? "Товар"} × ${r.qty} — ${Math.round(Number(r.total))} ₽`)
+        .join("\n");
+
+      productBlock = `\n\n🛍 <b>Товары к выдаче</b>\n${pLines}`;
+    }
+
+    const soldOutBlock =
+      soldOut.length > 0
+        ? `\n\n⚠️ Часть товаров закончилась — их отложить не удалось.`
+        : "";
+
     await tgSend(
       user.id,
-      `✅ <b>Заказ оформлен!</b>\n\n${lines}\n\n` +
+      `✅ <b>Заказ оформлен!</b>\n\n${lines}` +
+        productBlock +
+        `\n\n` +
         (redeemTotal > 0 ? `⭐ Списываем баллов: ${redeemTotal}\n` : "") +
         (certTotal > 0 ? `🎟 Сертификат: −${certTotal} ₽\n` : "") +
-        `💰 К оплате: ${moneyDue} ₽`,
+        `💰 К оплате: ${moneyDue + Math.round(productsTotal)} ₽` +
+        (productsTotal > 0 ? `\n   (услуги ${moneyDue} ₽ + товары ${Math.round(productsTotal)} ₽)` : "") +
+        soldOutBlock,
     );
   } catch {
     /* noop */
   }
 
-  return json({ ok: true, order_id: result.order_id, points_redeemed: redeemTotal, cert_redeemed: certTotal });
+  return json({
+    ok: true,
+    order_id: result.order_id,
+    points_redeemed: redeemTotal,
+    cert_redeemed: certTotal,
+    products_reserved: reservedIds.length,
+    products_sold_out: soldOut.length,
+  });
 }
