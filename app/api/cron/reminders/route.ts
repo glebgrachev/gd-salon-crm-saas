@@ -23,7 +23,14 @@ export async function POST(req: Request) {
 
   const admin = createAdmin();
   const now = new Date();
-  const in3h = new Date(now.getTime() + 3 * 3600_000);
+
+  // Напоминание уходит за 4 часа, а отменить запись можно до 3 часов.
+  // Разница в час — чтобы клиент успел среагировать: раньше напоминание
+  // приходило ровно на границе отмены, и кнопка в нём уже не работала.
+  const REMIND_H = 4;
+  const CANCEL_H = 3;
+
+  const remindAt = new Date(now.getTime() + REMIND_H * 3600_000);
   const in24h = new Date(now.getTime() + 24 * 3600_000);
   const ago24h = new Date(now.getTime() - 24 * 3600_000);
 
@@ -38,7 +45,7 @@ export async function POST(req: Request) {
     .select(SELECT)
     .in("status", ["new", "confirmed", "paid"])
     .is("reminded_day_at", null)
-    .gt("starts_at", in3h.toISOString())
+    .gt("starts_at", remindAt.toISOString())
     .lte("starts_at", in24h.toISOString())
     .limit(50);
   for (const b of (dayRows as unknown as Row[]) ?? []) {
@@ -59,28 +66,36 @@ export async function POST(req: Request) {
     day++;
   }
 
-  // напоминание за 3 часа (просто текст)
+  // напоминание за 4 часа — пока отмена ещё доступна
   const { data: threeRows } = await admin
     .from("bookings")
     .select(SELECT)
     .in("status", ["new", "confirmed", "paid"])
     .is("reminded_3h_at", null)
     .gt("starts_at", now.toISOString())
-    .lte("starts_at", in3h.toISOString())
+    .lte("starts_at", remindAt.toISOString())
     .limit(50);
   for (const b of (threeRows as unknown as Row[]) ?? []) {
+    // до какого момента ещё можно отменить
+    const cancelUntil = new Date(new Date(b.starts_at).getTime() - CANCEL_H * 3600_000);
+    const canStillCancel = cancelUntil.getTime() > now.getTime();
+
     await tgSend(
       b.client_id,
       `⏰ Сегодня в ${fmtTimeMsk(b.starts_at)} вы записаны\n\n` +
         `${b.service?.name ?? "Услуга"} · ${b.specialist?.full_name ?? ""}\n` +
-        `Ждём вас! 💅`,
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "Отменить запись", web_app: { url: `${miniApp}/?cancel=${b.id}` } }],
-          ],
-        },
-      },
+        (canStillCancel
+          ? `\nНе сможете прийти? Отменить можно до ${fmtTimeMsk(cancelUntil.toISOString())}.`
+          : `Ждём вас! 💅`),
+      canStillCancel
+        ? {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "Отменить запись", web_app: { url: `${miniApp}/?cancel=${b.id}` } }],
+              ],
+            },
+          }
+        : undefined,
     );
     await admin.from("bookings").update({ reminded_3h_at: now.toISOString() }).eq("id", b.id);
     three++;
