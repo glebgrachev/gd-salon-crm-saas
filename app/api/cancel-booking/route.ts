@@ -45,5 +45,27 @@ export async function POST(req: Request) {
     .eq("id", booking.id);
   if (error) return json({ error: error.message }, 500);
 
+  // слот освободился — сразу предлагаем его тем, кто ждёт в очереди,
+  // не дожидаясь планового сканирования (раз в 5 минут)
+  notifyWaitlist();
+
   return json({ ok: true });
+}
+
+/** Дёргаем сканер очереди в фоне: ответ клиенту не ждёт рассылки */
+function notifyWaitlist() {
+  const url = process.env.NEXT_PUBLIC_CRM_URL ?? process.env.CRM_URL;
+  const secret = process.env.CRON_SECRET;
+  if (!url || !secret) return;
+
+  void fetch(`${url}/api/cron/waitlist`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${secret}`,
+    },
+    body: "{}",
+  }).catch(() => {
+    /* плановый cron всё равно подхватит */
+  });
 }
