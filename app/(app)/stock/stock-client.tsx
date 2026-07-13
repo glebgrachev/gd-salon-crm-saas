@@ -7,6 +7,7 @@ import {
   Plus, Loader2, Pencil, Trash2, TrendingUp, X, PackagePlus, History, ShoppingCart, Beaker,
 } from "lucide-react";
 import { uploadImage } from "@/lib/upload";
+import { useRealtime } from "@/lib/use-realtime";
 import {
   saveProduct,
   deleteProduct,
@@ -84,6 +85,12 @@ export default function StockClient({
   const [purchasing, setPurchasing] = useState(false);
   const [selling, setSelling] = useState(false);
   const [historyFor, setHistoryFor] = useState<ProductRow | "all" | null>(null);
+
+  // живое обновление: клиент отложил/отменил товар — таблица обновится сама
+  const [salesVersion, setSalesVersion] = useState(0);
+  useRealtime(["products", "product_sales", "stock_movements"], () =>
+    setSalesVersion((v) => v + 1),
+  );
 
   const list = products.filter((p) => p.kind === tab);
   const lowCount = products.filter((p) => p.is_low && p.is_active).length;
@@ -163,7 +170,7 @@ export default function StockClient({
           consumables={consumables}
         />
       ) : tab === "sales" ? (
-        <SalesTab specialists={specialists} />
+        <SalesTab specialists={specialists} version={salesVersion} />
       ) : (
         <div className="mt-4 overflow-hidden rounded-xl border border-neutral-200 bg-white">
           <table className="w-full text-sm">
@@ -1315,7 +1322,7 @@ function ConsumablesTab({
 
 /* ---------- продажи ---------- */
 
-function SalesTab({ specialists }: { specialists: SpecOpt[] }) {
+function SalesTab({ specialists, version }: { specialists: SpecOpt[]; version: number }) {
   const router = useRouter();
   const [rows, setRows] = useState<SaleRow[] | null>(null);
   const [pending, startTransition] = useTransition();
@@ -1343,7 +1350,7 @@ function SalesTab({ specialists }: { specialists: SpecOpt[] }) {
       if (r.ok) setRows(r.rows);
       else toast.error(r.error);
     });
-  }, []);
+  }, [version]);   // version меняется при realtime-событии
 
   function cancel(id: string) {
     if (!confirm("Отменить продажу? Товар вернётся на склад.")) return;

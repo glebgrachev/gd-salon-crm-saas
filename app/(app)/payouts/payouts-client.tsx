@@ -3,6 +3,7 @@
 import { useState, useTransition, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useRealtime } from "@/lib/use-realtime";
 import { fetchPayoutDetail, type DetailRow } from "./actions";
 
 export type PayoutRow = {
@@ -67,6 +68,8 @@ export default function PayoutsClient({
   rows: PayoutRow[];
   error: string | null;
 }) {
+  // продажа товара или оплата записи меняют начисления — обновляем сразу
+  useRealtime(["bookings", "product_sales"]);
   const router = useRouter();
   const [f, setF] = useState(from);
   const [t, setT] = useState(to);
