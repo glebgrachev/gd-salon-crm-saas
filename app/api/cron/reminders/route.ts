@@ -16,6 +16,34 @@ type Row = {
 const SELECT =
   "id, client_id, starts_at, ends_at, service:services ( name ), specialist:specialists ( full_name )";
 
+type Admin = ReturnType<typeof createAdmin>;
+type Mark = "reminded_day_at" | "reminded_3h_at" | "review_requested_at";
+
+/**
+ * Помечает запись как обработанную ДО отправки сообщения.
+ *
+ * Условие `.is(field, null)` делает операцию идемпотентной: если два
+ * запуска cron наложатся, метку поставит только первый — второй получит
+ * пустой результат и не отправит дубль.
+ *
+ * Возвращает false, если пометить не удалось. Тогда сообщение НЕ шлём:
+ * лучше пропустить одно уведомление, чем зациклиться и отправить сотню.
+ */
+async function claim(admin: Admin, id: string, field: Mark): Promise<boolean> {
+  const { data, error } = await admin
+    .from("bookings")
+    .update({ [field]: new Date().toISOString() })
+    .eq("id", id)
+    .is(field, null)          // ещё не помечено — иначе кто-то нас опередил
+    .select("id");
+
+  if (error) {
+    console.error(`reminders: не смогли пометить ${field} у ${id}:`, error.message);
+    return false;
+  }
+  return (data?.length ?? 0) > 0;
+}
+
 export async function POST(req: Request) {
   if (req.headers.get("x-cron-secret") !== process.env.CRON_SECRET) {
     return new Response(JSON.stringify({ error: "forbidden" }), { status: 403 });
@@ -50,6 +78,11 @@ export async function POST(req: Request) {
     .lte("starts_at", in24h.toISOString())
     .limit(50);
   for (const b of (dayRows as unknown as Row[]) ?? []) {
+    // Сначала занимаем запись, только потом шлём.
+    // Если метка не сохранится, клиент не получит сообщение —
+    // это лучше, чем получить его сто раз подряд.
+    if (!(await claim(admin, b.id, "reminded_day_at"))) continue;
+
     await tgSend(
       b.client_id,
       `📅 Напоминание: завтра вы записаны\n\n` +
@@ -63,7 +96,6 @@ export async function POST(req: Request) {
         },
       },
     );
-    await admin.from("bookings").update({ reminded_day_at: now.toISOString() }).eq("id", b.id);
     day++;
   }
 
@@ -78,6 +110,8 @@ export async function POST(req: Request) {
     .lte("starts_at", remindAt.toISOString())
     .limit(50);
   for (const b of (threeRows as unknown as Row[]) ?? []) {
+    if (!(await claim(admin, b.id, "reminded_3h_at"))) continue;
+
     // до какого момента ещё можно отменить
     const cancelUntil = new Date(new Date(b.starts_at).getTime() - CANCEL_H * 3600_000);
     const canStillCancel = cancelUntil.getTime() > now.getTime();
@@ -99,7 +133,6 @@ export async function POST(req: Request) {
           }
         : undefined,
     );
-    await admin.from("bookings").update({ reminded_3h_at: now.toISOString() }).eq("id", b.id);
     three++;
   }
 
@@ -114,6 +147,8 @@ export async function POST(req: Request) {
     .gt("ends_at", ago24h.toISOString())
     .limit(50);
   for (const b of (reviewRows as unknown as Row[]) ?? []) {
+    if (!(await claim(admin, b.id, "review_requested_at"))) continue;
+
     await tgSend(
       b.client_id,
       `Спасибо, что были у нас! 💖\n\n` +
@@ -127,7 +162,6 @@ export async function POST(req: Request) {
         },
       },
     );
-    await admin.from("bookings").update({ review_requested_at: now.toISOString() }).eq("id", b.id);
     review++;
   }
 
