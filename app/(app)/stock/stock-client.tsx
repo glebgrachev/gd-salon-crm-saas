@@ -4,7 +4,7 @@ import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  Plus, Loader2, Pencil, Trash2, TrendingUp, X, PackagePlus, History, ShoppingCart, Beaker,
+  Plus, Loader2, Pencil, Trash2, TrendingUp, X, PackagePlus, History, ShoppingCart, Beaker, Gift,
 } from "lucide-react";
 import { uploadImage } from "@/lib/upload";
 import { useRealtime } from "@/lib/use-realtime";
@@ -63,7 +63,7 @@ const dt = (iso: string) =>
     minute: "2-digit",
   }).format(new Date(iso));
 
-type Tab = "sale" | "supply" | "consumables" | "sales" | "suppliers";
+type Tab = "sale" | "certificate" | "supply" | "consumables" | "sales" | "suppliers";
 
 export default function StockClient({
   products,
@@ -147,6 +147,9 @@ export default function StockClient({
         <TabBtn on={tab === "sale"} onClick={() => setTab("sale")}>
           На продажу
         </TabBtn>
+        <TabBtn on={tab === "certificate"} onClick={() => setTab("certificate")}>
+          Сертификаты
+        </TabBtn>
         <TabBtn on={tab === "supply"} onClick={() => setTab("supply")}>
           Расходники
         </TabBtn>
@@ -171,6 +174,11 @@ export default function StockClient({
         />
       ) : tab === "sales" ? (
         <SalesTab specialists={specialists} version={salesVersion} />
+      ) : tab === "certificate" ? (
+        <CertificatesTab
+          items={products.filter((p) => p.kind === "certificate")}
+          onEdit={setEditing}
+        />
       ) : (
         <div className="mt-4 overflow-hidden rounded-xl border border-neutral-200 bg-white">
           <table className="w-full text-sm">
@@ -468,6 +476,8 @@ function ProductModal({
   const [uploading, setUploading] = useState(false);
 
   const [kind, setKind] = useState<ProductKind>(product?.kind ?? defaultKind);
+  const [faceValue, setFaceValue] = useState(String(product?.face_value ?? ""));
+  const [validityDays, setValidityDays] = useState(String(product?.validity_days ?? ""));
   const [name, setName] = useState(product?.name ?? "");
   const [sku, setSku] = useState(product?.sku ?? "");
   const [unit, setUnit] = useState<BaseUnit>(product?.base_unit ?? "pcs");
@@ -501,11 +511,13 @@ function ProductModal({
         sku,
         base_unit: unit,
         pack_size: Number(packSize) || 1,
-        price: kind === "sale" ? Number(price) || null : null,
+        price: kind === "supply" ? null : Number(price) || null,
         low_stock: Number(lowStock) || 0,
         description: desc,
         photo_url: photo,
         is_active: active,
+        face_value: kind === "certificate" ? Number(faceValue) || null : null,
+        validity_days: kind === "certificate" ? Number(validityDays) || null : null,
       });
       if (r.ok) {
         toast.success(product ? "Позиция обновлена" : "Позиция добавлена");
@@ -528,6 +540,16 @@ function ProductModal({
             }`}
           >
             На продажу
+          </button>
+          <button
+            onClick={() => setKind("certificate")}
+            className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition ${
+              kind === "certificate"
+                ? "bg-neutral-900 text-white"
+                : "text-neutral-600 hover:bg-neutral-100"
+            }`}
+          >
+            Сертификат
           </button>
           <button
             onClick={() => setKind("supply")}
@@ -592,9 +614,44 @@ function ProductModal({
           </Field>
         </div>
 
-        {kind === "sale" && (
+        {kind === "certificate" && (
           <>
-            <Field label="Цена продажи, ₽">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Номинал, ₽">
+                <input
+                  type="number"
+                  min={0}
+                  value={faceValue}
+                  onChange={(e) => setFaceValue(e.target.value)}
+                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+                />
+                <p className="mt-1 text-xs text-neutral-400">На эту сумму можно оплатить услуги</p>
+              </Field>
+              <Field label="Действует, дней">
+                <input
+                  type="number"
+                  min={0}
+                  value={validityDays}
+                  onChange={(e) => setValidityDays(e.target.value)}
+                  placeholder="365"
+                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+                />
+                <p className="mt-1 text-xs text-neutral-400">Пусто — бессрочный</p>
+              </Field>
+            </div>
+
+            {Number(faceValue) > 0 && Number(price) > 0 && Number(price) < Number(faceValue) && (
+              <div className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                Клиент платит {rub(Number(price))}, а получает {rub(Number(faceValue))} —
+                выгода {rub(Number(faceValue) - Number(price))}. Хороший повод купить.
+              </div>
+            )}
+          </>
+        )}
+
+        {(kind === "sale" || kind === "certificate") && (
+          <>
+            <Field label={kind === "certificate" ? "Цена продажи, ₽" : "Цена продажи, ₽"}>
               <input
                 type="number"
                 min={0}
@@ -602,6 +659,11 @@ function ProductModal({
                 onChange={(e) => setPrice(e.target.value)}
                 className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
               />
+              {kind === "certificate" && (
+                <p className="mt-1 text-xs text-neutral-400">
+                  Может быть ниже номинала — тогда это скидка
+                </p>
+              )}
             </Field>
 
             <Field label="Описание (видно клиентам)">
@@ -1666,5 +1728,142 @@ function SellModal({
         </div>
       </div>
     </Modal>
+  );
+}
+
+/* ---------- сертификаты на продажу ---------- */
+
+function CertificatesTab({
+  items,
+  onEdit,
+}: {
+  items: ProductRow[];
+  onEdit: (p: ProductRow | "new") => void;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  function remove(p: ProductRow) {
+    if (!confirm(`Убрать «${p.name}» из продажи?`)) return;
+    startTransition(async () => {
+      const r = await deleteProduct(p.id);
+      if (r.ok) {
+        toast.success("Убрали из продажи");
+        router.refresh();
+      } else {
+        toast.error(r.error ?? "Ошибка");
+      }
+    });
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="mt-4 rounded-xl border border-dashed border-neutral-300 bg-white px-8 py-16 text-center">
+        <Gift className="mx-auto h-8 w-8 text-neutral-300" />
+        <p className="mt-3 text-sm text-neutral-500">
+          Сертификатов на продажу пока нет.
+        </p>
+        <p className="mx-auto mt-1 max-w-md text-xs text-neutral-400">
+          Заведите номиналы — они появятся в магазине приложения. Клиент купит,
+          вы отметите оплату, и код придёт ему в Telegram.
+        </p>
+        <button
+          onClick={() => onEdit("new")}
+          className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-neutral-800"
+        >
+          <Plus className="h-4 w-4" />
+          Добавить номинал
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 space-y-4">
+      <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-2.5 text-xs text-neutral-600">
+        Эти номиналы клиенты видят в магазине. Купленный сертификат появится
+        во вкладке «Продажи» как отложенный — отметьте «Оплачено», и код уйдёт клиенту.
+        Все выпущенные коды — в разделе «Сертификаты».
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-neutral-200 text-left text-xs text-neutral-500">
+              <th className="px-4 py-3">Название</th>
+              <th className="px-4 py-3 text-right">Номинал</th>
+              <th className="px-4 py-3 text-right">Цена</th>
+              <th className="px-4 py-3 text-right">Выгода клиента</th>
+              <th className="px-4 py-3 text-right">Срок</th>
+              <th className="px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((p) => {
+              const face = Number(p.face_value ?? 0);
+              const price = Number(p.price ?? 0);
+              const benefit = face - price;
+
+              return (
+                <tr
+                  key={p.id}
+                  className={`border-b border-neutral-100 last:border-0 ${
+                    p.is_active ? "" : "opacity-40"
+                  }`}
+                >
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-neutral-900">{p.name}</div>
+                    {p.description && (
+                      <div className="mt-0.5 line-clamp-1 text-xs text-neutral-400">
+                        {p.description}
+                      </div>
+                    )}
+                    {!p.is_active && (
+                      <span className="mt-1 inline-block rounded-md bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">
+                        снят с продажи
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold text-neutral-900">
+                    {rub(face)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-neutral-700">{rub(price)}</td>
+                  <td className="px-4 py-3 text-right">
+                    {benefit > 0 ? (
+                      <span className="inline-flex items-center gap-1 text-emerald-700">
+                        <TrendingUp className="h-3.5 w-3.5" />
+                        {rub(benefit)}
+                      </span>
+                    ) : (
+                      <span className="text-neutral-300">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right text-neutral-600">
+                    {p.validity_days ? `${p.validity_days} дн.` : "бессрочно"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => onEdit(p)}
+                        className="rounded-md p-1.5 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-900"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => remove(p)}
+                        disabled={pending}
+                        className="rounded-md p-1.5 text-neutral-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }

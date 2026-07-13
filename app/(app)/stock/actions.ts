@@ -3,8 +3,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { tgSend } from "@/lib/notify";
 
-export type ProductKind = "sale" | "supply";
+export type ProductKind = "sale" | "supply" | "certificate";
 export type BaseUnit = "pcs" | "ml" | "g";
 
 export type ProductRow = {
@@ -25,6 +26,8 @@ export type ProductRow = {
   is_low: boolean;
   margin_percent: number | null;
   profit_per_unit: number | null;
+  face_value: number | null;      // номинал сертификата
+  validity_days: number | null;   // через сколько дней сгорит
 };
 
 export type SupplierRow = {
@@ -68,6 +71,8 @@ export async function saveProduct(input: {
   description: string;
   photo_url: string | null;
   is_active: boolean;
+  face_value?: number | null;
+  validity_days?: number | null;
 }) {
   const supabase = await guard();
   if (!supabase) return { ok: false, error: "Нет доступа" };
@@ -75,9 +80,19 @@ export async function saveProduct(input: {
   const name = input.name.trim();
   if (!name) return { ok: false, error: "Укажите название" };
   if (input.pack_size <= 0) return { ok: false, error: "Фасовка должна быть больше нуля" };
+  if (input.kind === "certificate") {
+    if (input.price == null || input.price <= 0) {
+      return { ok: false, error: "Укажите цену продажи сертификата" };
+    }
+    if (!input.face_value || input.face_value <= 0) {
+      return { ok: false, error: "Укажите номинал сертификата" };
+    }
+  }
   if (input.kind === "sale" && (input.price == null || input.price <= 0)) {
     return { ok: false, error: "У товара на продажу должна быть цена" };
   }
+
+  const sellable = input.kind === "sale" || input.kind === "certificate";
 
   const payload = {
     kind: input.kind,
@@ -85,11 +100,14 @@ export async function saveProduct(input: {
     sku: input.sku.trim() || null,
     base_unit: input.base_unit,
     pack_size: input.pack_size,
-    price: input.kind === "sale" ? input.price : null,
+    price: sellable ? input.price : null,
     low_stock: Math.max(0, input.low_stock),
     description: input.description.trim() || null,
     photo_url: input.photo_url,
     is_active: input.is_active,
+    // только у сертификатов
+    face_value:    input.kind === "certificate" ? input.face_value ?? null : null,
+    validity_days: input.kind === "certificate" ? input.validity_days ?? null : null,
   };
 
   const admin = createAdmin();
@@ -497,12 +515,63 @@ export async function markSalePaid(saleId: string, specialistId: string | null) 
     })
     .eq("id", saleId)
     .eq("status", "reserved")
-    .select("id");
+    .select("id, client_id, product:products ( kind, name )");
 
   if (error) return { ok: false, error: error.message };
   if (!data || data.length === 0) return { ok: false, error: "Резерв не найден или уже закрыт" };
 
+  // Если оплатили сертификат — выпускаем коды и отправляем клиенту
+  type Paid = {
+    id: string;
+    client_id: number | null;
+    product: { kind: string; name: string } | null;
+  };
+  const sale = (data as unknown as Paid[])[0];
+
+  let issued = 0;
+
+  if (sale.product?.kind === "certificate") {
+    const { data: res, error: issueErr } = await admin.rpc("issue_certificates_for_sale", {
+      p_sale: saleId,
+    });
+
+    if (issueErr) {
+      // продажа уже проведена — откатывать не будем, но честно скажем
+      return {
+        ok: false,
+        error: `Продажа отмечена, но сертификат не выпустился: ${issueErr.message}`,
+      };
+    }
+
+    type Issued = {
+      ok: boolean;
+      codes: { code: string; amount: number; expires_at: string | null }[];
+    };
+    const out = res as unknown as Issued;
+    const codes = out?.codes ?? [];
+    issued = codes.length;
+
+    if (codes.length > 0 && sale.client_id) {
+      const lines = codes
+        .map((c) => {
+          const exp = c.expires_at
+            ? `\n   Действует до ${new Date(c.expires_at).toLocaleDateString("ru-RU")}`
+            : "";
+          return `<code>${c.code}</code> — ${Math.round(Number(c.amount))} ₽${exp}`;
+        })
+        .join("\n\n");
+
+      await tgSend(
+        sale.client_id,
+        `🎁 <b>Сертификат готов!</b>\n\n${lines}\n\n` +
+          `Чтобы воспользоваться — введите код при записи. ` +
+          `Или подарите: получателю достаточно ввести этот код у себя.`,
+      );
+    }
+  }
+
   revalidatePath("/stock", "layout");
   revalidatePath("/payouts", "layout");
-  return { ok: true };
+  revalidatePath("/certificates", "layout");
+  return { ok: true, issued };
 }
