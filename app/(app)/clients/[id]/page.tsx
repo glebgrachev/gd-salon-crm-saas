@@ -139,8 +139,11 @@ export default async function ClientPage({
                 ? `напоминание отправлено ${new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit" }).format(new Date(seg.retention_notified_at))}`
                 : "напоминание ещё не отправлялось"}
             </span>
-            {seg.retention_notified_at && (
-              <RetentionResetButton clientId={id} />
+            {(seg.segment === "sleeping" || seg.segment === "lost") && (
+              <RetentionResetButton
+                clientId={id}
+                alreadySent={!!seg.retention_notified_at}
+              />
             )}
           </div>
         </div>
