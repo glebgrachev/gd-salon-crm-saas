@@ -1,5 +1,5 @@
 import { createAdmin } from "@/lib/supabase/admin";
-import { tgSend } from "@/lib/notify";
+import { sendReactivation } from "@/lib/retention";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +17,6 @@ export async function POST(req: Request) {
   }
 
   const admin = createAdmin();
-  const miniApp = process.env.MINIAPP_URL ?? "https://beauty-miniapp-tawny.vercel.app";
 
   // берём тех, кто уже в «Спящем» и кому мы ещё ни разу не отправляли напоминание
   const { data } = await admin
@@ -31,19 +30,7 @@ export async function POST(req: Request) {
   let sent = 0;
 
   for (const r of rows) {
-    const hello = r.first_name ? `${r.first_name}, ` : "";
-    const days = r.days_since_last ?? 0;
-    const ok = await tgSend(
-      r.client_id,
-      `💜 <b>Мы соскучились!</b>\n\n` +
-        `${hello}давно не виделись — прошло ${days} дн. с вашего последнего визита.\n` +
-        `Возвращайтесь, будем рады!`,
-      {
-        reply_markup: {
-          inline_keyboard: [[{ text: "Записаться", web_app: { url: miniApp } }]],
-        },
-      },
-    );
+    const ok = await sendReactivation(r.client_id, r.first_name, r.days_since_last);
     if (ok) {
       await admin
         .from("users")

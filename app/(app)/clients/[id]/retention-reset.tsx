@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { resetRetentionNotification } from "./actions";
+import { sendReactivationNow } from "./actions";
 
 export default function RetentionResetButton({ clientId }: { clientId: number }) {
   const [pending, startTransition] = useTransition();
@@ -13,10 +13,10 @@ export default function RetentionResetButton({ clientId }: { clientId: number })
     <button
       onClick={() =>
         startTransition(async () => {
-          const r = await resetRetentionNotification(clientId);
+          const r = await sendReactivationNow(clientId);
           if (!r.ok) toast.error(r.error ?? "Ошибка");
           else {
-            toast.success("Отметка сброшена — напоминание отправится в следующую рассылку");
+            toast.success("Сообщение отправлено клиенту");
             router.refresh();
           }
         })
@@ -24,7 +24,7 @@ export default function RetentionResetButton({ clientId }: { clientId: number })
       disabled={pending}
       className="text-xs font-medium text-neutral-700 underline underline-offset-2 hover:text-neutral-900 disabled:opacity-50"
     >
-      {pending ? "Сбрасываем…" : "Отправить снова"}
+      {pending ? "Отправляем…" : "Отправить снова"}
     </button>
   );
 }
