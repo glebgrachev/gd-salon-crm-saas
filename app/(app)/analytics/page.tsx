@@ -53,12 +53,26 @@ export default async function AnalyticsPage({
   const qs = `?type=${type}&date=${dateStr}`;
 
   const supabase = await createClient();
+
+  // 1. Получаем пользователя и shop_id
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data: admin } = await supabase
+    .from("admins")
+    .select("shop_id")
+    .eq("user_uid", user?.id)
+    .single();
+
+  const shopId = admin?.shop_id ?? 0;
+
+  // 2. Загружаем данные только для этого салона
   const [{ data: rows }, { data: cats }, { data: promos }] = await Promise.all([
     supabase
       .from("bookings")
       .select(
         "promo_id, discount_amount, price_snapshot, final_price, specialist:specialists ( id, full_name ), service:services ( id, name, category_id )",
       )
+      .eq("shop_id", shopId) // 👈 КЛЮЧЕВОЙ ФИЛЬТР
       .gte("starts_at", fromISO)
       .lt("starts_at", toISO)
       .in("status", ["completed", "paid"]),

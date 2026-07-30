@@ -1,0 +1,298 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
+import {
+  ArrowLeft,
+  Building2,
+  Phone,
+  Mail,
+  User,
+  MapPin,
+  Users,
+  CalendarCheck,
+} from "lucide-react";
+
+type Shop = {
+  id: number;
+  name: string;
+  phone: string;
+  email: string | null;
+  contact_name: string | null;
+  address: string;
+  inn: number | null;
+  ogrn: number | null;
+  plan: string;
+  modules: Record<string, boolean>;
+  blocked: boolean;
+  total_clients: number;
+  total_bookings: number;
+  total_specialists: number;
+  created_at: string;
+};
+
+const ALL_MODULES = [
+  { key: "analytics", label: "Аналитика" },
+  { key: "loyalty", label: "Лояльность" },
+  { key: "promotions", label: "Акции" },
+  { key: "certificates", label: "Сертификаты" },
+  { key: "broadcasts", label: "Рассылки" },
+  { key: "stock", label: "Склад" },
+  { key: "retention", label: "Удержание" },
+];
+
+export default function ShopDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const supabase = createClient();
+  const [shop, setShop] = useState<Shop | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    async function loadShop() {
+      const { data, error } = await supabase
+        .from("shops")
+        .select("*")
+        .eq("id", params.id)
+        .single();
+
+      if (error) {
+        toast.error("Не удалось загрузить данные салона");
+        router.push("/superadmin/shops");
+        return;
+      }
+
+      setShop(data);
+      setLoading(false);
+    }
+
+    loadShop();
+  }, [params.id, router, supabase]);
+
+  const toggleModule = async (key: string) => {
+    if (!shop) return;
+    setSaving(true);
+
+    const newModules = { ...shop.modules, [key]: !shop.modules[key] };
+    const { error } = await supabase
+      .from("shops")
+      .update({ modules: newModules })
+      .eq("id", shop.id);
+
+    if (error) {
+      toast.error("Не удалось обновить модуль");
+    } else {
+      setShop({ ...shop, modules: newModules });
+      toast.success(`Модуль ${shop.modules[key] ? "выключен" : "включен"}`);
+    }
+    setSaving(false);
+  };
+
+  const toggleBlock = async () => {
+    if (!shop) return;
+    setSaving(true);
+
+    const { error } = await supabase
+      .from("shops")
+      .update({ blocked: !shop.blocked })
+      .eq("id", shop.id);
+
+    if (error) {
+      toast.error("Не удалось изменить статус");
+    } else {
+      setShop({ ...shop, blocked: !shop.blocked });
+      toast.success(shop.blocked ? "Салон разблокирован" : "Салон заблокирован");
+    }
+    setSaving(false);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <p className="text-neutral-500">Загрузка...</p>
+      </div>
+    );
+  }
+
+  if (!shop) {
+    return (
+      <div className="p-8 text-center">
+        <p className="text-neutral-500">Салон не найден</p>
+        <Link
+          href="/superadmin/shops"
+          className="mt-4 inline-block text-blue-600 hover:underline"
+        >
+          Вернуться к списку
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-8">
+      <div className="mb-6 flex items-center gap-4">
+        <Link
+          href="/superadmin/shops"
+          className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-900"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Назад
+        </Link>
+        <h1 className="text-2xl font-semibold text-neutral-900">{shop.name}</h1>
+        <span
+          className={`ml-auto rounded-full px-3 py-1 text-xs font-medium ${
+            shop.blocked ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"
+          }`}
+        >
+          {shop.blocked ? "Заблокирован" : "Активен"}
+        </span>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Левая колонка — данные салона */}
+        <div className="rounded-xl border border-neutral-200 bg-white p-6">
+          <h2 className="text-sm font-semibold text-neutral-900">Данные салона</h2>
+          <div className="mt-4 space-y-3">
+            <div className="flex items-center gap-3 border-b border-neutral-100 pb-3">
+              <Building2 className="h-5 w-5 text-neutral-400" />
+              <div>
+                <p className="text-xs text-neutral-400">Название</p>
+                <p className="font-medium text-neutral-900">{shop.name}</p>
+              </div>
+            </div>
+
+            {shop.contact_name && (
+              <div className="flex items-center gap-3 border-b border-neutral-100 pb-3">
+                <User className="h-5 w-5 text-neutral-400" />
+                <div>
+                  <p className="text-xs text-neutral-400">Контактное лицо</p>
+                  <p className="text-neutral-900">{shop.contact_name}</p>
+                </div>
+              </div>
+            )}
+
+            {shop.email && (
+              <div className="flex items-center gap-3 border-b border-neutral-100 pb-3">
+                <Mail className="h-5 w-5 text-neutral-400" />
+                <div>
+                  <p className="text-xs text-neutral-400">Email</p>
+                  <p className="text-neutral-900">{shop.email}</p>
+                </div>
+              </div>
+            )}
+
+            {shop.phone && (
+              <div className="flex items-center gap-3 border-b border-neutral-100 pb-3">
+                <Phone className="h-5 w-5 text-neutral-400" />
+                <div>
+                  <p className="text-xs text-neutral-400">Телефон</p>
+                  <p className="text-neutral-900">{shop.phone}</p>
+                </div>
+              </div>
+            )}
+
+            {shop.address && (
+              <div className="flex items-center gap-3 border-b border-neutral-100 pb-3">
+                <MapPin className="h-5 w-5 text-neutral-400" />
+                <div>
+                  <p className="text-xs text-neutral-400">Адрес</p>
+                  <p className="text-neutral-900">{shop.address}</p>
+                </div>
+              </div>
+            )}
+
+            {shop.inn && (
+              <div className="flex items-center gap-3 border-b border-neutral-100 pb-3">
+                <div className="h-5 w-5 text-neutral-400 font-mono text-xs">ИНН</div>
+                <div>
+                  <p className="text-xs text-neutral-400">ИНН</p>
+                  <p className="text-neutral-900">{shop.inn}</p>
+                </div>
+              </div>
+            )}
+
+            {shop.ogrn && (
+              <div className="flex items-center gap-3">
+                <div className="h-5 w-5 text-neutral-400 font-mono text-xs">ОГРН</div>
+                <div>
+                  <p className="text-xs text-neutral-400">ОГРН</p>
+                  <p className="text-neutral-900">{shop.ogrn}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6 grid grid-cols-3 gap-3 border-t border-neutral-100 pt-4">
+            <div className="text-center">
+              <p className="text-sm font-semibold text-neutral-900">{shop.total_clients}</p>
+              <p className="text-xs text-neutral-400">Клиентов</p>
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-neutral-900">{shop.total_bookings}</p>
+              <p className="text-xs text-neutral-400">Записей</p>
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-neutral-900">{shop.total_specialists}</p>
+              <p className="text-xs text-neutral-400">Специалистов</p>
+            </div>
+          </div>
+
+          <button
+            onClick={toggleBlock}
+            disabled={saving}
+            className={`mt-4 w-full rounded-lg px-4 py-2 text-sm font-medium transition ${
+              shop.blocked
+                ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                : "bg-red-600 text-white hover:bg-red-700"
+            } disabled:opacity-50`}
+          >
+            {shop.blocked ? "Разблокировать салон" : "Заблокировать салон"}
+          </button>
+        </div>
+
+        {/* Правая колонка — модули */}
+        <div className="rounded-xl border border-neutral-200 bg-white p-6">
+          <h2 className="text-sm font-semibold text-neutral-900">Модули</h2>
+          <p className="mt-1 text-xs text-neutral-400">
+            Включайте/выключайте функции для салона
+          </p>
+
+          <div className="mt-4 space-y-2">
+            {ALL_MODULES.map((mod) => (
+              <div
+                key={mod.key}
+                className="flex items-center justify-between rounded-lg border border-neutral-100 px-4 py-3"
+              >
+                <span className="text-sm text-neutral-700">{mod.label}</span>
+                <button
+                  onClick={() => toggleModule(mod.key)}
+                  disabled={saving}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                    shop.modules?.[mod.key] ? "bg-neutral-900" : "bg-neutral-300"
+                  } disabled:opacity-50`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                      shop.modules?.[mod.key] ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 rounded-lg bg-neutral-50 px-4 py-3 text-xs text-neutral-500">
+            Тариф:{" "}
+            <span className="font-medium text-neutral-700">
+              {shop.plan === "free" ? "Бесплатный" : "PRO"}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

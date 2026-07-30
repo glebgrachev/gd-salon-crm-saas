@@ -17,10 +17,17 @@ import {
   CalendarDays,
   Package,
   Bell,
+  Settings,
+  Shield,
+  Building2,
+  CreditCard,
   LogOut,
 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
-const NAV = [
+// Список пунктов для владельца салона
+const OWNER_NAV = [
   { href: "/", label: "Заказы", icon: CalendarCheck },
   { href: "/specialists", label: "Специалисты", icon: Scissors },
   { href: "/schedule", label: "График работы", icon: CalendarDays },
@@ -35,10 +42,42 @@ const NAV = [
   { href: "/stock", label: "Склад", icon: Package },
   { href: "/payouts", label: "Зарплаты", icon: Wallet },
   { href: "/analytics", label: "Аналитика", icon: BarChart3 },
+  { href: "/settings", label: "Настройки", icon: Settings },
+];
+
+// Список пунктов для суперадмина
+const SUPERADMIN_NAV = [
+  { href: "/superadmin", label: "Дашборд", icon: Shield },
+  { href: "/superadmin/shops", label: "Салоны", icon: Building2 },
+  { href: "/superadmin/users", label: "Пользователи", icon: Users },
+  { href: "/superadmin/subscriptions", label: "Подписки", icon: CreditCard },
 ];
 
 export default function Sidebar({ email }: { email?: string | null }) {
   const pathname = usePathname();
+  const supabase = createClient();
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function checkRole() {
+      const { data } = await supabase.rpc("is_superadmin");
+      setIsSuperAdmin(!!data);
+      setLoading(false);
+    }
+    checkRole();
+  }, [supabase]);
+
+  // Определяем, какие пункты показывать
+  const navItems = isSuperAdmin ? SUPERADMIN_NAV : OWNER_NAV;
+
+  if (loading) {
+    return (
+      <aside className="flex w-60 shrink-0 flex-col border-r border-neutral-200 bg-white p-4">
+        <div className="text-sm text-neutral-400">Загрузка...</div>
+      </aside>
+    );
+  }
 
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-neutral-200 bg-white">
@@ -46,11 +85,13 @@ export default function Sidebar({ email }: { email?: string | null }) {
         <span className="text-sm font-semibold tracking-tight text-neutral-900">
           BeautyApp
         </span>
-        <span className="block text-xs text-neutral-400">Админ-панель салона</span>
+        <span className="block text-xs text-neutral-400">
+          {isSuperAdmin ? "Суперадмин-панель" : "Админ-панель салона"}
+        </span>
       </div>
 
       <nav className="flex-1 space-y-0.5 px-3">
-        {NAV.map(({ href, label, icon: Icon }) => {
+        {navItems.map(({ href, label, icon: Icon }) => {
           const active =
             href === "/" ? pathname === "/" : pathname.startsWith(href);
           return (

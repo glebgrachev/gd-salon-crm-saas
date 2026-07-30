@@ -117,6 +117,7 @@ export default function SpecialistsManager({
       else {
         toast.success(form.id ? "Сохранено" : "Мастер добавлен");
         setForm(null);
+        router.refresh();
       }
     });
   }
@@ -126,6 +127,10 @@ export default function SpecialistsManager({
     startTransition(async () => {
       const r = await deleteSpecialist(s.id);
       if (!r.ok) toast.error(r.error ?? "Ошибка");
+      else {
+        toast.success("Мастер удалён");
+        router.refresh();
+      }
     });
   }
 
@@ -141,7 +146,8 @@ export default function SpecialistsManager({
           </p>
         </div>
         <Button size="sm" onClick={openCreate}>
-          <Plus /> Добавить
+          <Plus className="h-4 w-4" />
+          Добавить
         </Button>
       </header>
 
@@ -215,14 +221,14 @@ export default function SpecialistsManager({
                     size="icon-sm"
                     onClick={() => openEdit(s)}
                   >
-                    <Pencil />
+                    <Pencil className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon-sm"
                     onClick={() => remove(s)}
                   >
-                    <Trash2 />
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
@@ -269,9 +275,9 @@ export default function SpecialistsManager({
                     onClick={() => fileRef.current?.click()}
                   >
                     {uploading ? (
-                      <Loader2 className="animate-spin" />
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <Upload />
+                      <Upload className="h-4 w-4" />
                     )}
                     {form.photo_url ? "Заменить фото" : "Загрузить фото"}
                   </Button>

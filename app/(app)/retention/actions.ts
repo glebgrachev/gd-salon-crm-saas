@@ -1,17 +1,33 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { createAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+
+// 🔥 Расширенный guard — возвращает supabase + shopId
+async function guard() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: admin } = await supabase
+    .from("admins")
+    .select("shop_id")
+    .eq("user_uid", user.id)
+    .single();
+
+  if (!admin?.shop_id) return null;
+
+  return { supabase, shopId: admin.shop_id };
+}
 
 export async function updateRetentionSettings(input: {
   new_days: number;
   regular_days: number;
   lost_days: number;
 }) {
-  const supabase = await createClient();
-  const { data: isAdmin } = await supabase.rpc("is_admin");
-  if (!isAdmin) return { ok: false, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false, error: "Нет доступа" };
+  const { supabase, shopId } = g;
 
   const n = Math.round(Number(input.new_days));
   const r = Math.round(Number(input.regular_days));
@@ -21,10 +37,26 @@ export async function updateRetentionSettings(input: {
     return { ok: false, error: "Пороги должны идти по возрастанию: Новый < Постоянный < Потерянный" };
   }
 
-  const admin = createAdmin();
-  const { data, error } = await admin
+  // Проверяем, что настройка принадлежит этому салону
+  const { data: existing } = await supabase
     .from("retention_settings")
-    .update({ new_days: n, regular_days: r, lost_days: l, updated_at: new Date().toISOString() })
+    .select("shop_id")
+    .eq("id", 1)
+    .single();
+
+  if (!existing || existing.shop_id !== shopId) {
+    return { ok: false, error: "Настройки не найдены или не принадлежат вашему салону" };
+  }
+
+  const { data, error } = await supabase
+    .from("retention_settings")
+    .update({
+      new_days: n,
+      regular_days: r,
+      lost_days: l,
+      updated_at: new Date().toISOString(),
+      shop_id: shopId,
+    })
     .eq("id", 1)
     .select();
   if (error) return { ok: false, error: error.message };

@@ -25,6 +25,18 @@ function buildPath(categoryId: string, cats: Map<string, Cat>): string {
 export default async function PromotionsPage() {
   const supabase = await createClient();
 
+  // 1. Получаем пользователя и shop_id
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data: admin } = await supabase
+    .from("admins")
+    .select("shop_id")
+    .eq("user_uid", user?.id)
+    .single();
+
+  const shopId = admin?.shop_id ?? 0;
+
+  // 2. Загружаем данные ТОЛЬКО для этого салона
   const [{ data: promos }, { data: cats }, { data: svcs }, { data: trig }, { data: perf }] =
     await Promise.all([
       supabase
@@ -32,6 +44,7 @@ export default async function PromotionsPage() {
         .select(
           "id, kind, title, description, banner_url, discount_type, discount_value, target_category_id, target_service_id, gift_service_id, gift_discount_percent, valid_from, valid_to, is_active",
         )
+        .eq("shop_id", shopId) // 👈 КЛЮЧЕВОЙ ФИЛЬТР
         .order("created_at", { ascending: false }),
       supabase.from("categories").select("id, parent_id, name"),
       supabase.from("services").select("id, name, category_id").order("name"),
@@ -40,7 +53,8 @@ export default async function PromotionsPage() {
         .from("bookings")
         .select("promo_id, final_price, price_snapshot, status")
         .not("promo_id", "is", null)
-        .in("status", ["completed", "paid"]),
+        .in("status", ["completed", "paid"])
+        .eq("shop_id", shopId), // 👈 ФИЛЬТР ПО САЛОНУ
     ]);
 
   const catMap = new Map<string, Cat>(((cats as Cat[]) ?? []).map((c) => [c.id, c]));

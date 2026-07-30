@@ -13,6 +13,23 @@ const ALLOWED: BookingStatus[] = [
   "no_show",
 ];
 
+// 🔥 Расширенный guard — возвращает supabase + shopId
+async function guard() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: admin } = await supabase
+    .from("admins")
+    .select("shop_id")
+    .eq("user_uid", user.id)
+    .single();
+
+  if (!admin?.shop_id) return null;
+
+  return { supabase, shopId: admin.shop_id };
+}
+
 export async function updateBookingStatus(
   id: string,
   status: BookingStatus,
@@ -21,10 +38,20 @@ export async function updateBookingStatus(
     return { ok: false, error: "Недопустимый статус" };
   }
 
-  const supabase = await createClient();
+  const g = await guard();
+  if (!g) return { ok: false, error: "Нет доступа" };
+  const { supabase, shopId } = g;
 
-  const { data: isAdmin } = await supabase.rpc("is_admin");
-  if (!isAdmin) return { ok: false, error: "Нет доступа" };
+  // Проверяем, что запись принадлежит этому салону
+  const { data: booking } = await supabase
+    .from("bookings")
+    .select("shop_id")
+    .eq("id", id)
+    .single();
+
+  if (!booking || booking.shop_id !== shopId) {
+    return { ok: false, error: "Запись не найдена или не принадлежит вашему салону" };
+  }
 
   const { error } = await supabase
     .from("bookings")

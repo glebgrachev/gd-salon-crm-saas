@@ -1,22 +1,43 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { createAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 
+// 🔥 Расширенный guard — возвращает supabase + shopId
 async function guard() {
   const supabase = await createClient();
-  const { data: isAdmin } = await supabase.rpc("is_admin");
-  return isAdmin ? supabase : null;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: admin } = await supabase
+    .from("admins")
+    .select("shop_id")
+    .eq("user_uid", user.id)
+    .single();
+
+  if (!admin?.shop_id) return null;
+
+  return { supabase, shopId: admin.shop_id };
 }
 
 /** Убрать клиента из очереди (админ) */
 export async function removeFromWaitlist(id: string) {
-  const supabase = await guard();
-  if (!supabase) return { ok: false, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false, error: "Нет доступа" };
+  const { supabase, shopId } = g;
 
-  const admin = createAdmin();
-  const { error } = await admin
+  // Проверяем, что запись принадлежит этому салону
+  const { data: existing } = await supabase
+    .from("waitlist")
+    .select("shop_id")
+    .eq("id", id)
+    .single();
+
+  if (!existing || existing.shop_id !== shopId) {
+    return { ok: false, error: "Запись не найдена или не принадлежит вашему салону" };
+  }
+
+  const { error } = await supabase
     .from("waitlist")
     .update({ status: "cancelled", updated_at: new Date().toISOString() })
     .eq("id", id)

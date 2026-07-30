@@ -6,13 +6,32 @@ export const dynamic = "force-dynamic";
 export default async function ClientsPage() {
   const supabase = await createClient();
 
+  // 1. Получаем пользователя и shop_id
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data: admin } = await supabase
+    .from("admins")
+    .select("shop_id")
+    .eq("user_uid", user?.id)
+    .single();
+
+  const shopId = admin?.shop_id ?? 0;
+
+  // 2. Загружаем данные ТОЛЬКО для этого салона
   const [{ data: users }, { data: bookings }, { data: segments }] = await Promise.all([
     supabase
       .from("users")
       .select("telegram_id, first_name, last_name, username, phone, created_at")
+      .eq("shop_id", shopId) // 👈 КЛЮЧЕВОЙ ФИЛЬТР
       .order("created_at", { ascending: false }),
-    supabase.from("bookings").select("client_id, status, price_snapshot"),
-    supabase.from("v_client_segments").select("client_id, segment, last_visit, days_since_last, visits"),
+    supabase
+      .from("bookings")
+      .select("client_id, status, price_snapshot")
+      .eq("shop_id", shopId), // 👈 ФИЛЬТР ПО САЛОНУ
+    supabase
+      .from("v_client_segments")
+      .select("client_id, segment, last_visit, days_since_last, visits")
+      .eq("shop_id", shopId), // 👈 ФИЛЬТР ПО САЛОНУ
   ]);
 
   const stats = new Map<number, { count: number; spent: number }>();

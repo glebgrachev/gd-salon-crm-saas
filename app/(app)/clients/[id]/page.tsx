@@ -29,26 +29,45 @@ export default async function ClientPage({
   const { id } = await params;
   const supabase = await createClient();
 
+  // 1. Получаем пользователя и shop_id
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data: admin } = await supabase
+    .from("admins")
+    .select("shop_id")
+    .eq("user_uid", user?.id)
+    .single();
+
+  const shopId = admin?.shop_id ?? 0;
+
+  // 2. Проверяем, что клиент принадлежит этому салону
   const { data: client } = await supabase
     .from("users")
-    .select("telegram_id, first_name, last_name, username, phone, created_at")
+    .select("telegram_id, first_name, last_name, username, phone, created_at, shop_id")
     .eq("telegram_id", id)
     .maybeSingle();
 
   if (!client) notFound();
 
+  if (client.shop_id !== shopId) {
+    notFound();
+  }
+
+  // 3. Загружаем данные только для этого салона
   const { data: bookingsData } = await supabase
     .from("bookings")
     .select(
-      "id, starts_at, status, price_snapshot, specialist:specialists ( full_name ), service:services ( name )",
+      "id, starts_at, status, price_snapshot, shop_id, specialist:specialists ( full_name ), service:services ( name )",
     )
     .eq("client_id", id)
+    .eq("shop_id", shopId) // 👈 КЛЮЧЕВОЙ ФИЛЬТР
     .order("starts_at", { ascending: false });
 
   const { data: loyalty } = await supabase
     .from("loyalty_accounts")
     .select("balance, total_earned, total_spent")
     .eq("client_id", id)
+    .eq("shop_id", shopId) // 👈 ФИЛЬТР ПО САЛОНУ
     .maybeSingle();
   const points = Number(loyalty?.balance ?? 0);
 
@@ -56,6 +75,7 @@ export default async function ClientPage({
     .from("v_client_segments")
     .select("segment, last_visit, days_since_last, visits, retention_notified_at")
     .eq("client_id", id)
+    .eq("shop_id", shopId) // 👈 ФИЛЬТР ПО САЛОНУ
     .maybeSingle();
 
   const bookings = (bookingsData as unknown as B[]) ?? [];

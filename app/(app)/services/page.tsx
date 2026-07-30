@@ -9,16 +9,30 @@ export const dynamic = "force-dynamic";
 export default async function ServicesPage() {
   const supabase = await createClient();
 
+  // 1. Получаем пользователя и shop_id
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data: admin } = await supabase
+    .from("admins")
+    .select("shop_id")
+    .eq("user_uid", user?.id)
+    .single();
+
+  const shopId = admin?.shop_id ?? 0;
+
+  // 2. Загружаем категории и услуги ТОЛЬКО для этого салона
   const [{ data: cats }, { data: svcs }] = await Promise.all([
     supabase
       .from("categories")
       .select("id, parent_id, name, level, sort_order")
+      .eq("shop_id", shopId) // 👈 КЛЮЧЕВОЙ ФИЛЬТР
       .order("level")
       .order("sort_order")
       .order("name"),
     supabase
       .from("services")
       .select("id, category_id, name, duration_min")
+      .eq("shop_id", shopId) // 👈 ФИЛЬТР ПО САЛОНУ
       .order("name"),
   ]);
 

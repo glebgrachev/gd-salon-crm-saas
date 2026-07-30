@@ -18,11 +18,28 @@ type Row = {
 export default async function RetentionPage() {
   const supabase = await createClient();
 
+  // 1. Получаем пользователя и shop_id
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data: admin } = await supabase
+    .from("admins")
+    .select("shop_id")
+    .eq("user_uid", user?.id)
+    .single();
+
+  const shopId = admin?.shop_id ?? 0;
+
+  // 2. Загружаем данные ТОЛЬКО для этого салона
   const [{ data: rowsRaw }, { data: cfg }] = await Promise.all([
     supabase
       .from("v_client_segments")
-      .select("client_id, first_name, last_name, username, visits, last_visit, days_since_last, segment, retention_notified_at"),
-    supabase.from("retention_settings").select("new_days, regular_days, lost_days").eq("id", 1).maybeSingle(),
+      .select("client_id, first_name, last_name, username, visits, last_visit, days_since_last, segment, retention_notified_at")
+      .eq("shop_id", shopId), // 👈 КЛЮЧЕВОЙ ФИЛЬТР
+    supabase
+      .from("retention_settings")
+      .select("new_days, regular_days, lost_days")
+      .eq("shop_id", shopId) // 👈 ФИЛЬТР ПО САЛОНУ
+      .maybeSingle(),
   ]);
 
   const rows = (rowsRaw as Row[]) ?? [];

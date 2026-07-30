@@ -56,20 +56,40 @@ export default async function SpecialistAnalytics({
   const qs = `?type=${type}&date=${dateStr}`;
 
   const supabase = await createClient();
+
+  // 1. Получаем пользователя и shop_id
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data: admin } = await supabase
+    .from("admins")
+    .select("shop_id")
+    .eq("user_uid", user?.id)
+    .single();
+
+  const shopId = admin?.shop_id ?? 0;
+
+  // 2. Проверяем, что специалист принадлежит этому салону
   const { data: specialist } = await supabase
     .from("specialists")
-    .select("full_name")
+    .select("full_name, shop_id")
     .eq("id", id)
     .maybeSingle();
+
   if (!specialist) notFound();
 
+  if (specialist.shop_id !== shopId) {
+    notFound();
+  }
+
+  // 3. Загружаем данные только для этого салона
   const [{ data: rows }, { data: cats }] = await Promise.all([
     supabase
       .from("bookings")
       .select(
-        "price_snapshot, final_price, service:services ( id, name, category_id )",
+        "price_snapshot, final_price, shop_id, service:services ( id, name, category_id )",
       )
       .eq("specialist_id", id)
+      .eq("shop_id", shopId) // 👈 КЛЮЧЕВОЙ ФИЛЬТР
       .gte("starts_at", fromISO)
       .lt("starts_at", toISO)
       .in("status", ["completed", "paid"]),

@@ -1,8 +1,24 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { createAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+
+// 🔥 Расширенный guard — возвращает supabase + shopId
+async function guard() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: admin } = await supabase
+    .from("admins")
+    .select("shop_id")
+    .eq("user_uid", user.id)
+    .single();
+
+  if (!admin?.shop_id) return null;
+
+  return { supabase, shopId: admin.shop_id };
+}
 
 // без похожих символов (0/O, 1/I) — код диктуется голосом/переписывается
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -17,14 +33,13 @@ function genCode() {
 }
 
 export async function issueCertificate(input: { amount: number; note?: string; expires_at?: string }) {
-  const supabase = await createClient();
-  const { data: isAdmin } = await supabase.rpc("is_admin");
-  if (!isAdmin) return { ok: false, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false, error: "Нет доступа" };
+  const { supabase, shopId } = g;
 
   const amount = Math.round(Number(input.amount));
   if (!Number.isFinite(amount) || amount <= 0) return { ok: false, error: "Укажите номинал" };
 
-  // срок действия: пустая строка → бессрочно; иначе YYYY-MM-DD, не в прошлом
   let expires_at: string | null = null;
   if (input.expires_at && input.expires_at.trim()) {
     const d = input.expires_at.trim();
@@ -34,12 +49,19 @@ export async function issueCertificate(input: { amount: number; note?: string; e
     expires_at = d;
   }
 
-  const admin = createAdmin();
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = genCode();
-    const { data, error } = await admin
+    const { data, error } = await supabase
       .from("certificates")
-      .insert({ code, amount, balance: amount, status: "issued", note: input.note?.trim() || null, expires_at })
+      .insert({
+        code,
+        amount,
+        balance: amount,
+        status: "issued",
+        note: input.note?.trim() || null,
+        expires_at,
+        shop_id: shopId,
+      })
       .select("code")
       .single();
     if (!error && data) {
@@ -54,20 +76,31 @@ export async function issueCertificate(input: { amount: number; note?: string; e
 }
 
 export async function setCertificateDisabled(id: string, disabled: boolean) {
-  const supabase = await createClient();
-  const { data: isAdmin } = await supabase.rpc("is_admin");
-  if (!isAdmin) return { ok: false, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false, error: "Нет доступа" };
+  const { supabase, shopId } = g;
 
-  const admin = createAdmin();
+  // Проверяем, что сертификат принадлежит этому салону
+  const { data: existing } = await supabase
+    .from("certificates")
+    .select("status, shop_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!existing || existing.shop_id !== shopId) {
+    return { ok: false, error: "Сертификат не найден или не принадлежит вашему салону" };
+  }
+
   // не трогаем использованные; переключаем issued/active <-> disabled
-  const { data: cert } = await admin.from("certificates").select("status").eq("id", id).maybeSingle();
-  if (!cert) return { ok: false, error: "Не найдено" };
-
+  const cert = existing;
   let next: string;
   if (disabled) next = "disabled";
-  else next = cert.status === "disabled" ? "issued" : cert.status; // вернуть из disabled
+  else next = cert.status === "disabled" ? "issued" : cert.status;
 
-  const { error } = await admin.from("certificates").update({ status: next }).eq("id", id);
+  const { error } = await supabase
+    .from("certificates")
+    .update({ status: next })
+    .eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/certificates");
   return { ok: true };

@@ -1,7 +1,6 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { createAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { tgSend } from "@/lib/notify";
 
@@ -26,8 +25,8 @@ export type ProductRow = {
   is_low: boolean;
   margin_percent: number | null;
   profit_per_unit: number | null;
-  face_value: number | null;      // номинал сертификата
-  validity_days: number | null;   // через сколько дней сгорит
+  face_value: number | null;
+  validity_days: number | null;
 };
 
 export type SupplierRow = {
@@ -51,10 +50,21 @@ export type MovementRow = {
   created_at: string;
 };
 
+// 🔥 Расширенный guard — возвращает supabase + shopId
 async function guard() {
   const supabase = await createClient();
-  const { data: isAdmin } = await supabase.rpc("is_admin");
-  return isAdmin ? supabase : null;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: admin } = await supabase
+    .from("admins")
+    .select("shop_id")
+    .eq("user_uid", user.id)
+    .single();
+
+  if (!admin?.shop_id) return null;
+
+  return { supabase, shopId: admin.shop_id };
 }
 
 /* ---------- товары ---------- */
@@ -74,8 +84,9 @@ export async function saveProduct(input: {
   face_value?: number | null;
   validity_days?: number | null;
 }) {
-  const supabase = await guard();
-  if (!supabase) return { ok: false, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false, error: "Нет доступа" };
+  const { supabase, shopId } = g;
 
   const name = input.name.trim();
   if (!name) return { ok: false, error: "Укажите название" };
@@ -105,18 +116,27 @@ export async function saveProduct(input: {
     description: input.description.trim() || null,
     photo_url: input.photo_url,
     is_active: input.is_active,
-    // только у сертификатов
-    face_value:    input.kind === "certificate" ? input.face_value ?? null : null,
+    shop_id: shopId,
+    face_value: input.kind === "certificate" ? input.face_value ?? null : null,
     validity_days: input.kind === "certificate" ? input.validity_days ?? null : null,
   };
 
-  const admin = createAdmin();
-
   if (input.id) {
-    const { error } = await admin.from("products").update(payload).eq("id", input.id);
+    // Проверяем, что товар принадлежит этому салону
+    const { data: existing } = await supabase
+      .from("products")
+      .select("shop_id")
+      .eq("id", input.id)
+      .single();
+
+    if (!existing || existing.shop_id !== shopId) {
+      return { ok: false, error: "Товар не найден или не принадлежит вашему салону" };
+    }
+
+    const { error } = await supabase.from("products").update(payload).eq("id", input.id);
     if (error) return { ok: false, error: error.message };
   } else {
-    const { error } = await admin.from("products").insert(payload);
+    const { error } = await supabase.from("products").insert(payload);
     if (error) return { ok: false, error: error.message };
   }
 
@@ -125,24 +145,35 @@ export async function saveProduct(input: {
 }
 
 export async function deleteProduct(id: string) {
-  const supabase = await guard();
-  if (!supabase) return { ok: false, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false, error: "Нет доступа" };
+  const { supabase, shopId } = g;
 
-  const admin = createAdmin();
+  // Проверяем, что товар принадлежит этому салону
+  const { data: existing } = await supabase
+    .from("products")
+    .select("shop_id")
+    .eq("id", id)
+    .single();
+
+  if (!existing || existing.shop_id !== shopId) {
+    return { ok: false, error: "Товар не найден или не принадлежит вашему салону" };
+  }
+
   // если по товару были движения — не удаляем, а деактивируем
-  const { count } = await admin
+  const { count } = await supabase
     .from("stock_movements")
     .select("id", { count: "exact", head: true })
     .eq("product_id", id);
 
   if ((count ?? 0) > 0) {
-    const { error } = await admin.from("products").update({ is_active: false }).eq("id", id);
+    const { error } = await supabase.from("products").update({ is_active: false }).eq("id", id);
     if (error) return { ok: false, error: error.message };
     revalidatePath("/stock", "layout");
     return { ok: true, archived: true };
   }
 
-  const { error } = await admin.from("products").delete().eq("id", id);
+  const { error } = await supabase.from("products").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/stock", "layout");
@@ -158,8 +189,9 @@ export async function saveSupplier(input: {
   email: string;
   note: string;
 }) {
-  const supabase = await guard();
-  if (!supabase) return { ok: false, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false, error: "Нет доступа" };
+  const { supabase, shopId } = g;
 
   const name = input.name.trim();
   if (!name) return { ok: false, error: "Укажите название" };
@@ -169,14 +201,24 @@ export async function saveSupplier(input: {
     phone: input.phone.trim() || null,
     email: input.email.trim() || null,
     note: input.note.trim() || null,
+    shop_id: shopId,
   };
 
-  const admin = createAdmin();
   if (input.id) {
-    const { error } = await admin.from("suppliers").update(payload).eq("id", input.id);
+    const { data: existing } = await supabase
+      .from("suppliers")
+      .select("shop_id")
+      .eq("id", input.id)
+      .single();
+
+    if (!existing || existing.shop_id !== shopId) {
+      return { ok: false, error: "Поставщик не найден или не принадлежит вашему салону" };
+    }
+
+    const { error } = await supabase.from("suppliers").update(payload).eq("id", input.id);
     if (error) return { ok: false, error: error.message };
   } else {
-    const { error } = await admin.from("suppliers").insert(payload);
+    const { error } = await supabase.from("suppliers").insert(payload);
     if (error) return { ok: false, error: error.message };
   }
 
@@ -185,11 +227,21 @@ export async function saveSupplier(input: {
 }
 
 export async function deleteSupplier(id: string) {
-  const supabase = await guard();
-  if (!supabase) return { ok: false, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false, error: "Нет доступа" };
+  const { supabase, shopId } = g;
 
-  const admin = createAdmin();
-  const { error } = await admin.from("suppliers").update({ is_active: false }).eq("id", id);
+  const { data: existing } = await supabase
+    .from("suppliers")
+    .select("shop_id")
+    .eq("id", id)
+    .single();
+
+  if (!existing || existing.shop_id !== shopId) {
+    return { ok: false, error: "Поставщик не найден или не принадлежит вашему салону" };
+  }
+
+  const { error } = await supabase.from("suppliers").update({ is_active: false }).eq("id", id);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/stock", "layout");
@@ -212,17 +264,29 @@ export async function createPurchase(input: {
   note: string;
   lines: PurchaseLine[];
 }) {
-  const supabase = await guard();
-  if (!supabase) return { ok: false, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false, error: "Нет доступа" };
+  const { supabase, shopId } = g;
 
   const lines = input.lines.filter((l) => l.product_id && l.packs > 0);
   if (lines.length === 0) return { ok: false, error: "Добавьте хотя бы одну позицию" };
 
-  const admin = createAdmin();
-
   const total = lines.reduce((s, l) => s + (Number(l.cost_total) || 0), 0);
 
-  const { data: inv, error: invErr } = await admin
+  // Проверяем, что все товары принадлежат этому салону
+  for (const l of lines) {
+    const { data: product } = await supabase
+      .from("products")
+      .select("shop_id")
+      .eq("id", l.product_id)
+      .single();
+
+    if (!product || product.shop_id !== shopId) {
+      return { ok: false, error: "Один из товаров не принадлежит вашему салону" };
+    }
+  }
+
+  const { data: inv, error: invErr } = await supabase
     .from("purchase_invoices")
     .insert({
       supplier_id: input.supplier_id,
@@ -230,6 +294,7 @@ export async function createPurchase(input: {
       invoice_date: input.invoice_date,
       note: input.note.trim() || null,
       total,
+      shop_id: shopId,
     })
     .select("id")
     .single();
@@ -239,17 +304,18 @@ export async function createPurchase(input: {
   for (const l of lines) {
     const qtyBase = l.packs * l.pack_size;
 
-    const { error: itemErr } = await admin.from("purchase_items").insert({
+    const { error: itemErr } = await supabase.from("purchase_items").insert({
       invoice_id: inv.id,
       product_id: l.product_id,
       packs: l.packs,
       pack_size: l.pack_size,
       qty_base: qtyBase,
       cost_total: l.cost_total,
+      shop_id: shopId,
     });
     if (itemErr) return { ok: false, error: itemErr.message };
 
-    const { error: stockErr } = await admin.rpc("stock_purchase", {
+    const { error: stockErr } = await supabase.rpc("stock_purchase", {
       p_product: l.product_id,
       p_packs: l.packs,
       p_pack_size: l.pack_size,
@@ -266,12 +332,23 @@ export async function createPurchase(input: {
 /* ---------- инвентаризация и списание ---------- */
 
 export async function adjustStock(productId: string, newStock: number, note: string) {
-  const supabase = await guard();
-  if (!supabase) return { ok: false, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false, error: "Нет доступа" };
+  const { supabase, shopId } = g;
+
   if (newStock < 0) return { ok: false, error: "Остаток не может быть отрицательным" };
 
-  const admin = createAdmin();
-  const { error } = await admin.rpc("stock_adjust", {
+  const { data: product } = await supabase
+    .from("products")
+    .select("shop_id")
+    .eq("id", productId)
+    .single();
+
+  if (!product || product.shop_id !== shopId) {
+    return { ok: false, error: "Товар не найден или не принадлежит вашему салону" };
+  }
+
+  const { error } = await supabase.rpc("stock_adjust", {
     p_product: productId,
     p_new_stock: newStock,
     p_note: note.trim() || null,
@@ -283,12 +360,23 @@ export async function adjustStock(productId: string, newStock: number, note: str
 }
 
 export async function writeOff(productId: string, qty: number, note: string) {
-  const supabase = await guard();
-  if (!supabase) return { ok: false, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false, error: "Нет доступа" };
+  const { supabase, shopId } = g;
+
   if (qty <= 0) return { ok: false, error: "Количество должно быть больше нуля" };
 
-  const admin = createAdmin();
-  const { error } = await admin.rpc("stock_consume", {
+  const { data: product } = await supabase
+    .from("products")
+    .select("shop_id")
+    .eq("id", productId)
+    .single();
+
+  if (!product || product.shop_id !== shopId) {
+    return { ok: false, error: "Товар не найден или не принадлежит вашему салону" };
+  }
+
+  const { error } = await supabase.rpc("stock_consume", {
     p_product: productId,
     p_qty: qty,
     p_kind: "writeoff",
@@ -305,13 +393,14 @@ export async function writeOff(productId: string, qty: number, note: string) {
 /* ---------- журнал ---------- */
 
 export async function fetchMovements(productId: string | null, limit = 100) {
-  const supabase = await guard();
-  if (!supabase) return { ok: false as const, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false as const, error: "Нет доступа" };
+  const { supabase, shopId } = g;
 
-  const admin = createAdmin();
-  let q = admin
+  let q = supabase
     .from("stock_movements")
     .select("id, product_id, kind, qty_base, cost_base, balance_after, note, created_at, product:products ( name )")
+    .eq("shop_id", shopId)
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -345,13 +434,35 @@ export type ConsumableRow = {
 };
 
 export async function setConsumable(serviceId: string, productId: string, qtyBase: number) {
-  const supabase = await guard();
-  if (!supabase) return { ok: false, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false, error: "Нет доступа" };
+  const { supabase, shopId } = g;
+
   if (qtyBase <= 0) return { ok: false, error: "Количество должно быть больше нуля" };
 
-  const admin = createAdmin();
-  const { error } = await admin.from("service_consumables").upsert(
-    { service_id: serviceId, product_id: productId, qty_base: qtyBase },
+  // Проверяем, что услуга и товар принадлежат этому салону
+  const { data: service } = await supabase
+    .from("services")
+    .select("shop_id")
+    .eq("id", serviceId)
+    .single();
+
+  if (!service || service.shop_id !== shopId) {
+    return { ok: false, error: "Услуга не найдена или не принадлежит вашему салону" };
+  }
+
+  const { data: product } = await supabase
+    .from("products")
+    .select("shop_id")
+    .eq("id", productId)
+    .single();
+
+  if (!product || product.shop_id !== shopId) {
+    return { ok: false, error: "Товар не найден или не принадлежит вашему салону" };
+  }
+
+  const { error } = await supabase.from("service_consumables").upsert(
+    { service_id: serviceId, product_id: productId, qty_base: qtyBase, shop_id: shopId },
     { onConflict: "service_id,product_id" },
   );
   if (error) return { ok: false, error: error.message };
@@ -361,11 +472,22 @@ export async function setConsumable(serviceId: string, productId: string, qtyBas
 }
 
 export async function removeConsumable(serviceId: string, productId: string) {
-  const supabase = await guard();
-  if (!supabase) return { ok: false, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false, error: "Нет доступа" };
+  const { supabase, shopId } = g;
 
-  const admin = createAdmin();
-  const { error } = await admin
+  const { data: existing } = await supabase
+    .from("service_consumables")
+    .select("shop_id")
+    .eq("service_id", serviceId)
+    .eq("product_id", productId)
+    .single();
+
+  if (!existing || existing.shop_id !== shopId) {
+    return { ok: false, error: "Запись не найдена или не принадлежит вашему салону" };
+  }
+
+  const { error } = await supabase
     .from("service_consumables")
     .delete()
     .eq("service_id", serviceId)
@@ -385,12 +507,23 @@ export async function sellProduct(input: {
   specialist_id: string | null;
   booking_id: string | null;
 }) {
-  const supabase = await guard();
-  if (!supabase) return { ok: false, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false, error: "Нет доступа" };
+  const { supabase, shopId } = g;
+
   if (input.qty <= 0) return { ok: false, error: "Количество должно быть больше нуля" };
 
-  const admin = createAdmin();
-  const { data, error } = await admin.rpc("sell_product", {
+  const { data: product } = await supabase
+    .from("products")
+    .select("shop_id")
+    .eq("id", input.product_id)
+    .single();
+
+  if (!product || product.shop_id !== shopId) {
+    return { ok: false, error: "Товар не найден или не принадлежит вашему салону" };
+  }
+
+  const { data, error } = await supabase.rpc("sell_product", {
     p_product: input.product_id,
     p_qty: input.qty,
     p_client: input.client_id,
@@ -421,11 +554,21 @@ export async function sellProduct(input: {
 }
 
 export async function cancelSale(saleId: string) {
-  const supabase = await guard();
-  if (!supabase) return { ok: false, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false, error: "Нет доступа" };
+  const { supabase, shopId } = g;
 
-  const admin = createAdmin();
-  const { error } = await admin.rpc("cancel_product_sale", { p_sale: saleId });
+  const { data: sale } = await supabase
+    .from("product_sales")
+    .select("shop_id")
+    .eq("id", saleId)
+    .single();
+
+  if (!sale || sale.shop_id !== shopId) {
+    return { ok: false, error: "Продажа не найдена или не принадлежит вашему салону" };
+  }
+
+  const { error } = await supabase.rpc("cancel_product_sale", { p_sale: saleId });
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/stock", "layout");
@@ -448,15 +591,16 @@ export type SaleRow = {
 };
 
 export async function fetchSales(limit = 100) {
-  const supabase = await guard();
-  if (!supabase) return { ok: false as const, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false as const, error: "Нет доступа" };
+  const { supabase, shopId } = g;
 
-  const admin = createAdmin();
-  const { data, error } = await admin
+  const { data, error } = await supabase
     .from("product_sales")
     .select(
-      "id, created_at, paid_at, qty, price, total, cost, status, product:products ( name ), client:users ( first_name, last_name, username ), specialist:specialists ( full_name )",
+      "id, created_at, paid_at, qty, price, total, cost, status, shop_id, product:products ( name ), client:users ( first_name, last_name, username ), specialist:specialists ( full_name )",
     )
+    .eq("shop_id", shopId)
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -471,6 +615,7 @@ export async function fetchSales(limit = 100) {
     total: number;
     cost: number;
     status: string;
+    shop_id: number;
     product: { name: string } | null;
     client: { first_name: string | null; last_name: string | null; username: string | null } | null;
     specialist: { full_name: string } | null;
@@ -500,13 +645,22 @@ export async function fetchSales(limit = 100) {
   return { ok: true as const, rows };
 }
 
-/** Отметить отложенный товар как оплаченный (клиент забрал при визите) */
 export async function markSalePaid(saleId: string, specialistId: string | null) {
-  const supabase = await guard();
-  if (!supabase) return { ok: false, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false, error: "Нет доступа" };
+  const { supabase, shopId } = g;
 
-  const admin = createAdmin();
-  const { data, error } = await admin
+  const { data: existing } = await supabase
+    .from("product_sales")
+    .select("shop_id")
+    .eq("id", saleId)
+    .single();
+
+  if (!existing || existing.shop_id !== shopId) {
+    return { ok: false, error: "Продажа не найдена или не принадлежит вашему салону" };
+  }
+
+  const { data, error } = await supabase
     .from("product_sales")
     .update({
       status: "paid",
@@ -520,7 +674,6 @@ export async function markSalePaid(saleId: string, specialistId: string | null) 
   if (error) return { ok: false, error: error.message };
   if (!data || data.length === 0) return { ok: false, error: "Резерв не найден или уже закрыт" };
 
-  // Если оплатили сертификат — выпускаем коды и отправляем клиенту
   type Paid = {
     id: string;
     client_id: number | null;
@@ -531,12 +684,11 @@ export async function markSalePaid(saleId: string, specialistId: string | null) 
   let issued = 0;
 
   if (sale.product?.kind === "certificate") {
-    const { data: res, error: issueErr } = await admin.rpc("issue_certificates_for_sale", {
+    const { data: res, error: issueErr } = await supabase.rpc("issue_certificates_for_sale", {
       p_sale: saleId,
     });
 
     if (issueErr) {
-      // продажа уже проведена — откатывать не будем, но честно скажем
       return {
         ok: false,
         error: `Продажа отмечена, но сертификат не выпустился: ${issueErr.message}`,

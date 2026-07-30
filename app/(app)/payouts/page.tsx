@@ -21,13 +21,33 @@ export default async function PayoutsPage({
   const to = sp.to ?? def.to;
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("payout_report", { p_from: from, p_to: to });
+
+  // 1. Получаем пользователя и shop_id
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data: admin } = await supabase
+    .from("admins")
+    .select("shop_id")
+    .eq("user_uid", user?.id)
+    .single();
+
+  const shopId = admin?.shop_id ?? 0;
+
+  // 2. Вызываем RPC без p_shop_id
+  const { data, error } = await supabase.rpc("payout_report", {
+    p_from: from,
+    p_to: to,
+  });
+
+  // 3. Фильтруем данные на клиенте (если в функции нет shop_id)
+  const filteredData = ((data as PayoutRow[]) ?? [])
+    .filter((row: PayoutRow) => row.shop_id === shopId);
 
   return (
     <PayoutsClient
       from={from}
       to={to}
-      rows={(data as PayoutRow[]) ?? []}
+      rows={filteredData}
       error={error?.message ?? null}
     />
   );

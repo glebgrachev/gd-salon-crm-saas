@@ -41,17 +41,38 @@ export default async function ServiceAnalytics({
   const qs = `?type=${type}&date=${dateStr}`;
 
   const supabase = await createClient();
+
+  // 1. Получаем пользователя и shop_id
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data: admin } = await supabase
+    .from("admins")
+    .select("shop_id")
+    .eq("user_uid", user?.id)
+    .single();
+
+  const shopId = admin?.shop_id ?? 0;
+
+  // 2. Проверяем, что услуга принадлежит этому салону
   const { data: service } = await supabase
     .from("services")
-    .select("name")
+    .select("name, shop_id")
     .eq("id", id)
     .maybeSingle();
+
   if (!service) notFound();
 
+  // Если услуга не принадлежит текущему салону — 404
+  if (service.shop_id !== shopId) {
+    notFound();
+  }
+
+  // 3. Загружаем данные только для этого салона
   const { data: rows } = await supabase
     .from("bookings")
     .select("price_snapshot, final_price, specialist:specialists ( id, full_name )")
     .eq("service_id", id)
+    .eq("shop_id", shopId) // 👈 КЛЮЧЕВОЙ ФИЛЬТР
     .gte("starts_at", fromISO)
     .lt("starts_at", toISO)
     .in("status", ["completed", "paid"]);

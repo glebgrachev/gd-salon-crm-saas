@@ -3,11 +3,21 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
+// 🔥 Расширенный guard — возвращает supabase + shopId
 async function guard() {
   const supabase = await createClient();
-  const { data: isAdmin } = await supabase.rpc("is_admin");
-  if (!isAdmin) return null;
-  return supabase;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: admin } = await supabase
+    .from("admins")
+    .select("shop_id")
+    .eq("user_uid", user.id)
+    .single();
+
+  if (!admin?.shop_id) return null;
+
+  return { supabase, shopId: admin.shop_id };
 }
 
 export type PromotionInput = {
@@ -30,7 +40,7 @@ export type PromotionInput = {
   is_active: boolean;
 };
 
-function row(input: PromotionInput) {
+function row(input: PromotionInput, shopId: number) {
   const isGift = input.kind === "gift";
   return {
     kind: input.kind,
@@ -53,19 +63,25 @@ function row(input: PromotionInput) {
     valid_from: input.valid_from || null,
     valid_to: input.valid_to || null,
     is_active: input.is_active,
+    shop_id: shopId,
   };
 }
 
 async function writeTriggers(
-  supabase: NonNullable<Awaited<ReturnType<typeof guard>>>,
+  supabase: any,
   promotionId: string,
   kind: string,
   triggers: string[],
+  shopId: number,
 ) {
   await supabase.from("promotion_triggers").delete().eq("promotion_id", promotionId);
   if (kind === "gift" && triggers.length) {
     await supabase.from("promotion_triggers").insert(
-      triggers.map((service_id) => ({ promotion_id: promotionId, service_id })),
+      triggers.map((service_id) => ({
+        promotion_id: promotionId,
+        service_id,
+        shop_id: shopId,
+      })),
     );
   }
 }
@@ -77,17 +93,18 @@ export async function createPromotion(input: PromotionInput) {
   if (input.kind === "gift" && input.triggers.length === 0)
     return { ok: false, error: "Добавьте хотя бы одну услугу-триггер" };
 
-  const supabase = await guard();
-  if (!supabase) return { ok: false, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false, error: "Нет доступа" };
+  const { supabase, shopId } = g;
 
   const { data, error } = await supabase
     .from("promotions")
-    .insert(row(input))
+    .insert(row(input, shopId))
     .select("id")
     .single();
   if (error) return { ok: false, error: error.message };
 
-  await writeTriggers(supabase, data.id, input.kind, input.triggers);
+  await writeTriggers(supabase, data.id, input.kind, input.triggers, shopId);
 
   revalidatePath("/promotions");
   return { ok: true };
@@ -100,21 +117,48 @@ export async function updatePromotion(id: string, input: PromotionInput) {
   if (input.kind === "gift" && input.triggers.length === 0)
     return { ok: false, error: "Добавьте хотя бы одну услугу-триггер" };
 
-  const supabase = await guard();
-  if (!supabase) return { ok: false, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false, error: "Нет доступа" };
+  const { supabase, shopId } = g;
 
-  const { error } = await supabase.from("promotions").update(row(input)).eq("id", id);
+  // Проверяем, что акция принадлежит этому салону
+  const { data: existing } = await supabase
+    .from("promotions")
+    .select("shop_id")
+    .eq("id", id)
+    .single();
+
+  if (!existing || existing.shop_id !== shopId) {
+    return { ok: false, error: "Акция не найдена или не принадлежит вашему салону" };
+  }
+
+  const { error } = await supabase
+    .from("promotions")
+    .update(row(input, shopId))
+    .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
-  await writeTriggers(supabase, id, input.kind, input.triggers);
+  await writeTriggers(supabase, id, input.kind, input.triggers, shopId);
 
   revalidatePath("/promotions");
   return { ok: true };
 }
 
 export async function deletePromotion(id: string) {
-  const supabase = await guard();
-  if (!supabase) return { ok: false, error: "Нет доступа" };
+  const g = await guard();
+  if (!g) return { ok: false, error: "Нет доступа" };
+  const { supabase, shopId } = g;
+
+  // Проверяем, что акция принадлежит этому салону
+  const { data: existing } = await supabase
+    .from("promotions")
+    .select("shop_id")
+    .eq("id", id)
+    .single();
+
+  if (!existing || existing.shop_id !== shopId) {
+    return { ok: false, error: "Акция не найдена или не принадлежит вашему салону" };
+  }
 
   const { error } = await supabase.from("promotions").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };

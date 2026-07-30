@@ -6,10 +6,22 @@ export const dynamic = "force-dynamic";
 export default async function LoyaltyPage() {
   const supabase = await createClient();
 
+  // 1. Получаем пользователя и shop_id
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data: admin } = await supabase
+    .from("admins")
+    .select("shop_id")
+    .eq("user_uid", user?.id)
+    .single();
+
+  const shopId = admin?.shop_id ?? 0;
+
+  // 2. Загружаем настройки ТОЛЬКО для этого салона
   const { data } = await supabase
     .from("loyalty_settings")
     .select("cashback_percent, redeem_max_percent, point_value")
-    .eq("id", 1)
+    .eq("shop_id", shopId) // 👈 КЛЮЧЕВОЙ ФИЛЬТР
     .maybeSingle();
 
   const settings = {
@@ -18,10 +30,12 @@ export default async function LoyaltyPage() {
     point_value: Number(data?.point_value ?? 1),
   };
 
-  // сводка по баллам (для наглядности)
+  // 3. Сводка по баллам ТОЛЬКО для этого салона
   const { data: accs } = await supabase
     .from("loyalty_accounts")
-    .select("balance, total_earned, total_spent");
+    .select("balance, total_earned, total_spent")
+    .eq("shop_id", shopId); // 👈 ФИЛЬТР ПО САЛОНУ
+
   const rows = (accs as { balance: number; total_earned: number; total_spent: number }[]) ?? [];
   const stats = {
     clients: rows.filter((r) => Number(r.balance) > 0).length,
