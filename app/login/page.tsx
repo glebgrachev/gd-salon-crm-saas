@@ -31,13 +31,18 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"login" | "register">("login");
 
-  // Вход через Google
+  // 🔥 Вход через Google — используем переменную окружения
   async function signInWithGoogle() {
     setLoading(true);
     setError(null);
+
+    const redirectTo = process.env.NEXT_PUBLIC_APP_URL 
+      ? `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`
+      : `${location.origin}/auth/callback`;
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${location.origin}/auth/callback` },
+      options: { redirectTo },
     });
     if (error) {
       setError(translateError(error.message));
@@ -78,12 +83,16 @@ export default function LoginPage() {
       return;
     }
 
+    const redirectTo = process.env.NEXT_PUBLIC_APP_URL 
+      ? process.env.NEXT_PUBLIC_APP_URL
+      : `${location.origin}/`;
+
     // 1. Регистрируем пользователя
     const { error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${location.origin}/`,
+        emailRedirectTo: redirectTo,
       },
     });
 
