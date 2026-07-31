@@ -45,6 +45,7 @@ function PaymentSuccessContent() {
 
         setShopId(admin.shop_id);
 
+        // Если payment_id не передан в URL — ищем последний pending платёж
         if (!paymentId) {
           const { data: payment } = await supabase
             .from("payments")
@@ -56,8 +57,8 @@ function PaymentSuccessContent() {
             .single();
 
           if (payment?.provider_payment_id) {
-            setPaymentId(payment.provider_payment_id);
-            console.log(`🔍 Найден payment_id: ${payment.provider_payment_id}`);
+            setPaymentId(payment.provider_payment_id); // 👈 ПРАВИЛЬНЫЙ ID
+            console.log(`🔍 Найден provider_payment_id: ${payment.provider_payment_id}`);
           } else {
             const { data: shop } = await supabase
               .from("shops")
@@ -110,7 +111,6 @@ function PaymentSuccessContent() {
     }
 
     try {
-      // 🔥 Передаём publishable ключ в Authorization
       const response = await fetch(
         "https://cmzqpjfckzftlptrozdf.supabase.co/functions/v1/check-payment",
         {
@@ -119,7 +119,7 @@ function PaymentSuccessContent() {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${PUBLISHABLE_KEY}`,
           },
-          body: JSON.stringify({ payment_id: paymentId }),
+          body: JSON.stringify({ payment_id: paymentId }), // 👈 ПРАВИЛЬНЫЙ ID
         }
       );
 
@@ -167,7 +167,7 @@ function PaymentSuccessContent() {
 
   const startPolling = (shopId: number) => {
     let attempts = 0;
-    const MAX_ATTEMPTS = 30; // 30 * 2 сек = 1 минута
+    const MAX_ATTEMPTS = 30;
 
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
