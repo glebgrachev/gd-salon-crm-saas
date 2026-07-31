@@ -124,7 +124,6 @@ export default function TariffsPage() {
         return;
       }
 
-      // 🔥 Вызываем Edge Function с publishable ключом
       const response = await fetch(
         "https://cmzqpjfckzftlptrozdf.supabase.co/functions/v1/create-payment",
         {
@@ -149,9 +148,12 @@ export default function TariffsPage() {
       }
 
       if (data.paymentUrl) {
+        // 🔥 Открываем оплату в новом окне
         window.open(data.paymentUrl, "_blank");
-        toast.info("Оплата открыта в новом окне. После оплаты вернитесь в приложение.");
-        router.push("/payment-success");
+        toast.info("Оплата открыта в новом окне.");
+
+        // 🔥 Передаём payment_id на страницу ожидания
+        router.push(`/payment-success?payment_id=${data.payment_id}`);
       } else {
         toast.error("Не удалось получить ссылку на оплату");
       }
