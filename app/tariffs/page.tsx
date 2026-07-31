@@ -148,12 +148,12 @@ export default function TariffsPage() {
       }
 
       if (data.paymentUrl) {
-        // 🔥 Открываем оплату в новом окне
+        // Открываем оплату в новом окне
         window.open(data.paymentUrl, "_blank");
         toast.info("Оплата открыта в новом окне.");
 
-        // 🔥 Передаём payment_id на страницу ожидания
-        router.push(`/payment-success?payment_id=${data.payment_id}`);
+        // 🔥 Передаём paymentId от Юкассы (UUID)
+        router.push(`/payment-success?payment_id=${data.paymentId}`);
       } else {
         toast.error("Не удалось получить ссылку на оплату");
       }
