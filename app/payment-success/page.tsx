@@ -92,11 +92,15 @@ function PaymentSuccessContent() {
       }
 
       try {
+        // 🔥 ИСПРАВЛЕННЫЙ ЗАПРОС С AUTHORIZATION
         const response = await fetch(
           "https://cmzqpjfckzftlptrozdf.supabase.co/functions/v1/check-payment",
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+            },
             body: JSON.stringify({ payment_id: paymentId }),
           }
         );
