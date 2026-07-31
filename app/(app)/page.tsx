@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 import OrdersClient from "./orders-client";
 import type { OrderRow } from "@/lib/bookings";
 
@@ -15,9 +16,18 @@ const SELECT = `
 export default async function OrdersPage() {
   const supabase = await createClient();
 
-  // 1. Получаем пользователя и shop_id
+  // 1. Получаем пользователя
   const { data: { user } } = await supabase.auth.getUser();
 
+  // 2. Проверяем, является ли пользователь суперадмином
+  const { data: isSuperAdmin } = await supabase.rpc("is_superadmin");
+
+  // 3. Если суперадмин → редирект на /superadmin
+  if (isSuperAdmin) {
+    redirect("/superadmin");
+  }
+
+  // 4. Получаем shop_id для обычного админа
   const { data: admin } = await supabase
     .from("admins")
     .select("shop_id")
@@ -26,11 +36,11 @@ export default async function OrdersPage() {
 
   const shopId = admin?.shop_id ?? 0;
 
-  // 2. Загружаем заказы ТОЛЬКО для этого салона
+  // 5. Загружаем заказы ТОЛЬКО для этого салона
   const { data } = await supabase
     .from("bookings")
     .select(SELECT)
-    .eq("shop_id", shopId) // 👈 КЛЮЧЕВОЙ ФИЛЬТР
+    .eq("shop_id", shopId)
     .order("starts_at", { ascending: false });
 
   return <OrdersClient initialOrders={(data as unknown as OrderRow[]) ?? []} />;
