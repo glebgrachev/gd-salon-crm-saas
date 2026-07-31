@@ -125,13 +125,14 @@ export default function TariffsPage() {
         return;
       }
 
-      // Вызываем Edge Function для создания платежа
+      // 🔥 Вызываем Edge Function с anon ключом
       const response = await fetch(
         "https://cmzqpjfckzftlptrozdf.supabase.co/functions/v1/create-payment",
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "Authorization": `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
           },
           body: JSON.stringify({
             shop_id: admin.shop_id,
