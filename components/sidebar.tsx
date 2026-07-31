@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import {
   CalendarCheck,
   Scissors,
@@ -21,28 +22,30 @@ import {
   Shield,
   Building2,
   CreditCard,
+  Star,
   LogOut,
 } from "lucide-react";
-import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { hasModule, type ModuleKey } from "@/lib/permissions-client";
+import ProModal from "@/components/ProModal";
 
 // Список пунктов для владельца салона
 const OWNER_NAV = [
-  { href: "/", label: "Заказы", icon: CalendarCheck },
-  { href: "/specialists", label: "Специалисты", icon: Scissors },
-  { href: "/schedule", label: "График работы", icon: CalendarDays },
-  { href: "/clients", label: "Клиенты", icon: Users },
-  { href: "/services", label: "Услуги", icon: LayoutGrid },
-  { href: "/promotions", label: "Акции", icon: Megaphone },
-  { href: "/loyalty", label: "Лояльность", icon: Gift },
-  { href: "/certificates", label: "Сертификаты", icon: Ticket },
-  { href: "/retention", label: "Возвращаемость", icon: UserCheck },
-  { href: "/broadcasts", label: "Рассылки", icon: Send },
-  { href: "/waitlist", label: "Лист ожидания", icon: Bell },
-  { href: "/stock", label: "Склад", icon: Package },
-  { href: "/payouts", label: "Зарплаты", icon: Wallet },
-  { href: "/analytics", label: "Аналитика", icon: BarChart3 },
-  { href: "/settings", label: "Настройки", icon: Settings },
+  { href: "/", label: "Заказы", icon: CalendarCheck, module: null },
+  { href: "/specialists", label: "Специалисты", icon: Scissors, module: null },
+  { href: "/schedule", label: "График работы", icon: CalendarDays, module: null },
+  { href: "/clients", label: "Клиенты", icon: Users, module: null },
+  { href: "/services", label: "Услуги", icon: LayoutGrid, module: null },
+  { href: "/promotions", label: "Акции", icon: Megaphone, module: "promotions" },
+  { href: "/loyalty", label: "Лояльность", icon: Gift, module: "loyalty" },
+  { href: "/certificates", label: "Сертификаты", icon: Ticket, module: "certificates" },
+  { href: "/retention", label: "Возвращаемость", icon: UserCheck, module: "retention" },
+  { href: "/broadcasts", label: "Рассылки", icon: Send, module: "broadcasts" },
+  { href: "/waitlist", label: "Лист ожидания", icon: Bell, module: "waitlist" },
+  { href: "/stock", label: "Склад", icon: Package, module: "stock" },
+  { href: "/payouts", label: "Зарплаты", icon: Wallet, module: null },
+  { href: "/analytics", label: "Аналитика", icon: BarChart3, module: "analytics" },
+  { href: "/settings", label: "Настройки", icon: Settings, module: null },
 ];
 
 // Список пунктов для суперадмина
@@ -55,20 +58,56 @@ const SUPERADMIN_NAV = [
 
 export default function Sidebar({ email }: { email?: string | null }) {
   const pathname = usePathname();
+  const router = useRouter();
   const supabase = createClient();
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [modules, setModules] = useState<Record<string, boolean> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [lockedModule, setLockedModule] = useState("");
 
   useEffect(() => {
-    async function checkRole() {
-      const { data } = await supabase.rpc("is_superadmin");
-      setIsSuperAdmin(!!data);
+    async function loadData() {
+      const { data: isSuper } = await supabase.rpc("is_superadmin");
+      setIsSuperAdmin(!!isSuper);
+
+      // Загружаем модули только для владельцев салонов
+      if (!isSuper) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: admin } = await supabase
+            .from("admins")
+            .select("shop_id")
+            .eq("user_uid", user.id)
+            .single();
+
+          if (admin?.shop_id) {
+            const { data: shop } = await supabase
+              .from("shops")
+              .select("modules")
+              .eq("id", admin.shop_id)
+              .single();
+            setModules(shop?.modules ?? {});
+          }
+        }
+      }
       setLoading(false);
     }
-    checkRole();
+    loadData();
   }, [supabase]);
 
-  const navItems = isSuperAdmin ? SUPERADMIN_NAV : OWNER_NAV;
+  const handleLockedClick = (label: string) => {
+    setLockedModule(label);
+    setModalOpen(true);
+  };
+
+  // Строим пункты меню с пометкой о блокировке
+  const navItems = isSuperAdmin
+    ? SUPERADMIN_NAV
+    : OWNER_NAV.map((item) => {
+        const isLocked = item.module && !hasModule(modules, item.module as ModuleKey);
+        return { ...item, isLocked: !!isLocked };
+      });
 
   if (loading) {
     return (
@@ -79,58 +118,76 @@ export default function Sidebar({ email }: { email?: string | null }) {
   }
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-neutral-200 bg-white">
-      <div className="px-5 py-5">
-        <span className="text-sm font-semibold tracking-tight text-neutral-900">
-          BeautyApp
-        </span>
-        <span className="block text-xs text-neutral-400">
-          {isSuperAdmin ? "Суперадмин-панель" : "Админ-панель салона"}
-        </span>
-      </div>
-
-      <nav className="flex-1 space-y-0.5 px-3">
-        {navItems.map(({ href, label, icon: Icon }) => {
-          // 🔥 Правильная логика определения активного пункта
-          const isActive = isSuperAdmin
-            ? href === "/superadmin"
-              ? pathname === "/superadmin"
-              : pathname.startsWith(href)
-            : href === "/"
-            ? pathname === "/"
-            : pathname.startsWith(href);
-
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
-                isActive
-                  ? "bg-neutral-100 font-medium text-neutral-900"
-                  : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
-              }`}
-            >
-              <Icon size={17} strokeWidth={1.75} />
-              {label}
-            </Link>
-          );
-        })}
-      </nav>
-
-      <div className="border-t border-neutral-200 p-3">
-        <div className="truncate px-3 pb-2 text-xs text-neutral-400">
-          {email}
+    <>
+      <aside className="flex w-60 shrink-0 flex-col border-r border-neutral-200 bg-white">
+        <div className="px-5 py-5">
+          <span className="text-sm font-semibold tracking-tight text-neutral-900">
+            BeautyApp
+          </span>
+          <span className="block text-xs text-neutral-400">
+            {isSuperAdmin ? "Управление платформой" : "Админ-панель салона"}
+          </span>
         </div>
-        <form action="/auth/signout" method="post">
-          <button
-            type="submit"
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-neutral-600 transition hover:bg-neutral-50 hover:text-neutral-900"
-          >
-            <LogOut size={17} strokeWidth={1.75} />
-            Выйти
-          </button>
-        </form>
-      </div>
-    </aside>
+
+        <nav className="flex-1 space-y-0.5 px-3">
+          {navItems.map(({ href, label, icon: Icon, isLocked }) => {
+            const isActive = isSuperAdmin
+              ? href === "/superadmin"
+                ? pathname === "/superadmin"
+                : pathname.startsWith(href)
+              : href === "/"
+              ? pathname === "/"
+              : pathname.startsWith(href);
+
+            return (
+              <Link
+                key={href}
+                href={isLocked ? "#" : href}
+                onClick={(e) => {
+                  if (isLocked) {
+                    e.preventDefault();
+                    handleLockedClick(label);
+                  }
+                }}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
+                  isActive
+                    ? "bg-neutral-100 font-medium text-neutral-900"
+                    : isLocked
+                    ? "text-neutral-500 hover:bg-neutral-50"
+                    : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
+                }`}
+              >
+                <Icon size={17} strokeWidth={1.75} />
+                {label}
+                {isLocked && (
+                  <Star className="ml-auto h-4 w-4 fill-amber-200 text-amber-400" />
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="border-t border-neutral-200 p-3">
+          <div className="truncate px-3 pb-2 text-xs text-neutral-400">
+            {email}
+          </div>
+          <form action="/auth/signout" method="post">
+            <button
+              type="submit"
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-neutral-600 transition hover:bg-neutral-50 hover:text-neutral-900"
+            >
+              <LogOut size={17} strokeWidth={1.75} />
+              Выйти
+            </button>
+          </form>
+        </div>
+      </aside>
+
+      <ProModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        moduleName={lockedModule}
+      />
+    </>
   );
 }

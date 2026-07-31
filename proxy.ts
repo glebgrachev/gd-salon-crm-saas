@@ -7,7 +7,8 @@ const publicRoutes = [
   "/access-denied",
   "/auth/callback",
   "/onboarding",
-  "/blocked", // 👈 Страница блокировки
+  "/blocked",
+  "/tariffs", // 👈 Добавляем, чтобы страница тарифов была доступна без проверки модулей
 ];
 
 export async function proxy(request: NextRequest) {
@@ -55,23 +56,39 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/onboarding", request.url));
   }
 
-  // 6. 🔥 ПРОВЕРКА БЛОКИРОВКИ САЛОНА
+  // 6. Проверка блокировки салона
   if (admin?.shop_id) {
     const { data: shop } = await supabase
       .from("shops")
-      .select("blocked")
+      .select("blocked, modules")
       .eq("id", admin.shop_id)
       .single();
 
     // Если салон заблокирован → разлогиниваем и отправляем на /blocked
     if (shop?.blocked) {
-      // Если уже на странице блокировки — пропускаем
       if (pathname === "/blocked") {
         return NextResponse.next();
       }
-      // Разлогиниваем и отправляем на /blocked
       await supabase.auth.signOut();
       return NextResponse.redirect(new URL("/blocked", request.url));
+    }
+
+    // 🔥 7. ПРОВЕРКА МОДУЛЕЙ
+    const moduleMap: Record<string, string> = {
+      "/analytics": "analytics",
+      "/loyalty": "loyalty",
+      "/broadcasts": "broadcasts",
+      "/promotions": "promotions",
+      "/certificates": "certificates",
+      "/stock": "stock",
+      "/retention": "retention",
+      "/waitlist": "waitlist",
+    };
+
+    const moduleKey = moduleMap[pathname];
+    if (moduleKey && !shop?.modules?.[moduleKey]) {
+      // Если модуль выключен — редирект на тарифы
+      return NextResponse.redirect(new URL("/tariffs", request.url));
     }
   }
 
