@@ -68,7 +68,6 @@ export default function Sidebar({ email }: { email?: string | null }) {
     checkRole();
   }, [supabase]);
 
-  // Определяем, какие пункты показывать
   const navItems = isSuperAdmin ? SUPERADMIN_NAV : OWNER_NAV;
 
   if (loading) {
@@ -92,14 +91,21 @@ export default function Sidebar({ email }: { email?: string | null }) {
 
       <nav className="flex-1 space-y-0.5 px-3">
         {navItems.map(({ href, label, icon: Icon }) => {
-          const active =
-            href === "/" ? pathname === "/" : pathname.startsWith(href);
+          // 🔥 Правильная логика определения активного пункта
+          const isActive = isSuperAdmin
+            ? href === "/superadmin"
+              ? pathname === "/superadmin"
+              : pathname.startsWith(href)
+            : href === "/"
+            ? pathname === "/"
+            : pathname.startsWith(href);
+
           return (
             <Link
               key={href}
               href={href}
               className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
-                active
+                isActive
                   ? "bg-neutral-100 font-medium text-neutral-900"
                   : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
               }`}
