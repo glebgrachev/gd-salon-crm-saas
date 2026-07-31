@@ -1,3 +1,4 @@
+// app/payment-success/page.tsx
 "use client";
 
 import { useEffect, useState, useRef } from "react";
@@ -6,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { CheckCircle, Loader2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
-export default function PaymentSuccessClient() {
+export default function PaymentSuccessPage() {
   const router = useRouter();
   const supabase = createClient();
   const searchParams = useSearchParams();
@@ -75,7 +76,7 @@ export default function PaymentSuccessClient() {
 
   const startPolling = (shopId: number) => {
     let attempts = 0;
-    const MAX_ATTEMPTS = 60; // 60 * 2 сек = 2 минуты
+    const MAX_ATTEMPTS = 60;
 
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -105,7 +106,6 @@ export default function PaymentSuccessClient() {
         const result = await response.json();
 
         if (result.status === "succeeded") {
-          // ✅ Оплата прошла → обновляем тариф
           await updateTariff(shopId);
           setStatus("success");
           setMessage("🎉 Оплата прошла успешно! Тариф активирован.");
@@ -113,21 +113,17 @@ export default function PaymentSuccessClient() {
           toast.success("Тариф активирован!");
           setTimeout(() => router.push("/"), 3000);
         } else if (result.status === "canceled") {
-          // ❌ Оплата отменена
           setStatus("error");
           setMessage("❌ Платёж был отменён. Попробуйте снова.");
           if (intervalRef.current) clearInterval(intervalRef.current);
-          // Обновляем статус платежа в БД
           await supabase
             .from("payments")
             .update({ status: "canceled" })
             .eq("provider_payment_id", paymentId);
           toast.error("Платёж отменён");
         } else if (result.status === "pending") {
-          // ⏳ Всё ещё ждём
           setMessage("Ожидаем подтверждения оплаты...");
         } else {
-          // ❌ Неизвестный статус
           if (attempts > 3) {
             setStatus("error");
             setMessage("Не удалось определить статус платежа. Попробуйте обновить страницу.");
@@ -143,13 +139,12 @@ export default function PaymentSuccessClient() {
         }
       }
 
-      // Прерываем по таймауту
       if (attempts >= MAX_ATTEMPTS) {
         setStatus("error");
         setMessage("⏰ Время ожидания истекло. Проверьте статус платежа в истории.");
         if (intervalRef.current) clearInterval(intervalRef.current);
       }
-    }, 2000); // Каждые 2 секунды
+    }, 2000);
   };
 
   const updateTariff = async (shopId: number) => {
