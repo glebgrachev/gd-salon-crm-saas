@@ -1,13 +1,13 @@
-// app/payment-success/page.tsx
 "use client";
 
+import { Suspense } from "react";
 import { useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { CheckCircle, Loader2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
-export default function PaymentSuccessPage() {
+function PaymentSuccessContent() {
   const router = useRouter();
   const supabase = createClient();
   const searchParams = useSearchParams();
@@ -41,7 +41,6 @@ export default function PaymentSuccessPage() {
 
       setShopId(admin.shop_id);
 
-      // Если payment_id не передан в URL — ищем последний pending платёж
       if (!paymentId) {
         const { data: payment } = await supabase
           .from("payments")
@@ -61,7 +60,6 @@ export default function PaymentSuccessPage() {
         }
       }
 
-      // Запускаем периодическую проверку
       startPolling(admin.shop_id);
     }
 
@@ -221,5 +219,13 @@ export default function PaymentSuccessPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function PaymentSuccessPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center text-neutral-500">Загрузка...</div>}>
+      <PaymentSuccessContent />
+    </Suspense>
   );
 }
