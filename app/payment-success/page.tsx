@@ -7,6 +7,9 @@ import { createClient } from "@/lib/supabase/client";
 import { CheckCircle, Loader2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
+// 🔥 Используем publishable ключ (как в create-payment)
+const PUBLISHABLE_KEY = "sb_publishable_vTWBLzZsUEq475a6qRKhuw_WP3XiiCX";
+
 function PaymentSuccessContent() {
   const router = useRouter();
   const supabase = createClient();
@@ -21,46 +24,72 @@ function PaymentSuccessContent() {
 
   useEffect(() => {
     async function init() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push("/login");
-        return;
-      }
-
-      const { data: admin } = await supabase
-        .from("admins")
-        .select("shop_id")
-        .eq("user_uid", user.id)
-        .single();
-
-      if (!admin?.shop_id) {
-        setStatus("error");
-        setMessage("Салон не найден");
-        return;
-      }
-
-      setShopId(admin.shop_id);
-
-      if (!paymentId) {
-        const { data: payment } = await supabase
-          .from("payments")
-          .select("provider_payment_id")
-          .eq("shop_id", admin.shop_id)
-          .eq("status", "pending")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .single();
-
-        if (payment?.provider_payment_id) {
-          setPaymentId(payment.provider_payment_id);
-        } else {
-          setStatus("error");
-          setMessage("Платёж не найден");
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          router.push("/login");
           return;
         }
-      }
 
-      startPolling(admin.shop_id);
+        const { data: admin } = await supabase
+          .from("admins")
+          .select("shop_id")
+          .eq("user_uid", user.id)
+          .single();
+
+        if (!admin?.shop_id) {
+          setStatus("error");
+          setMessage("Салон не найден");
+          return;
+        }
+
+        setShopId(admin.shop_id);
+
+        if (!paymentId) {
+          const { data: payment } = await supabase
+            .from("payments")
+            .select("provider_payment_id")
+            .eq("shop_id", admin.shop_id)
+            .eq("status", "pending")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .single();
+
+          if (payment?.provider_payment_id) {
+            setPaymentId(payment.provider_payment_id);
+            console.log(`🔍 Найден payment_id: ${payment.provider_payment_id}`);
+          } else {
+            const { data: shop } = await supabase
+              .from("shops")
+              .select("plan")
+              .eq("id", admin.shop_id)
+              .single();
+
+            if (shop?.plan !== "free" && shop?.plan !== null) {
+              setStatus("success");
+              setMessage("Тариф уже активирован!");
+              return;
+            }
+
+            setStatus("error");
+            setMessage("Платёж не найден");
+            return;
+          }
+        } else {
+          console.log(`🔍 payment_id из URL: ${paymentId}`);
+        }
+
+        // Проверяем статус немедленно
+        console.log("⏳ Запуск первой проверки...");
+        await checkStatus(admin.shop_id);
+
+        // Запускаем периодическую проверку
+        startPolling(admin.shop_id);
+      } catch (error) {
+        console.error("❌ Ошибка инициализации:", error);
+        setStatus("error");
+        setMessage("Произошла ошибка при инициализации");
+      }
     }
 
     init();
@@ -72,9 +101,73 @@ function PaymentSuccessContent() {
     };
   }, []);
 
+  const checkStatus = async (shopId: number): Promise<boolean> => {
+    console.log(`📊 Проверка статуса для payment_id: ${paymentId}`);
+
+    if (!paymentId) {
+      console.log("❌ Нет payment_id для проверки");
+      return false;
+    }
+
+    try {
+      // 🔥 Передаём publishable ключ в Authorization
+      const response = await fetch(
+        "https://cmzqpjfckzftlptrozdf.supabase.co/functions/v1/check-payment",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ payment_id: paymentId }),
+        }
+      );
+
+      console.log(`📨 Ответ от check-payment: статус ${response.status}`);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log(`❌ Ошибка check-payment: ${errorText}`);
+        return false;
+      }
+
+      const result = await response.json();
+      console.log(`📊 Результат:`, result);
+
+      if (result.status === "succeeded") {
+        await updateTariff(shopId);
+        setStatus("success");
+        setMessage("🎉 Оплата прошла успешно! Тариф активирован.");
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        toast.success("Тариф активирован!");
+        setTimeout(() => router.push("/"), 3000);
+        return true;
+      } else if (result.status === "canceled") {
+        setStatus("error");
+        setMessage("❌ Платёж был отменён. Попробуйте снова.");
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        await supabase
+          .from("payments")
+          .update({ status: "canceled" })
+          .eq("provider_payment_id", paymentId);
+        toast.error("Платёж отменён");
+        return true;
+      } else if (result.status === "pending") {
+        setMessage("Ожидаем подтверждения оплаты...");
+        return false;
+      } else {
+        console.log(`❌ Неизвестный статус: ${result.status}`);
+        return false;
+      }
+    } catch (error) {
+      console.error("❌ Ошибка при проверке статуса:", error);
+      return false;
+    }
+  };
+
   const startPolling = (shopId: number) => {
     let attempts = 0;
-    const MAX_ATTEMPTS = 60;
+    const MAX_ATTEMPTS = 30; // 30 * 2 сек = 1 минута
 
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -82,63 +175,12 @@ function PaymentSuccessContent() {
 
     intervalRef.current = setInterval(async () => {
       attempts++;
-      console.log(`⏳ Проверка платежа #${attempts}, payment_id: ${paymentId}`);
+      console.log(`⏳ Проверка платежа #${attempts}`);
+      const completed = await checkStatus(shopId);
 
-      if (!paymentId) {
-        setStatus("error");
-        setMessage("Нет ID платежа");
+      if (completed) {
         if (intervalRef.current) clearInterval(intervalRef.current);
         return;
-      }
-
-      try {
-        // 🔥 ИСПРАВЛЕННЫЙ ЗАПРОС С AUTHORIZATION
-        const response = await fetch(
-          "https://cmzqpjfckzftlptrozdf.supabase.co/functions/v1/check-payment",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-            },
-            body: JSON.stringify({ payment_id: paymentId }),
-          }
-        );
-
-        const result = await response.json();
-
-        if (result.status === "succeeded") {
-          await updateTariff(shopId);
-          setStatus("success");
-          setMessage("🎉 Оплата прошла успешно! Тариф активирован.");
-          if (intervalRef.current) clearInterval(intervalRef.current);
-          toast.success("Тариф активирован!");
-          setTimeout(() => router.push("/"), 3000);
-        } else if (result.status === "canceled") {
-          setStatus("error");
-          setMessage("❌ Платёж был отменён. Попробуйте снова.");
-          if (intervalRef.current) clearInterval(intervalRef.current);
-          await supabase
-            .from("payments")
-            .update({ status: "canceled" })
-            .eq("provider_payment_id", paymentId);
-          toast.error("Платёж отменён");
-        } else if (result.status === "pending") {
-          setMessage("Ожидаем подтверждения оплаты...");
-        } else {
-          if (attempts > 3) {
-            setStatus("error");
-            setMessage("Не удалось определить статус платежа. Попробуйте обновить страницу.");
-            if (intervalRef.current) clearInterval(intervalRef.current);
-          }
-        }
-      } catch (error) {
-        console.error("Ошибка проверки статуса:", error);
-        if (attempts > 3) {
-          setStatus("error");
-          setMessage("Ошибка при проверке платежа. Попробуйте обновить страницу.");
-          if (intervalRef.current) clearInterval(intervalRef.current);
-        }
       }
 
       if (attempts >= MAX_ATTEMPTS) {
@@ -160,7 +202,12 @@ function PaymentSuccessContent() {
         .limit(1)
         .single();
 
-      if (!payment) return;
+      if (!payment) {
+        console.log("❌ Нет pending платежа для обновления");
+        return;
+      }
+
+      console.log(`✅ Обновление платежа ${payment.id} на status=paid`);
 
       await supabase
         .from("payments")
@@ -179,6 +226,8 @@ function PaymentSuccessContent() {
           return acc;
         }, {} as Record<string, boolean>);
 
+        console.log(`✅ Обновление тарифа для shop_id=${shopId}, plan=${payment.plan_id}`);
+
         await supabase
           .from("shops")
           .update({
@@ -189,7 +238,7 @@ function PaymentSuccessContent() {
           .eq("id", shopId);
       }
     } catch (error) {
-      console.error("Ошибка обновления тарифа:", error);
+      console.error("❌ Ошибка обновления тарифа:", error);
     }
   };
 
