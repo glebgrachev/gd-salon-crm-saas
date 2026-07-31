@@ -29,6 +29,8 @@ type Plan = {
   sort_order: number;
 };
 
+const PUBLISHABLE_KEY = "sb_publishable_vTWBLzZsUEq475a6qRKhuw_WP3XiiCX";
+
 export default function TariffsPage() {
   const router = useRouter();
   const supabase = createClient();
@@ -39,7 +41,6 @@ export default function TariffsPage() {
 
   useEffect(() => {
     async function loadData() {
-      // 1. Загружаем текущий тариф пользователя
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         router.push("/login");
@@ -63,7 +64,6 @@ export default function TariffsPage() {
         }
       }
 
-      // 2. Загружаем тарифы с модулями из БД
       const { data, error } = await supabase
         .from("plans")
         .select(`
@@ -105,7 +105,6 @@ export default function TariffsPage() {
     setActivating(planId);
 
     try {
-      // Получаем shop_id
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast.error("Пожалуйста, войдите в систему");
@@ -125,14 +124,14 @@ export default function TariffsPage() {
         return;
       }
 
-      // 🔥 Вызываем Edge Function с anon ключом
+      // 🔥 Вызываем Edge Function с publishable ключом
       const response = await fetch(
         "https://cmzqpjfckzftlptrozdf.supabase.co/functions/v1/create-payment",
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+            "Authorization": `Bearer ${PUBLISHABLE_KEY}`,
           },
           body: JSON.stringify({
             shop_id: admin.shop_id,
@@ -149,11 +148,9 @@ export default function TariffsPage() {
         return;
       }
 
-      // Открываем платёжную страницу в новом окне
       if (data.paymentUrl) {
         window.open(data.paymentUrl, "_blank");
         toast.info("Оплата открыта в новом окне. После оплаты вернитесь в приложение.");
-        // Редирект на страницу ожидания оплаты
         router.push("/payment-success");
       } else {
         toast.error("Не удалось получить ссылку на оплату");
@@ -176,7 +173,6 @@ export default function TariffsPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
-      {/* Кнопка "Назад" */}
       <div className="mb-6">
         <Link
           href="/settings"
@@ -187,7 +183,6 @@ export default function TariffsPage() {
         </Link>
       </div>
 
-      {/* Заголовок */}
       <div className="mb-8 text-center">
         <h1 className="text-2xl font-semibold text-neutral-900">Выберите тариф</h1>
         <p className="mt-1 text-sm text-neutral-500">
@@ -198,7 +193,6 @@ export default function TariffsPage() {
         </p>
       </div>
 
-      {/* Карточки тарифов */}
       <div className="grid gap-6 md:grid-cols-3">
         {plans.map((plan) => {
           const isCurrent = plan.id === currentPlanId;
@@ -216,14 +210,12 @@ export default function TariffsPage() {
                   : "border-neutral-200 bg-white hover:shadow-sm"
               }`}
             >
-              {/* Бейдж "Популярный" */}
               {isPopular && (
                 <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-amber-100 px-3 py-0.5 text-xs font-medium text-amber-700">
                   Популярный
                 </span>
               )}
 
-              {/* Контент (растягивается) */}
               <div className="flex-1">
                 <div className="mb-4">
                   <h3 className="text-lg font-semibold text-neutral-900">{plan.name}</h3>
@@ -236,7 +228,6 @@ export default function TariffsPage() {
                   <p className="mt-1 text-sm text-neutral-500">{plan.description}</p>
                 </div>
 
-                {/* Особенности (лимиты) */}
                 <ul className="space-y-2 text-sm">
                   {plan.features.clients === -1 ? (
                     <li className="flex items-start gap-2 text-neutral-700">
@@ -273,7 +264,6 @@ export default function TariffsPage() {
                   )}
                 </ul>
 
-                {/* Модули */}
                 {plan.modules.length > 0 && (
                   <div className="mt-3 border-t border-neutral-100 pt-3">
                     <p className="text-xs font-medium text-neutral-400">Включено:</p>
@@ -289,7 +279,6 @@ export default function TariffsPage() {
                 )}
               </div>
 
-              {/* Кнопка — прижата к низу */}
               <div className="mt-auto pt-6">
                 {isCurrent ? (
                   <button
@@ -324,7 +313,6 @@ export default function TariffsPage() {
         })}
       </div>
 
-      {/* Подвал */}
       <div className="mt-8 text-center text-xs text-neutral-400">
         <p>Все тарифы включают базовую CRM и Telegram-мини-приложение.</p>
         <p className="mt-1">
