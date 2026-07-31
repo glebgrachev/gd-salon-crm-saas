@@ -14,8 +14,11 @@ export default function PaymentSuccessPage() {
   useEffect(() => {
     async function checkPayment() {
       try {
+        console.log("🔍 Проверка платежа...");
+
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
+          console.log("❌ Пользователь не авторизован");
           router.push("/login");
           return;
         }
@@ -28,10 +31,13 @@ export default function PaymentSuccessPage() {
           .single();
 
         if (!admin?.shop_id) {
+          console.log("❌ Салон не найден");
           setStatus("error");
           setMessage("Салон не найден");
           return;
         }
+
+        console.log(`🏪 Shop ID: ${admin.shop_id}`);
 
         // Находим последний ожидающий платёж
         const { data: payment } = await supabase
@@ -44,6 +50,8 @@ export default function PaymentSuccessPage() {
           .single();
 
         if (!payment) {
+          console.log("ℹ️ Нет ожидающих платежей");
+
           // Проверяем, может тариф уже обновился
           const { data: shop } = await supabase
             .from("shops")
@@ -62,7 +70,16 @@ export default function PaymentSuccessPage() {
           return;
         }
 
-        // Проверяем статус в Юкассе через Edge Function
+        console.log(`💳 Найден платёж: ID=${payment.id}, provider_payment_id=${payment.provider_payment_id}`);
+
+        if (!payment.provider_payment_id) {
+          console.log("❌ Нет provider_payment_id");
+          setStatus("error");
+          setMessage("Ошибка: нет ID платежа в Юкассе");
+          return;
+        }
+
+        // 🔥 Проверяем статус в Юкассе
         const response = await fetch(
           "https://cmzqpjfckzftlptrozdf.supabase.co/functions/v1/check-payment",
           {
@@ -72,9 +89,22 @@ export default function PaymentSuccessPage() {
           }
         );
 
+        console.log(`📨 Ответ от check-payment: ${response.status}`);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.log(`❌ Ошибка: ${errorText}`);
+          setStatus("error");
+          setMessage("Ошибка при проверке платежа");
+          return;
+        }
+
         const result = await response.json();
+        console.log(`📊 Статус платежа: ${result.status}`);
 
         if (result.status === "succeeded") {
+          console.log("✅ Платёж успешен! Обновляем тариф...");
+
           // Обновляем статус платежа
           await supabase
             .from("payments")
@@ -103,19 +133,23 @@ export default function PaymentSuccessPage() {
                 subscription_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
               })
               .eq("id", admin.shop_id);
+
+            console.log(`✅ Тариф обновлён на ${payment.plan_id}`);
           }
 
           setStatus("success");
           setMessage("🎉 Оплата прошла успешно! Тариф активирован.");
         } else if (result.status === "pending") {
+          console.log("⏳ Платёж в обработке...");
           setMessage("Ожидаем подтверждения оплаты...");
-          setTimeout(() => checkPayment(), 5000);
+          setTimeout(() => checkPayment(), 3000);
         } else {
+          console.log(`❌ Неизвестный статус: ${result.status}`);
           setStatus("error");
           setMessage("Оплата не прошла. Попробуйте снова.");
         }
       } catch (error) {
-        console.error(error);
+        console.error("🔥 Ошибка:", error);
         setStatus("error");
         setMessage("Произошла ошибка при проверке платежа");
       }
@@ -144,6 +178,15 @@ export default function PaymentSuccessPage() {
             className="mt-6 w-full rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-700"
           >
             {status === "success" ? "Перейти в админку" : "Попробовать снова"}
+          </button>
+        )}
+
+        {status === "loading" && (
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-6 w-full rounded-lg border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+          >
+            Проверить снова
           </button>
         )}
       </div>
