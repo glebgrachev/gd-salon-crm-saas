@@ -4,13 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Check, X, ArrowLeft } from "lucide-react";
+import { Check, ArrowLeft, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 type Module = {
   id: number;
   label: string;
   description: string | null;
-  icon: string | null;
 };
 
 type Plan = {
@@ -33,11 +33,13 @@ export default function TariffsPage() {
   const router = useRouter();
   const supabase = createClient();
   const [plans, setPlans] = useState<Plan[]>([]);
-  const [currentPlan, setCurrentPlan] = useState<string>("free");
+  const [currentPlanId, setCurrentPlanId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activating, setActivating] = useState<number | null>(null);
 
   useEffect(() => {
     async function loadData() {
+      // 1. Загружаем текущий тариф пользователя
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         router.push("/login");
@@ -57,10 +59,11 @@ export default function TariffsPage() {
           .eq("id", admin.shop_id)
           .single();
         if (shop) {
-          setCurrentPlan(shop.plan || "free");
+          setCurrentPlanId(shop.plan ? Number(shop.plan) : null);
         }
       }
 
+      // 2. Загружаем тарифы с модулями из БД
       const { data, error } = await supabase
         .from("plans")
         .select(`
@@ -98,6 +101,70 @@ export default function TariffsPage() {
     loadData();
   }, [router, supabase]);
 
+  const handleActivate = async (planId: number) => {
+    setActivating(planId);
+
+    try {
+      // Получаем shop_id
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("Пожалуйста, войдите в систему");
+        setActivating(null);
+        return;
+      }
+
+      const { data: admin } = await supabase
+        .from("admins")
+        .select("shop_id")
+        .eq("user_uid", user.id)
+        .single();
+
+      if (!admin?.shop_id) {
+        toast.error("Салон не найден");
+        setActivating(null);
+        return;
+      }
+
+      // Вызываем Edge Function для создания платежа
+      const response = await fetch(
+        "https://cmzqpjfckzftlptrozdf.supabase.co/functions/v1/create-payment",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            shop_id: admin.shop_id,
+            plan_id: planId,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!data.success) {
+        toast.error(data.error || "Не удалось создать платёж");
+        setActivating(null);
+        return;
+      }
+
+      // Открываем платёжную страницу в новом окне
+      if (data.paymentUrl) {
+        window.open(data.paymentUrl, "_blank");
+        toast.info("Оплата открыта в новом окне. После оплаты вернитесь в приложение.");
+        // Редирект на страницу ожидания оплаты
+        router.push("/payment-success");
+      } else {
+        toast.error("Не удалось получить ссылку на оплату");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Произошла ошибка при создании платежа");
+    } finally {
+      setActivating(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -125,7 +192,7 @@ export default function TariffsPage() {
         <p className="mt-1 text-sm text-neutral-500">
           Ваш текущий тариф:{" "}
           <span className="font-medium text-neutral-900">
-            {plans.find((p) => p.id === Number(currentPlan))?.name || "Старт"}
+            {plans.find((p) => p.id === currentPlanId)?.name || "Старт"}
           </span>
         </p>
       </div>
@@ -133,7 +200,7 @@ export default function TariffsPage() {
       {/* Карточки тарифов */}
       <div className="grid gap-6 md:grid-cols-3">
         {plans.map((plan) => {
-          const isCurrent = plan.id === Number(currentPlan);
+          const isCurrent = plan.id === currentPlanId;
           const isPopular = plan.sort_order === 2;
           const priceDisplay = plan.price_monthly === 0 ? "0 ₽" : `${plan.price_monthly} ₽`;
 
@@ -232,15 +299,22 @@ export default function TariffsPage() {
                   </button>
                 ) : (
                   <button
-                    onClick={() => alert("Оплата пока не настроена. Скоро появится!")}
+                    onClick={() => handleActivate(plan.id)}
+                    disabled={activating === plan.id}
                     className={`w-full rounded-lg px-4 py-2 text-sm font-medium text-white transition ${
                       plan.price_monthly === 0
                         ? "bg-neutral-300 hover:bg-neutral-400 cursor-not-allowed"
                         : "bg-neutral-900 hover:bg-neutral-700"
-                    }`}
-                    disabled={plan.price_monthly === 0}
+                    } disabled:opacity-50`}
                   >
-                    {plan.price_monthly === 0 ? "Вы на тарифе Старт" : "Активировать"}
+                    {activating === plan.id ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Обработка...
+                      </span>
+                    ) : (
+                      plan.price_monthly === 0 ? "Вы на тарифе Старт" : "Активировать"
+                    )}
                   </button>
                 )}
               </div>
