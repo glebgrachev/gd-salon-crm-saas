@@ -24,6 +24,9 @@ function PaymentSuccessContent() {
   useEffect(() => {
     async function init() {
       try {
+        console.log("🚀 init() started");
+        console.log("📌 paymentId из URL:", paymentId);
+
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
           router.push("/login");
@@ -60,31 +63,21 @@ function PaymentSuccessContent() {
             setPaymentId(payment.provider_payment_id);
             console.log(`🔍 Найден provider_payment_id: ${payment.provider_payment_id}`);
           } else {
-            const { data: shop } = await supabase
-              .from("shops")
-              .select("plan_id")
-              .eq("id", admin.shop_id)
-              .single();
-
-            if (shop?.plan_id !== 1 && shop?.plan_id !== null) {
-              setStatus("success");
-              setMessage("Тариф уже активирован!");
-              return;
-            }
-
+            console.warn("⚠️ Нет pending платежей");
             setStatus("error");
             setMessage("Платёж не найден");
             return;
           }
-        } else {
-          console.log(`🔍 payment_id из URL: ${paymentId}`);
         }
 
-        console.log("⏳ Запуск первой проверки...");
-        await checkStatus();
-
-        console.log("⏳ Запуск периодической проверки...");
-        startPolling();
+        if (paymentId) {
+          console.log("⏳ Запуск проверки статуса...");
+          await checkStatus();
+          console.log("⏳ Запуск периодической проверки...");
+          startPolling();
+        } else {
+          console.error("❌ Нет payment_id для проверки");
+        }
       } catch (error) {
         console.error("❌ Ошибка инициализации:", error);
         setStatus("error");
@@ -120,7 +113,7 @@ function PaymentSuccessContent() {
           },
           body: JSON.stringify({
             payment_id: paymentId,
-            shop_id: shopId, // 👈 Передаём shop_id
+            shop_id: shopId,
           }),
         }
       );
@@ -148,10 +141,6 @@ function PaymentSuccessContent() {
         setStatus("error");
         setMessage("❌ Платёж был отменён. Попробуйте снова.");
         if (intervalRef.current) clearInterval(intervalRef.current);
-        await supabase
-          .from("payments")
-          .update({ status: "canceled" })
-          .eq("provider_payment_id", paymentId);
         toast.error("Платёж отменён");
         return true;
       } else if (result.status === "pending") {
