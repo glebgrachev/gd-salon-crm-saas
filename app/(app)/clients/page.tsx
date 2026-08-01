@@ -17,21 +17,36 @@ export default async function ClientsPage() {
 
   const shopId = admin?.shop_id ?? 0;
 
-  // 2. Загружаем данные ТОЛЬКО для этого салона
+  // 2. Получаем лимит клиентов из модулей магазина
+  const { data: shop } = await supabase
+    .from("shops")
+    .select("modules")
+    .eq("id", shopId)
+    .single();
+
+  const clientLimit = shop?.modules?.clients ?? -1;
+
+  // 3. Считаем текущих клиентов
+  const { count: clientsCount } = await supabase
+    .from("users")
+    .select("*", { count: 'exact', head: true })
+    .eq("shop_id", shopId);
+
+  // 4. Загружаем данные ТОЛЬКО для этого салона
   const [{ data: users }, { data: bookings }, { data: segments }] = await Promise.all([
     supabase
       .from("users")
       .select("telegram_id, first_name, last_name, username, phone, created_at")
-      .eq("shop_id", shopId) // 👈 КЛЮЧЕВОЙ ФИЛЬТР
+      .eq("shop_id", shopId)
       .order("created_at", { ascending: false }),
     supabase
       .from("bookings")
       .select("client_id, status, price_snapshot")
-      .eq("shop_id", shopId), // 👈 ФИЛЬТР ПО САЛОНУ
+      .eq("shop_id", shopId),
     supabase
       .from("v_client_segments")
       .select("client_id, segment, last_visit, days_since_last, visits")
-      .eq("shop_id", shopId), // 👈 ФИЛЬТР ПО САЛОНУ
+      .eq("shop_id", shopId),
   ]);
 
   const stats = new Map<number, { count: number; spent: number }>();
@@ -63,5 +78,12 @@ export default async function ClientsPage() {
     },
   );
 
-  return <ClientsClient initial={rows} />;
+  return (
+    <ClientsClient 
+      initial={rows} 
+      shopId={shopId}
+      clientLimit={clientLimit}
+      clientsCount={clientsCount ?? 0}
+    />
+  );
 }
