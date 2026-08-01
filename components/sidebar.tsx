@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/client";
 import { Check, ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
+// FIXED: правильный импорт useSearchParams
+
 type Module = {
   id: number;
   label: string;
