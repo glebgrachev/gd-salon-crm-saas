@@ -28,6 +28,46 @@ export type SpecialistInput = {
   is_active: boolean;
 };
 
+// 🔥 Проверка лимита мастеров
+async function checkSpecialistLimit(supabase: any, shopId: number): Promise<{
+  ok: boolean;
+  current: number;
+  limit: number;
+  error?: string;
+}> {
+  // Получаем модули магазина
+  const { data: shop } = await supabase
+    .from("shops")
+    .select("modules")
+    .eq("id", shopId)
+    .single();
+
+  const limit = shop?.modules?.specialists ?? 1;
+  
+  // Считаем текущих мастеров
+  const { count } = await supabase
+    .from("specialists")
+    .select("*", { count: 'exact', head: true })
+    .eq("shop_id", shopId);
+
+  const current = count ?? 0;
+
+  if (limit === -1) {
+    return { ok: true, current, limit };
+  }
+
+  if (current >= limit) {
+    return {
+      ok: false,
+      current,
+      limit,
+      error: `Достигнут лимит мастеров (${current}/${limit}). Перейдите на PRO для снятия ограничений.`
+    };
+  }
+
+  return { ok: true, current, limit };
+}
+
 export async function createSpecialist(input: SpecialistInput) {
   const name = input.full_name.trim();
   if (!name) return { ok: false, error: "Введите ФИО" };
@@ -35,6 +75,12 @@ export async function createSpecialist(input: SpecialistInput) {
   const g = await guard();
   if (!g) return { ok: false, error: "Нет доступа" };
   const { supabase, shopId } = g;
+
+  // 🔥 Проверяем лимит мастеров
+  const limitCheck = await checkSpecialistLimit(supabase, shopId);
+  if (!limitCheck.ok) {
+    return { ok: false, error: limitCheck.error };
+  }
 
   const { error } = await supabase.from("specialists").insert({
     full_name: name,

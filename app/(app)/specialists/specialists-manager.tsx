@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Star, Upload, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Star, Upload, Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +21,7 @@ import {
   updateSpecialist,
   deleteSpecialist,
 } from "./actions";
+import { createClient } from "@/lib/supabase/client";
 
 export type Specialist = {
   id: string;
@@ -70,10 +71,53 @@ export default function SpecialistsManager({
   const [pending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [limitInfo, setLimitInfo] = useState<{
+    current: number;
+    limit: number;
+    allowed: boolean;
+  } | null>(null);
+
+  // Проверяем лимит при загрузке
+  useEffect(() => {
+    async function checkLimit() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: admin } = await supabase
+        .from("admins")
+        .select("shop_id")
+        .eq("user_uid", user.id)
+        .single();
+
+      if (!admin?.shop_id) return;
+
+      const { data: shop } = await supabase
+        .from("shops")
+        .select("modules")
+        .eq("id", admin.shop_id)
+        .single();
+
+      const limit = shop?.modules?.specialists ?? 1;
+      const current = initial.length;
+
+      setLimitInfo({
+        current,
+        limit,
+        allowed: limit === -1 || current < limit,
+      });
+    }
+    checkLimit();
+  }, [initial.length]);
 
   function openCreate() {
+    if (limitInfo && !limitInfo.allowed) {
+      toast.error(`Достигнут лимит мастеров (${limitInfo.current}/${limitInfo.limit}). Перейдите на PRO для снятия ограничений.`);
+      return;
+    }
     setForm({ ...EMPTY });
   }
+
   function openEdit(s: Specialist) {
     setForm({
       id: s.id,
@@ -144,8 +188,31 @@ export default function SpecialistsManager({
           <p className="mt-1 text-sm text-neutral-500">
             Мастера салона: фото, опыт, рейтинг.
           </p>
+          {limitInfo && !limitInfo.allowed && (
+            <div className="mt-2 flex items-center gap-2 text-sm text-amber-600">
+              <AlertTriangle className="h-4 w-4" />
+              <span>
+                Лимит мастеров достигнут ({limitInfo.current}/{limitInfo.limit}).
+                Перейдите на <a href="/tariffs" className="font-medium underline">PRO</a> для снятия ограничений.
+              </span>
+            </div>
+          )}
+          {limitInfo && limitInfo.limit !== -1 && limitInfo.allowed && (
+            <p className="mt-1 text-xs text-neutral-400">
+              Мастеров: {limitInfo.current}/{limitInfo.limit}
+            </p>
+          )}
+          {limitInfo && limitInfo.limit === -1 && (
+            <p className="mt-1 text-xs text-neutral-400">
+              Мастеров без лимита
+            </p>
+          )}
         </div>
-        <Button size="sm" onClick={openCreate}>
+        <Button 
+          size="sm" 
+          onClick={openCreate}
+          disabled={limitInfo ? !limitInfo.allowed : false}
+        >
           <Plus className="h-4 w-4" />
           Добавить
         </Button>
