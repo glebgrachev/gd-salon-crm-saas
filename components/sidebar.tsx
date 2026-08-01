@@ -1,13 +1,12 @@
 "use client";
 
+import { Suspense } from "react";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Check, ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-
-// FIXED: правильный импорт useSearchParams
 
 type Module = {
   id: number;
@@ -33,7 +32,7 @@ type Plan = {
 
 const PUBLISHABLE_KEY = "sb_publishable_vTWBLzZsUEq475a6qRKhuw_WP3XiiCX";
 
-export default function TariffsPage() {
+function TariffsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
@@ -377,5 +376,13 @@ export default function TariffsPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function TariffsPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center text-neutral-500">Загрузка...</div>}>
+      <TariffsPageContent />
+    </Suspense>
   );
 }
