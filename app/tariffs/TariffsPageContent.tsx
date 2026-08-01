@@ -329,6 +329,13 @@ export default function TariffsPageContent() {
                   >
                     ✅ Текущий тариф
                   </button>
+                ) : currentPlanId && currentPlanId > plan.id ? (
+                  <button
+                    disabled
+                    className="w-full rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-2 text-sm font-medium text-neutral-400 cursor-not-allowed"
+                  >
+                    У вас более высокий тариф
+                  </button>
                 ) : (
                   <button
                     onClick={() => handleActivate(plan.id)}
