@@ -7,26 +7,36 @@ import { createClient } from "@/lib/supabase/client";
 import { Check, ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-type Module = {
-  id: number;
-  label: string;
-  description: string | null;
-};
-
 type Plan = {
   id: number;
   name: string;
   description: string | null;
   price_monthly: number;
   price_yearly: number | null;
-  features: {
-    clients: number;
-    specialists: number;
-    bookings: number;
-  };
-  modules: Module[];
+  features: Record<string, number>;
   is_active: boolean;
   sort_order: number;
+};
+
+// Маппинг ключей модулей на человеческие названия
+const MODULE_LABELS: Record<string, string> = {
+  'clients': 'Клиентов в месяц',
+  'bookings': 'Записей',
+  'specialists': 'Мастеров',
+  'analytics': 'Аналитика',
+  'loyalty': 'Лояльность',
+  'newsletters': 'Рассылки',
+  'retention': 'Возвращаемость',
+  'promotions': 'Акции',
+  'certificates': 'Сертификаты',
+  'stock': 'Склад',
+  'waitlist': 'Лист ожидания'
+};
+
+// Форматирование значения для отображения
+const formatModuleValue = (value: number): string => {
+  if (value === -1) return '∞';
+  return String(value);
 };
 
 const PUBLISHABLE_KEY = "sb_publishable_vTWBLzZsUEq475a6qRKhuw_WP3XiiCX";
@@ -62,20 +72,14 @@ export default function TariffsPageContent() {
           .single();
         
         if (shop) {
-          console.log(`📊 Текущий plan_id салона: ${shop.plan_id}`);
           setCurrentPlanId(shop.plan_id);
         }
       }
 
+      // Загружаем планы с features
       const { data, error } = await supabase
         .from("plans")
-        .select(`
-          *,
-          plan_modules(
-            sort_order,
-            modules:module_id(*)
-          )
-        `)
+        .select("*")
         .eq("is_active", true)
         .order("sort_order");
 
@@ -85,19 +89,7 @@ export default function TariffsPageContent() {
         return;
       }
 
-      const formattedPlans: Plan[] = (data || []).map((p: any) => ({
-        ...p,
-        modules: (p.plan_modules || [])
-          .filter((pm: any) => pm.modules)
-          .map((pm: any) => pm.modules)
-          .sort((a: Module, b: Module) => {
-            const orderA = p.plan_modules.find((pm: any) => pm.module_id === a.id)?.sort_order || 0;
-            const orderB = p.plan_modules.find((pm: any) => pm.module_id === b.id)?.sort_order || 0;
-            return orderA - orderB;
-          }),
-      }));
-
-      setPlans(formattedPlans);
+      setPlans(data || []);
     } catch (error) {
       console.error("Ошибка загрузки:", error);
     } finally {
@@ -110,7 +102,6 @@ export default function TariffsPageContent() {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        console.log('🔄 Страница стала видимой, обновляем данные...');
         loadData();
       }
     };
@@ -124,7 +115,6 @@ export default function TariffsPageContent() {
 
   useEffect(() => {
     const handleFocus = () => {
-      console.log('🔄 Окно в фокусе, обновляем данные...');
       loadData();
     };
 
@@ -221,7 +211,7 @@ export default function TariffsPageContent() {
         <p className="mt-1 text-sm text-neutral-500">
           Ваш текущий тариф:{" "}
           <span className="font-medium text-neutral-900">
-            {plans.find((p) => p.id === currentPlanId)?.name || "Старт"}
+            {plans.find((p) => p.id === currentPlanId)?.name || "СТАРТ"}
           </span>
         </p>
         <button
@@ -240,6 +230,14 @@ export default function TariffsPageContent() {
           const isCurrent = plan.id === currentPlanId;
           const isPopular = plan.sort_order === 2;
           const priceDisplay = plan.price_monthly === 0 ? "0 ₽" : `${plan.price_monthly} ₽`;
+          
+          // Получаем все ключи модулей из features
+          const moduleKeys = Object.keys(plan.features || {});
+          
+          // Разделяем на базовые (clients, bookings, specialists) и дополнительные
+          const baseKeys = ['clients', 'bookings', 'specialists'];
+          const baseModules = moduleKeys.filter(key => baseKeys.includes(key));
+          const extraModules = moduleKeys.filter(key => !baseKeys.includes(key));
 
           return (
             <div
@@ -275,52 +273,40 @@ export default function TariffsPageContent() {
                   <p className="mt-1 text-sm text-neutral-500">{plan.description}</p>
                 </div>
 
+                {/* Базовые модули с лимитами */}
                 <ul className="space-y-2 text-sm">
-                  {plan.features.clients === -1 ? (
-                    <li className="flex items-start gap-2 text-neutral-700">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                      <span>Неограниченно клиентов</span>
-                    </li>
-                  ) : (
-                    <li className="flex items-start gap-2 text-neutral-700">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                      <span>До {plan.features.clients} клиентов</span>
-                    </li>
-                  )}
-                  {plan.features.specialists === -1 ? (
-                    <li className="flex items-start gap-2 text-neutral-700">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                      <span>Неограниченно специалистов</span>
-                    </li>
-                  ) : (
-                    <li className="flex items-start gap-2 text-neutral-700">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                      <span>До {plan.features.specialists} специалистов</span>
-                    </li>
-                  )}
-                  {plan.features.bookings === -1 ? (
-                    <li className="flex items-start gap-2 text-neutral-700">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                      <span>Неограниченно записей</span>
-                    </li>
-                  ) : (
-                    <li className="flex items-start gap-2 text-neutral-700">
-                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                      <span>До {plan.features.bookings} записей/мес</span>
-                    </li>
-                  )}
+                  {baseModules.map((key) => {
+                    const value = plan.features[key];
+                    const label = MODULE_LABELS[key] || key;
+                    const displayValue = formatModuleValue(value);
+                    const isUnlimited = value === -1;
+                    
+                    return (
+                      <li key={key} className="flex items-start gap-2 text-neutral-700">
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                        <span>
+                          {label}: <span className="font-medium">{displayValue}</span>
+                          {isUnlimited && <span className="text-xs text-neutral-400 ml-1">(безлимит)</span>}
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
 
-                {plan.modules.length > 0 && (
+                {/* Дополнительные модули */}
+                {extraModules.length > 0 && (
                   <div className="mt-3 border-t border-neutral-100 pt-3">
-                    <p className="text-xs font-medium text-neutral-400">Включено:</p>
+                    <p className="text-xs font-medium text-neutral-400">Дополнительные модули:</p>
                     <ul className="mt-1 space-y-1 text-sm">
-                      {plan.modules.map((mod) => (
-                        <li key={mod.id} className="flex items-start gap-2 text-neutral-600">
-                          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                          <span>{mod.label}</span>
-                        </li>
-                      ))}
+                      {extraModules.map((key) => {
+                        const label = MODULE_LABELS[key] || key;
+                        return (
+                          <li key={key} className="flex items-start gap-2 text-neutral-600">
+                            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                            <span>{label}</span>
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 )}
@@ -365,7 +351,7 @@ export default function TariffsPageContent() {
                         Обработка...
                       </span>
                     ) : (
-                      plan.price_monthly === 0 ? "Вы на тарифе Старт" : "Активировать"
+                      plan.price_monthly === 0 ? "Вы на тарифе СТАРТ" : "Активировать"
                     )}
                   </button>
                 )}
