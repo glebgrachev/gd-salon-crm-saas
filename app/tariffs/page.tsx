@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter }useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Check, ArrowLeft, Loader2 } from "lucide-react";
@@ -33,14 +33,16 @@ const PUBLISHABLE_KEY = "sb_publishable_vTWBLzZsUEq475a6qRKhuw_WP3XiiCX";
 
 export default function TariffsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [currentPlanId, setCurrentPlanId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [activating, setActivating] = useState<number | null>(null);
 
-  useEffect(() => {
-    async function loadData() {
+  // Функция загрузки данных
+  async function loadData() {
+    try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         router.push("/login");
@@ -54,16 +56,20 @@ export default function TariffsPage() {
         .single();
 
       if (admin?.shop_id) {
+        // Загружаем текущий план салона
         const { data: shop } = await supabase
           .from("shops")
-          .select("plan")
+          .select("plan_id")
           .eq("id", admin.shop_id)
           .single();
+        
         if (shop) {
-          setCurrentPlanId(shop.plan ? Number(shop.plan) : null);
+          console.log(`📊 Текущий plan_id салона: ${shop.plan_id}`);
+          setCurrentPlanId(shop.plan_id);
         }
       }
 
+      // Загружаем все планы
       const { data, error } = await supabase
         .from("plans")
         .select(`
@@ -95,11 +101,45 @@ export default function TariffsPage() {
       }));
 
       setPlans(formattedPlans);
+    } catch (error) {
+      console.error("Ошибка загрузки:", error);
+    } finally {
       setLoading(false);
     }
+  }
 
+  // Загрузка при монтировании и при возврате на страницу
+  useEffect(() => {
     loadData();
+
+    // Слушаем событие возврата на страницу (когда пользователь возвращается из оплаты)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('🔄 Страница стала видимой, обновляем данные...');
+        loadData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [router, supabase]);
+
+  // Дополнительно обновляем при фокусе окна
+  useEffect(() => {
+    const handleFocus = () => {
+      console.log('🔄 Окно в фокусе, обновляем данные...');
+      loadData();
+    };
+
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
 
   const handleActivate = async (planId: number) => {
     setActivating(planId);
@@ -152,7 +192,7 @@ export default function TariffsPage() {
         window.open(data.paymentUrl, "_blank");
         toast.info("Оплата открыта в новом окне.");
 
-        // 🔥 Передаём paymentId от Юкассы (UUID)
+        // Переходим на страницу успеха с payment_id
         router.push(`/payment-success?payment_id=${data.paymentId}`);
       } else {
         toast.error("Не удалось получить ссылку на оплату");
@@ -168,7 +208,7 @@ export default function TariffsPage() {
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-neutral-500">Загрузка...</p>
+        <Loader2 className="h-8 w-8 animate-spin text-neutral-400" />
       </div>
     );
   }
@@ -193,6 +233,16 @@ export default function TariffsPage() {
             {plans.find((p) => p.id === currentPlanId)?.name || "Старт"}
           </span>
         </p>
+        {/* Кнопка для ручного обновления */}
+        <button
+          onClick={() => {
+            setLoading(true);
+            loadData().then(() => setLoading(false));
+          }}
+          className="mt-2 text-xs text-neutral-400 hover:text-neutral-600 transition"
+        >
+          Обновить статус
+        </button>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
@@ -287,7 +337,7 @@ export default function TariffsPage() {
                     disabled
                     className="w-full rounded-lg border border-neutral-300 bg-transparent px-4 py-2 text-sm font-medium text-neutral-500 cursor-default"
                   >
-                    Текущий тариф
+                    ✅ Текущий тариф
                   </button>
                 ) : (
                   <button
