@@ -7,7 +7,6 @@ import { createClient } from "@/lib/supabase/client";
 import { CheckCircle, Loader2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
-// 🔥 Используем publishable ключ (как в create-payment)
 const PUBLISHABLE_KEY = "sb_publishable_vTWBLzZsUEq475a6qRKhuw_WP3XiiCX";
 
 function PaymentSuccessContent() {
@@ -45,7 +44,6 @@ function PaymentSuccessContent() {
 
         setShopId(admin.shop_id);
 
-        // Если payment_id не передан в URL — ищем последний pending платёж
         if (!paymentId) {
           const { data: payment } = await supabase
             .from("payments")
@@ -57,16 +55,16 @@ function PaymentSuccessContent() {
             .single();
 
           if (payment?.provider_payment_id) {
-            setPaymentId(payment.provider_payment_id); // 👈 ПРАВИЛЬНЫЙ ID
+            setPaymentId(payment.provider_payment_id);
             console.log(`🔍 Найден provider_payment_id: ${payment.provider_payment_id}`);
           } else {
             const { data: shop } = await supabase
               .from("shops")
-              .select("plan")
+              .select("plan_id")
               .eq("id", admin.shop_id)
               .single();
 
-            if (shop?.plan !== "free" && shop?.plan !== null) {
+            if (shop?.plan_id !== 1 && shop?.plan_id !== null) {
               setStatus("success");
               setMessage("Тариф уже активирован!");
               return;
@@ -80,11 +78,9 @@ function PaymentSuccessContent() {
           console.log(`🔍 payment_id из URL: ${paymentId}`);
         }
 
-        // Проверяем статус немедленно
         console.log("⏳ Запуск первой проверки...");
         await checkStatus(admin.shop_id);
 
-        // Запускаем периодическую проверку
         startPolling(admin.shop_id);
       } catch (error) {
         console.error("❌ Ошибка инициализации:", error);
@@ -119,7 +115,10 @@ function PaymentSuccessContent() {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${PUBLISHABLE_KEY}`,
           },
-          body: JSON.stringify({ payment_id: paymentId }), // 👈 ПРАВИЛЬНЫЙ ID
+          body: JSON.stringify({
+            payment_id: paymentId,
+            shop_id: shopId,
+          }),
         }
       );
 
@@ -214,29 +213,15 @@ function PaymentSuccessContent() {
         .update({ status: "paid", paid_at: new Date().toISOString() })
         .eq("id", payment.id);
 
-      const { data: plan } = await supabase
-        .from("plans")
-        .select("modules")
-        .eq("id", payment.plan_id)
-        .single();
+      console.log(`✅ Обновление тарифа для shop_id=${shopId}, plan_id=${payment.plan_id}`);
 
-      if (plan) {
-        const modules = (plan.modules as string[]).reduce((acc, key) => {
-          acc[key] = true;
-          return acc;
-        }, {} as Record<string, boolean>);
-
-        console.log(`✅ Обновление тарифа для shop_id=${shopId}, plan=${payment.plan_id}`);
-
-        await supabase
-          .from("shops")
-          .update({
-            plan: String(payment.plan_id),
-            modules: modules,
-            subscription_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          })
-          .eq("id", shopId);
-      }
+      await supabase
+        .from("shops")
+        .update({
+          plan_id: payment.plan_id,
+          subscription_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        })
+        .eq("id", shopId);
     } catch (error) {
       console.error("❌ Ошибка обновления тарифа:", error);
     }
