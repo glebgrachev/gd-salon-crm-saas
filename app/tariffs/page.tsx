@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -31,7 +32,7 @@ type Plan = {
 
 const PUBLISHABLE_KEY = "sb_publishable_vTWBLzZsUEq475a6qRKhuw_WP3XiiCX";
 
-export default function TariffsPage() {
+function TariffsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
@@ -40,7 +41,6 @@ export default function TariffsPage() {
   const [loading, setLoading] = useState(true);
   const [activating, setActivating] = useState<number | null>(null);
 
-  // Функция загрузки данных
   async function loadData() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -56,7 +56,6 @@ export default function TariffsPage() {
         .single();
 
       if (admin?.shop_id) {
-        // Загружаем текущий план салона
         const { data: shop } = await supabase
           .from("shops")
           .select("plan_id")
@@ -69,7 +68,6 @@ export default function TariffsPage() {
         }
       }
 
-      // Загружаем все планы
       const { data, error } = await supabase
         .from("plans")
         .select(`
@@ -108,11 +106,9 @@ export default function TariffsPage() {
     }
   }
 
-  // Загрузка при монтировании и при возврате на страницу
   useEffect(() => {
     loadData();
 
-    // Слушаем событие возврата на страницу (когда пользователь возвращается из оплаты)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         console.log('🔄 Страница стала видимой, обновляем данные...');
@@ -127,7 +123,6 @@ export default function TariffsPage() {
     };
   }, [router, supabase]);
 
-  // Дополнительно обновляем при фокусе окна
   useEffect(() => {
     const handleFocus = () => {
       console.log('🔄 Окно в фокусе, обновляем данные...');
@@ -188,11 +183,8 @@ export default function TariffsPage() {
       }
 
       if (data.paymentUrl) {
-        // Открываем оплату в новом окне
         window.open(data.paymentUrl, "_blank");
         toast.info("Оплата открыта в новом окне.");
-
-        // Переходим на страницу успеха с payment_id
         router.push(`/payment-success?payment_id=${data.paymentId}`);
       } else {
         toast.error("Не удалось получить ссылку на оплату");
@@ -233,7 +225,6 @@ export default function TariffsPage() {
             {plans.find((p) => p.id === currentPlanId)?.name || "Старт"}
           </span>
         </p>
-        {/* Кнопка для ручного обновления */}
         <button
           onClick={() => {
             setLoading(true);
@@ -375,5 +366,13 @@ export default function TariffsPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function TariffsPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-[60vh] items-center justify-center text-neutral-500">Загрузка...</div>}>
+      <TariffsPageContent />
+    </Suspense>
   );
 }
