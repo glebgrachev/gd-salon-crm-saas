@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { CheckCircle, Loader2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
+// 🔥 Используем publishable ключ (как в create-payment)
 const PUBLISHABLE_KEY = "sb_publishable_vTWBLzZsUEq475a6qRKhuw_WP3XiiCX";
 
 function PaymentSuccessContent() {
@@ -56,16 +57,16 @@ function PaymentSuccessContent() {
             .single();
 
           if (payment?.provider_payment_id) {
-            setPaymentId(payment.provider_payment_id);
+            setPaymentId(payment.provider_payment_id); // 👈 ПРАВИЛЬНЫЙ ID
             console.log(`🔍 Найден provider_payment_id: ${payment.provider_payment_id}`);
           } else {
             const { data: shop } = await supabase
               .from("shops")
-              .select("plan_id")
+              .select("plan")
               .eq("id", admin.shop_id)
               .single();
 
-            if (shop?.plan_id !== 1 && shop?.plan_id !== null) {
+            if (shop?.plan !== "free" && shop?.plan !== null) {
               setStatus("success");
               setMessage("Тариф уже активирован!");
               return;
@@ -81,10 +82,10 @@ function PaymentSuccessContent() {
 
         // Проверяем статус немедленно
         console.log("⏳ Запуск первой проверки...");
-        await checkStatus();
+        await checkStatus(admin.shop_id);
 
         // Запускаем периодическую проверку
-        startPolling();
+        startPolling(admin.shop_id);
       } catch (error) {
         console.error("❌ Ошибка инициализации:", error);
         setStatus("error");
@@ -101,11 +102,11 @@ function PaymentSuccessContent() {
     };
   }, []);
 
-  const checkStatus = async (): Promise<boolean> => {
-    console.log(`📊 Проверка статуса для payment_id: ${paymentId}, shop_id: ${shopId}`);
+  const checkStatus = async (shopId: number): Promise<boolean> => {
+    console.log(`📊 Проверка статуса для payment_id: ${paymentId}`);
 
-    if (!paymentId || !shopId) {
-      console.log("❌ Нет payment_id или shop_id для проверки");
+    if (!paymentId) {
+      console.log("❌ Нет payment_id для проверки");
       return false;
     }
 
@@ -118,10 +119,7 @@ function PaymentSuccessContent() {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${PUBLISHABLE_KEY}`,
           },
-          body: JSON.stringify({
-            payment_id: paymentId,
-            shop_id: shopId,
-          }),
+          body: JSON.stringify({ payment_id: paymentId }), // 👈 ПРАВИЛЬНЫЙ ID
         }
       );
 
@@ -137,6 +135,7 @@ function PaymentSuccessContent() {
       console.log(`📊 Результат:`, result);
 
       if (result.status === "succeeded") {
+        await updateTariff(shopId);
         setStatus("success");
         setMessage("🎉 Оплата прошла успешно! Тариф активирован.");
         if (intervalRef.current) clearInterval(intervalRef.current);
@@ -147,6 +146,10 @@ function PaymentSuccessContent() {
         setStatus("error");
         setMessage("❌ Платёж был отменён. Попробуйте снова.");
         if (intervalRef.current) clearInterval(intervalRef.current);
+        await supabase
+          .from("payments")
+          .update({ status: "canceled" })
+          .eq("provider_payment_id", paymentId);
         toast.error("Платёж отменён");
         return true;
       } else if (result.status === "pending") {
@@ -162,7 +165,7 @@ function PaymentSuccessContent() {
     }
   };
 
-  const startPolling = () => {
+  const startPolling = (shopId: number) => {
     let attempts = 0;
     const MAX_ATTEMPTS = 30;
 
@@ -173,7 +176,7 @@ function PaymentSuccessContent() {
     intervalRef.current = setInterval(async () => {
       attempts++;
       console.log(`⏳ Проверка платежа #${attempts}`);
-      const completed = await checkStatus();
+      const completed = await checkStatus(shopId);
 
       if (completed) {
         if (intervalRef.current) clearInterval(intervalRef.current);
@@ -186,6 +189,57 @@ function PaymentSuccessContent() {
         if (intervalRef.current) clearInterval(intervalRef.current);
       }
     }, 2000);
+  };
+
+  const updateTariff = async (shopId: number) => {
+    try {
+      const { data: payment } = await supabase
+        .from("payments")
+        .select("*")
+        .eq("shop_id", shopId)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!payment) {
+        console.log("❌ Нет pending платежа для обновления");
+        return;
+      }
+
+      console.log(`✅ Обновление платежа ${payment.id} на status=paid`);
+
+      await supabase
+        .from("payments")
+        .update({ status: "paid", paid_at: new Date().toISOString() })
+        .eq("id", payment.id);
+
+      const { data: plan } = await supabase
+        .from("plans")
+        .select("modules")
+        .eq("id", payment.plan_id)
+        .single();
+
+      if (plan) {
+        const modules = (plan.modules as string[]).reduce((acc, key) => {
+          acc[key] = true;
+          return acc;
+        }, {} as Record<string, boolean>);
+
+        console.log(`✅ Обновление тарифа для shop_id=${shopId}, plan=${payment.plan_id}`);
+
+        await supabase
+          .from("shops")
+          .update({
+            plan: String(payment.plan_id),
+            modules: modules,
+            subscription_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          })
+          .eq("id", shopId);
+      }
+    } catch (error) {
+      console.error("❌ Ошибка обновления тарифа:", error);
+    }
   };
 
   return (
