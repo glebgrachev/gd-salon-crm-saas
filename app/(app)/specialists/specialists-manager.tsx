@@ -80,6 +80,7 @@ export default function SpecialistsManager({
   const isLimitReached = limit !== -1 && currentCount >= limit;
 
   function openCreate() {
+    // 🔥 НЕ блокируем кнопку, а показываем модалку
     if (isLimitReached) {
       setLimitModalOpen(true);
       return;
@@ -158,6 +159,7 @@ export default function SpecialistsManager({
             <p className="mt-1 text-sm text-neutral-500">
               Мастера салона: фото, опыт, рейтинг.
             </p>
+            {/* Показываем лимит, но не блокируем кнопку */}
             {!limitsLoading && limit !== -1 && (
               <p className="mt-1 text-xs text-neutral-400">
                 Мастеров: {currentCount}/{limit}
@@ -169,12 +171,8 @@ export default function SpecialistsManager({
               </p>
             )}
           </div>
-          <Button 
-            size="sm" 
-            onClick={openCreate}
-            disabled={isLimitReached}
-            title={isLimitReached ? "Лимит мастеров достигнут" : ""}
-          >
+          {/* 🔥 Кнопка ВСЕГДА активна */}
+          <Button size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4" />
             Добавить
           </Button>
@@ -384,7 +382,10 @@ export default function SpecialistsManager({
       <ProModal
         isOpen={limitModalOpen}
         onClose={() => setLimitModalOpen(false)}
-        moduleName="добавление мастеров"
+        moduleName="мастеров"
+        type="limit"
+        current={currentCount}
+        limit={limit}
       />
     </>
   );
