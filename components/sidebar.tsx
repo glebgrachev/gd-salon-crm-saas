@@ -29,7 +29,7 @@ import { createClient } from "@/lib/supabase/client";
 import { hasModule, type ModuleKey } from "@/lib/permissions-client";
 import ProModal from "@/components/ProModal";
 
-// Список пунктов для владельца салона
+// Список пунктов для владельца салона не суперадминов
 const OWNER_NAV = [
   { href: "/", label: "Заказы", icon: CalendarCheck, module: null },
   { href: "/specialists", label: "Специалисты", icon: Scissors, module: null },
