@@ -43,7 +43,9 @@ function PaymentSuccessContent() {
         }
 
         setShopId(admin.shop_id);
+        console.log(`🏪 Shop ID: ${shopId}`);
 
+        // Если payment_id не передан в URL — ищем последний pending платёж
         if (!paymentId) {
           const { data: payment } = await supabase
             .from("payments")
@@ -79,9 +81,10 @@ function PaymentSuccessContent() {
         }
 
         console.log("⏳ Запуск первой проверки...");
-        await checkStatus(admin.shop_id);
+        await checkStatus();
 
-        startPolling(admin.shop_id);
+        console.log("⏳ Запуск периодической проверки...");
+        startPolling();
       } catch (error) {
         console.error("❌ Ошибка инициализации:", error);
         setStatus("error");
@@ -98,11 +101,11 @@ function PaymentSuccessContent() {
     };
   }, []);
 
-  const checkStatus = async (shopId: number): Promise<boolean> => {
-    console.log(`📊 Проверка статуса для payment_id: ${paymentId}`);
+  const checkStatus = async (): Promise<boolean> => {
+    console.log(`📊 Проверка статуса для payment_id: ${paymentId}, shop_id: ${shopId}`);
 
-    if (!paymentId) {
-      console.log("❌ Нет payment_id для проверки");
+    if (!paymentId || !shopId) {
+      console.log("❌ Нет payment_id или shop_id для проверки");
       return false;
     }
 
@@ -117,7 +120,7 @@ function PaymentSuccessContent() {
           },
           body: JSON.stringify({
             payment_id: paymentId,
-            shop_id: shopId,
+            shop_id: shopId, // 👈 Передаём shop_id
           }),
         }
       );
@@ -134,7 +137,7 @@ function PaymentSuccessContent() {
       console.log(`📊 Результат:`, result);
 
       if (result.status === "succeeded") {
-        await updateTariff(shopId);
+        await updateTariff();
         setStatus("success");
         setMessage("🎉 Оплата прошла успешно! Тариф активирован.");
         if (intervalRef.current) clearInterval(intervalRef.current);
@@ -164,7 +167,7 @@ function PaymentSuccessContent() {
     }
   };
 
-  const startPolling = (shopId: number) => {
+  const startPolling = () => {
     let attempts = 0;
     const MAX_ATTEMPTS = 30;
 
@@ -175,7 +178,7 @@ function PaymentSuccessContent() {
     intervalRef.current = setInterval(async () => {
       attempts++;
       console.log(`⏳ Проверка платежа #${attempts}`);
-      const completed = await checkStatus(shopId);
+      const completed = await checkStatus();
 
       if (completed) {
         if (intervalRef.current) clearInterval(intervalRef.current);
@@ -190,8 +193,13 @@ function PaymentSuccessContent() {
     }, 2000);
   };
 
-  const updateTariff = async (shopId: number) => {
+  const updateTariff = async () => {
     try {
+      if (!shopId) {
+        console.log("❌ Нет shop_id для обновления тарифа");
+        return;
+      }
+
       const { data: payment } = await supabase
         .from("payments")
         .select("*")
@@ -222,6 +230,8 @@ function PaymentSuccessContent() {
           subscription_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         })
         .eq("id", shopId);
+
+      console.log(`✅ Тариф обновлён!`);
     } catch (error) {
       console.error("❌ Ошибка обновления тарифа:", error);
     }
