@@ -8,12 +8,24 @@ interface ProModalProps {
   isOpen: boolean;
   onClose: () => void;
   moduleName: string;
+  type?: "module" | "limit";  // Добавляем тип
+  current?: number;           // Для лимитов
+  limit?: number;             // Для лимитов
 }
 
-export default function ProModal({ isOpen, onClose, moduleName }: ProModalProps) {
+export default function ProModal({ 
+  isOpen, 
+  onClose, 
+  moduleName,
+  type = "module",
+  current,
+  limit 
+}: ProModalProps) {
   const router = useRouter();
 
   if (!isOpen) return null;
+
+  const isLimit = type === "limit";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -31,12 +43,18 @@ export default function ProModal({ isOpen, onClose, moduleName }: ProModalProps)
           </div>
 
           <h2 className="text-lg font-semibold text-neutral-900">
-            Модуль «{moduleName}» не доступен на Вашем тарифе
+            {isLimit 
+              ? `Достигнут лимит «${moduleName}»`
+              : `Модуль «${moduleName}» не доступен на Вашем тарифе`
+            }
           </h2>
           <p className="mt-2 text-sm text-neutral-500">
-            Этот модуль доступен только на тарифах PRO и выше.
-            <br />
-            Выберите подходящий тариф, чтобы открыть все возможности.
+            {isLimit 
+              ? `Вы используете ${current} из ${limit} ${moduleName}. 
+                 Перейдите на тариф PRO, чтобы снять ограничения.`
+              : `Этот модуль доступен только на тарифах PRO и выше.
+                 Выберите подходящий тариф, чтобы открыть все возможности.`
+            }
           </p>
 
           <div className="mt-6 flex w-full gap-3">
