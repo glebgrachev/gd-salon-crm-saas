@@ -1,7 +1,7 @@
 // lib/permissions-client.ts
 import { createClient } from "@/lib/supabase/client";
 
-export async function getShopModulesClient(shopId: number): Promise<Record<string, boolean>> {
+export async function getShopModulesClient(shopId: number): Promise<Record<string, any>> {
   const supabase = createClient();
   const { data } = await supabase
     .from("shops")
@@ -11,7 +11,10 @@ export async function getShopModulesClient(shopId: number): Promise<Record<strin
   return data?.modules ?? {};
 }
 
-export function hasModule(modules: Record<string, boolean> | null, key: string): boolean {
+export function hasModule(modules: Record<string, any> | null, key: string): boolean {
   if (!modules) return false;
-  return modules[key] === true;
+  const value = modules[key];
+  // -1, 1, true, "unlimited" → true
+  // 0, false, null, undefined → false
+  return value !== 0 && value !== false && value !== null && value !== undefined;
 }
