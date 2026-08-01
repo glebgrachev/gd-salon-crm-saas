@@ -253,7 +253,7 @@ export default function TariffsPageContent() {
               }`}
             >
               {isCurrent && (
-                <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-emerald-100 px-3 py-0.5 text-xs font-medium text-emerald-700">
+                <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-emerald-100 px-3 py-0.5 text-xs font-medium text-emerald-700 whitespace-nowrap">
                   ✅ Вы сейчас на этом тарифе
                 </span>
               )}
@@ -329,10 +329,18 @@ export default function TariffsPageContent() {
               <div className="mt-auto pt-6">
                 {isCurrent ? (
                   <button
-                    disabled
-                    className="w-full rounded-lg border border-neutral-300 bg-transparent px-4 py-2 text-sm font-medium text-neutral-500 cursor-default"
+                    onClick={() => handleActivate(plan.id)}
+                    disabled={activating === plan.id}
+                    className="w-full rounded-lg px-4 py-2 text-sm font-medium text-white transition bg-neutral-900 hover:bg-neutral-700 disabled:opacity-50"
                   >
-                    Текущий тариф
+                    {activating === plan.id ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Обработка...
+                      </span>
+                    ) : (
+                      "Продлить"
+                    )}
                   </button>
                 ) : currentPlanId && currentPlanId > plan.id ? (
                   <button
