@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { CheckCircle, Loader2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
+// 🔥 Используем publishable ключ (как в create-payment)
 const PUBLISHABLE_KEY = "sb_publishable_vTWBLzZsUEq475a6qRKhuw_WP3XiiCX";
 
 function PaymentSuccessContent() {
@@ -24,9 +25,6 @@ function PaymentSuccessContent() {
   useEffect(() => {
     async function init() {
       try {
-        console.log("🚀 init() started");
-        console.log("📌 paymentId из URL:", paymentId);
-
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
           router.push("/login");
@@ -46,7 +44,6 @@ function PaymentSuccessContent() {
         }
 
         setShopId(admin.shop_id);
-        console.log(`🏪 Shop ID: ${shopId}`);
 
         // Если payment_id не передан в URL — ищем последний pending платёж
         if (!paymentId) {
@@ -60,24 +57,35 @@ function PaymentSuccessContent() {
             .single();
 
           if (payment?.provider_payment_id) {
-            setPaymentId(payment.provider_payment_id);
+            setPaymentId(payment.provider_payment_id); // 👈 ПРАВИЛЬНЫЙ ID
             console.log(`🔍 Найден provider_payment_id: ${payment.provider_payment_id}`);
           } else {
-            console.warn("⚠️ Нет pending платежей");
+            const { data: shop } = await supabase
+              .from("shops")
+              .select("plan")
+              .eq("id", admin.shop_id)
+              .single();
+
+            if (shop?.plan !== "free" && shop?.plan !== null) {
+              setStatus("success");
+              setMessage("Тариф уже активирован!");
+              return;
+            }
+
             setStatus("error");
             setMessage("Платёж не найден");
             return;
           }
+        } else {
+          console.log(`🔍 payment_id из URL: ${paymentId}`);
         }
 
-        if (paymentId) {
-          console.log("⏳ Запуск проверки статуса...");
-          await checkStatus();
-          console.log("⏳ Запуск периодической проверки...");
-          startPolling();
-        } else {
-          console.error("❌ Нет payment_id для проверки");
-        }
+        // Проверяем статус немедленно
+        console.log("⏳ Запуск первой проверки...");
+        await checkStatus(admin.shop_id);
+
+        // Запускаем периодическую проверку
+        startPolling(admin.shop_id);
       } catch (error) {
         console.error("❌ Ошибка инициализации:", error);
         setStatus("error");
@@ -94,11 +102,11 @@ function PaymentSuccessContent() {
     };
   }, []);
 
-  const checkStatus = async (): Promise<boolean> => {
-    console.log(`📊 Проверка статуса для payment_id: ${paymentId}, shop_id: ${shopId}`);
+  const checkStatus = async (shopId: number): Promise<boolean> => {
+    console.log(`📊 Проверка статуса для payment_id: ${paymentId}`);
 
-    if (!paymentId || !shopId) {
-      console.log("❌ Нет payment_id или shop_id для проверки");
+    if (!paymentId) {
+      console.log("❌ Нет payment_id для проверки");
       return false;
     }
 
@@ -111,10 +119,7 @@ function PaymentSuccessContent() {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${PUBLISHABLE_KEY}`,
           },
-          body: JSON.stringify({
-            payment_id: paymentId,
-            shop_id: shopId,
-          }),
+          body: JSON.stringify({ payment_id: paymentId }), // 👈 ПРАВИЛЬНЫЙ ID
         }
       );
 
@@ -130,7 +135,7 @@ function PaymentSuccessContent() {
       console.log(`📊 Результат:`, result);
 
       if (result.status === "succeeded") {
-        await updateTariff();
+        await updateTariff(shopId);
         setStatus("success");
         setMessage("🎉 Оплата прошла успешно! Тариф активирован.");
         if (intervalRef.current) clearInterval(intervalRef.current);
@@ -141,6 +146,10 @@ function PaymentSuccessContent() {
         setStatus("error");
         setMessage("❌ Платёж был отменён. Попробуйте снова.");
         if (intervalRef.current) clearInterval(intervalRef.current);
+        await supabase
+          .from("payments")
+          .update({ status: "canceled" })
+          .eq("provider_payment_id", paymentId);
         toast.error("Платёж отменён");
         return true;
       } else if (result.status === "pending") {
@@ -156,7 +165,7 @@ function PaymentSuccessContent() {
     }
   };
 
-  const startPolling = () => {
+  const startPolling = (shopId: number) => {
     let attempts = 0;
     const MAX_ATTEMPTS = 30;
 
@@ -167,7 +176,7 @@ function PaymentSuccessContent() {
     intervalRef.current = setInterval(async () => {
       attempts++;
       console.log(`⏳ Проверка платежа #${attempts}`);
-      const completed = await checkStatus();
+      const completed = await checkStatus(shopId);
 
       if (completed) {
         if (intervalRef.current) clearInterval(intervalRef.current);
@@ -182,13 +191,8 @@ function PaymentSuccessContent() {
     }, 2000);
   };
 
-  const updateTariff = async () => {
+  const updateTariff = async (shopId: number) => {
     try {
-      if (!shopId) {
-        console.log("❌ Нет shop_id для обновления тарифа");
-        return;
-      }
-
       const { data: payment } = await supabase
         .from("payments")
         .select("*")
@@ -210,17 +214,29 @@ function PaymentSuccessContent() {
         .update({ status: "paid", paid_at: new Date().toISOString() })
         .eq("id", payment.id);
 
-      console.log(`✅ Обновление тарифа для shop_id=${shopId}, plan_id=${payment.plan_id}`);
+      const { data: plan } = await supabase
+        .from("plans")
+        .select("modules")
+        .eq("id", payment.plan_id)
+        .single();
 
-      await supabase
-        .from("shops")
-        .update({
-          plan_id: payment.plan_id,
-          subscription_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        })
-        .eq("id", shopId);
+      if (plan) {
+        const modules = (plan.modules as string[]).reduce((acc, key) => {
+          acc[key] = true;
+          return acc;
+        }, {} as Record<string, boolean>);
 
-      console.log(`✅ Тариф обновлён!`);
+        console.log(`✅ Обновление тарифа для shop_id=${shopId}, plan=${payment.plan_id}`);
+
+        await supabase
+          .from("shops")
+          .update({
+            plan: String(payment.plan_id),
+            modules: modules,
+            subscription_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          })
+          .eq("id", shopId);
+      }
     } catch (error) {
       console.error("❌ Ошибка обновления тарифа:", error);
     }
