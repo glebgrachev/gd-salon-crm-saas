@@ -56,7 +56,8 @@ export default function SettingsPage() {
     inn: "",
     ogrn: "",
     logo: "",
-    plan: "free",
+    plan_id: 1,
+    subscription_expires_at: null as string | null,
   });
 
   useEffect(() => {
@@ -100,7 +101,8 @@ export default function SettingsPage() {
         inn: shopData.inn ? String(shopData.inn) : "",
         ogrn: shopData.ogrn ? String(shopData.ogrn) : "",
         logo: shopData.logo || "",
-        plan: shopData.plan || "free",
+        plan_id: shopData.plan_id || 1,
+        subscription_expires_at: shopData.subscription_expires_at || null,
       });
       setLoading(false);
     }
@@ -176,6 +178,31 @@ export default function SettingsPage() {
     router.refresh();
   };
 
+  // Функция для получения названия тарифа
+  const getPlanName = (planId: number) => {
+    switch (planId) {
+      case 1:
+        return "Бесплатный";
+      case 2:
+        return "PRO";
+      case 3:
+        return "PRO + 3 модуля";
+      default:
+        return "Неизвестно";
+    }
+  };
+
+  // Форматирование даты
+  const formatDate = (date: string | null) => {
+    if (!date) return "Не активна";
+    const d = new Date(date);
+    return d.toLocaleDateString("ru-RU", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -189,22 +216,32 @@ export default function SettingsPage() {
       {/* ============================================================ */}
       {/* БЛОК ТАРИФА */}
       {/* ============================================================ */}
-      <div className="mb-6 flex items-center justify-between rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center gap-3">
-          <CreditCard className="h-5 w-5 text-neutral-400" />
-          <div>
-            <p className="text-sm font-medium text-neutral-900">Мой тариф</p>
-            <p className="text-xs text-neutral-500">
-              {shop.plan === "free" ? "Бесплатный" : "PRO"}
-            </p>
+      <div className="mb-6 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <CreditCard className="h-5 w-5 text-neutral-400" />
+            <div>
+              <p className="text-sm font-medium text-neutral-900">Мой тариф</p>
+              <p className="text-xs text-neutral-500">
+                {getPlanName(shop.plan_id)}
+              </p>
+            </div>
           </div>
+          <Link
+            href="/tariffs"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-700"
+          >
+            Смотреть тарифы →
+          </Link>
         </div>
-        <Link
-          href="/tariffs"
-          className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-700"
-        >
-          Смотреть тарифы →
-        </Link>
+        <div className="mt-2 border-t border-neutral-100 pt-2">
+          <p className="text-xs text-neutral-400">
+            Действует до:{" "}
+            <span className="font-medium text-neutral-600">
+              {formatDate(shop.subscription_expires_at)}
+            </span>
+          </p>
+        </div>
       </div>
 
       <h1 className="text-lg font-semibold tracking-tight text-neutral-900">
