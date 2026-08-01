@@ -231,7 +231,7 @@ export default function SettingsPage() {
             href="/tariffs"
             className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-700"
           >
-            Смотреть тарифы →
+            Все тарифы →
           </Link>
         </div>
         <div className="mt-2 border-t border-neutral-100 pt-2">
