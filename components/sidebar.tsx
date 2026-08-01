@@ -62,7 +62,6 @@ export default function Sidebar({ email }: { email?: string | null }) {
   const supabase = createClient();
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [modules, setModules] = useState<Record<string, boolean> | null>(null);
-  const [subscriptionExpiresAt, setSubscriptionExpiresAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [lockedModule, setLockedModule] = useState("");
@@ -85,11 +84,10 @@ export default function Sidebar({ email }: { email?: string | null }) {
           if (admin?.shop_id) {
             const { data: shop } = await supabase
               .from("shops")
-              .select("modules, subscription_expires_at")
+              .select("modules")
               .eq("id", admin.shop_id)
               .single();
             setModules(shop?.modules ?? {});
-            setSubscriptionExpiresAt(shop?.subscription_expires_at ?? null);
           }
         }
       }
@@ -107,11 +105,7 @@ export default function Sidebar({ email }: { email?: string | null }) {
   const navItems = isSuperAdmin
     ? SUPERADMIN_NAV
     : OWNER_NAV.map((item) => {
-        const isLocked = item.module && !hasModule(
-          modules, 
-          item.module as ModuleKey,
-          subscriptionExpiresAt
-        );
+        const isLocked = item.module && !hasModule(modules, item.module as ModuleKey);
         return { ...item, isLocked: !!isLocked };
       });
 
