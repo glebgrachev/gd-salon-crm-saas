@@ -252,7 +252,12 @@ export default function TariffsPageContent() {
                   : "border-neutral-200 bg-white hover:shadow-sm"
               }`}
             >
-              {isPopular && (
+              {isCurrent && (
+                <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-emerald-100 px-3 py-0.5 text-xs font-medium text-emerald-700">
+                  ✅ Вы сейчас на этом тарифе
+                </span>
+              )}
+              {isPopular && !isCurrent && (
                 <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-amber-100 px-3 py-0.5 text-xs font-medium text-amber-700">
                   Популярный
                 </span>
@@ -327,7 +332,7 @@ export default function TariffsPageContent() {
                     disabled
                     className="w-full rounded-lg border border-neutral-300 bg-transparent px-4 py-2 text-sm font-medium text-neutral-500 cursor-default"
                   >
-                    ✅ Текущий тариф
+                    Текущий тариф
                   </button>
                 ) : currentPlanId && currentPlanId > plan.id ? (
                   <button

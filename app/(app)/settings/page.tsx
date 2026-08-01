@@ -178,7 +178,6 @@ export default function SettingsPage() {
     router.refresh();
   };
 
-  // Функция для получения названия тарифа
   const getPlanName = (planId: number) => {
     switch (planId) {
       case 1:
@@ -192,7 +191,6 @@ export default function SettingsPage() {
     }
   };
 
-  // Форматирование даты
   const formatDate = (date: string | null) => {
     if (!date) return "Не активна";
     const d = new Date(date);
@@ -201,6 +199,11 @@ export default function SettingsPage() {
       month: "2-digit",
       year: "numeric",
     });
+  };
+
+  const isSubscriptionActive = () => {
+    if (!shop.subscription_expires_at) return false;
+    return new Date(shop.subscription_expires_at) > new Date();
   };
 
   if (loading) {
@@ -231,15 +234,16 @@ export default function SettingsPage() {
             href="/tariffs"
             className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-700"
           >
-            Все тарифы →
+            {isSubscriptionActive() ? "Продлить →" : "Выбрать тариф →"}
           </Link>
         </div>
         <div className="mt-2 border-t border-neutral-100 pt-2">
           <p className="text-xs text-neutral-400">
-            Действует до:{" "}
-            <span className="font-medium text-neutral-600">
-              {formatDate(shop.subscription_expires_at)}
-            </span>
+            {isSubscriptionActive() ? (
+              <>Действует до: <span className="font-medium text-neutral-600">{formatDate(shop.subscription_expires_at)}</span></>
+            ) : (
+              <span className="text-amber-600">Подписка не активна</span>
+            )}
           </p>
         </div>
       </div>
@@ -252,7 +256,6 @@ export default function SettingsPage() {
       </p>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-5">
-        {/* Название салона */}
         <div>
           <label className="block text-sm font-medium text-neutral-700">
             Название салона <span className="text-red-500">*</span>
@@ -266,7 +269,6 @@ export default function SettingsPage() {
           />
         </div>
 
-        {/* Контактное лицо */}
         <div>
           <label className="block text-sm font-medium text-neutral-700">
             Контактное лицо
@@ -280,7 +282,6 @@ export default function SettingsPage() {
           />
         </div>
 
-        {/* Email */}
         <div>
           <label className="block text-sm font-medium text-neutral-700">
             Email для связи
@@ -297,7 +298,6 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        {/* Телефон */}
         <div>
           <label className="block text-sm font-medium text-neutral-700">
             Телефон
@@ -314,7 +314,6 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        {/* Адрес */}
         <div>
           <label className="block text-sm font-medium text-neutral-700">
             Адрес
@@ -328,7 +327,6 @@ export default function SettingsPage() {
           />
         </div>
 
-        {/* ИНН */}
         <div>
           <label className="block text-sm font-medium text-neutral-700">
             ИНН
@@ -345,7 +343,6 @@ export default function SettingsPage() {
           <p className="mt-1 text-xs text-neutral-400">10 или 12 цифр</p>
         </div>
 
-        {/* ОГРН */}
         <div>
           <label className="block text-sm font-medium text-neutral-700">
             ОГРН
