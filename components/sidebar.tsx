@@ -29,19 +29,19 @@ import { createClient } from "@/lib/supabase/client";
 import { hasModule, type ModuleKey } from "@/lib/permissions-client";
 import ProModal from "@/components/ProModal";
 
-// Список пунктов для владельца салона
+// 🔥 Исправленные ключи модулей
 const OWNER_NAV = [
   { href: "/", label: "Заказы", icon: CalendarCheck, module: null },
   { href: "/specialists", label: "Специалисты", icon: Scissors, module: null },
   { href: "/schedule", label: "График работы", icon: CalendarDays, module: null },
   { href: "/clients", label: "Клиенты", icon: Users, module: null },
   { href: "/services", label: "Услуги", icon: LayoutGrid, module: null },
-  { href: "/promotions", label: "Акции", icon: Megaphone, module: "promotions" },
+  { href: "/promotions", label: "Акции", icon: Megaphone, module: "promocodes" },
   { href: "/loyalty", label: "Лояльность", icon: Gift, module: "loyalty" },
   { href: "/certificates", label: "Сертификаты", icon: Ticket, module: "certificates" },
   { href: "/retention", label: "Возвращаемость", icon: UserCheck, module: "retention" },
-  { href: "/broadcasts", label: "Рассылки", icon: Send, module: "broadcasts" },
-  { href: "/waitlist", label: "Лист ожидания", icon: Bell, module: "waitlist" },
+  { href: "/broadcasts", label: "Рассылки", icon: Send, module: "newsletters" },
+  { href: "/waitlist", label: "Лист ожидания", icon: Bell, module: "waiting_list" },
   { href: "/stock", label: "Склад", icon: Package, module: "stock" },
   { href: "/payouts", label: "Зарплаты", icon: Wallet, module: null },
   { href: "/analytics", label: "Аналитика", icon: BarChart3, module: "analytics" },
@@ -66,34 +66,50 @@ export default function Sidebar({ email }: { email?: string | null }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [lockedModule, setLockedModule] = useState("");
 
-  useEffect(() => {
-    async function loadData() {
-      const { data: isSuper } = await supabase.rpc("is_superadmin");
-      setIsSuperAdmin(!!isSuper);
+  // Функция загрузки модулей
+  async function loadModules() {
+    const { data: isSuper } = await supabase.rpc("is_superadmin");
+    setIsSuperAdmin(!!isSuper);
 
-      // Загружаем модули только для владельцев салонов
-      if (!isSuper) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: admin } = await supabase
-            .from("admins")
-            .select("shop_id")
-            .eq("user_uid", user.id)
+    if (!isSuper) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: admin } = await supabase
+          .from("admins")
+          .select("shop_id")
+          .eq("user_uid", user.id)
+          .single();
+
+        if (admin?.shop_id) {
+          const { data: shop } = await supabase
+            .from("shops")
+            .select("modules")
+            .eq("id", admin.shop_id)
             .single();
-
-          if (admin?.shop_id) {
-            const { data: shop } = await supabase
-              .from("shops")
-              .select("modules")
-              .eq("id", admin.shop_id)
-              .single();
-            setModules(shop?.modules ?? {});
-          }
+          console.log("📦 Модули салона в сайдбаре:", shop?.modules);
+          setModules(shop?.modules ?? {});
         }
       }
-      setLoading(false);
     }
-    loadData();
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    loadModules();
+
+    // Обновляем модули при возврате на страницу
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('🔄 Обновляем модули в сайдбаре...');
+        loadModules();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [supabase]);
 
   const handleLockedClick = (label: string) => {
