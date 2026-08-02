@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, CreditCard, Zap, Crown, Star } from "lucide-react";
+import { Plus, Pencil, Trash2, CreditCard, Zap, Crown, Star, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type Plan = {
@@ -85,10 +85,19 @@ export default function SuperAdminPlans() {
           <h1 className="text-2xl font-semibold text-neutral-900">Тарифы</h1>
           <p className="text-sm text-neutral-500">Управление тарифами платформы</p>
         </div>
-        <Button onClick={() => router.push("/superadmin/plans/new")}>
-          <Plus className="h-4 w-4" />
-          Создать тариф
-        </Button>
+        <div className="flex gap-3">
+          <Button
+            variant="outline"
+            onClick={() => router.push("/superadmin/modules")}
+          >
+            <Package className="h-4 w-4" />
+            Управление модулями
+          </Button>
+          <Button onClick={() => router.push("/superadmin/plans/new")}>
+            <Plus className="h-4 w-4" />
+            Создать тариф
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
