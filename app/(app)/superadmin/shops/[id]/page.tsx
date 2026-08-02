@@ -42,14 +42,23 @@ type Plan = {
   price_monthly: number;
 };
 
+// 🔥 Полный список модулей (синхронизирован с БД)
 const ALL_MODULES = [
+  // Базовые модули (всегда есть)
+  { key: "clients", label: "Клиенты" },
+  { key: "bookings", label: "Записи" },
+  { key: "specialists", label: "Специалисты" },
+  
+  // PRO модули
   { key: "analytics", label: "Аналитика" },
   { key: "loyalty", label: "Лояльность" },
+  { key: "newsletters", label: "Рассылки" },
+  { key: "retention", label: "Возвращаемость" },
+  
+  // PRO+ модули
   { key: "promotions", label: "Акции" },
   { key: "certificates", label: "Сертификаты" },
-  { key: "broadcasts", label: "Рассылки" },
   { key: "stock", label: "Склад" },
-  { key: "retention", label: "Удержание" },
   { key: "waitlist", label: "Лист ожидания" },
 ];
 
@@ -64,7 +73,6 @@ export default function ShopDetailPage() {
 
   useEffect(() => {
     async function loadData() {
-      // Загружаем салон
       const { data: shopData, error: shopError } = await supabase
         .from("shops")
         .select("*")
@@ -77,7 +85,6 @@ export default function ShopDetailPage() {
         return;
       }
 
-      // Загружаем планы
       const { data: plansData } = await supabase
         .from("plans")
         .select("id, name, price_monthly")
@@ -95,7 +102,6 @@ export default function ShopDetailPage() {
     if (!shop) return;
     setSaving(true);
 
-    // Получаем features выбранного плана
     const { data: plan } = await supabase
       .from("plans")
       .select("features")
@@ -348,27 +354,31 @@ export default function ShopDetailPage() {
             </p>
 
             <div className="mt-4 space-y-2">
-              {ALL_MODULES.map((mod) => (
-                <div
-                  key={mod.key}
-                  className="flex items-center justify-between rounded-lg border border-neutral-100 px-4 py-3"
-                >
-                  <span className="text-sm text-neutral-700">{mod.label}</span>
-                  <button
-                    onClick={() => toggleModule(mod.key)}
-                    disabled={saving}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                      shop.modules?.[mod.key] ? "bg-neutral-900" : "bg-neutral-300"
-                    } disabled:opacity-50`}
+              {ALL_MODULES.map((mod) => {
+                // Проверяем, есть ли модуль в shop.modules
+                const isActive = shop.modules?.[mod.key] ?? false;
+                return (
+                  <div
+                    key={mod.key}
+                    className="flex items-center justify-between rounded-lg border border-neutral-100 px-4 py-3"
                   >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                        shop.modules?.[mod.key] ? "translate-x-6" : "translate-x-1"
-                      }`}
-                    />
-                  </button>
-                </div>
-              ))}
+                    <span className="text-sm text-neutral-700">{mod.label}</span>
+                    <button
+                      onClick={() => toggleModule(mod.key)}
+                      disabled={saving}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                        isActive ? "bg-neutral-900" : "bg-neutral-300"
+                      } disabled:opacity-50`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                          isActive ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
