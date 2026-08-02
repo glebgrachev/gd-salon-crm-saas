@@ -9,6 +9,7 @@ import {
   Scissors,
   Users,
   LayoutGrid,
+  CalendarDays,
   Wallet,
   Settings,
   Shield,
