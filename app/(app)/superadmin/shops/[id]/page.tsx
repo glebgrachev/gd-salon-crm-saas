@@ -237,7 +237,7 @@ export default function ShopDetailPage() {
     const link = `https://t.me/${shop.bot_username}?start=shop_${shop.id}`;
     navigator.clipboard?.writeText(link);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 2500);
   };
 
   if (loading) {
@@ -431,22 +431,18 @@ export default function ShopDetailPage() {
                   <div className="flex flex-col gap-2">
                     <div className="flex items-start gap-2">
                       <span className="text-xs text-neutral-500 whitespace-nowrap pt-0.5">Ссылка:</span>
-                      <a
-                        href={botLinkWithShop}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-sm text-blue-600 hover:underline break-all"
+                      <button
+                        onClick={copyLink}
+                        className="text-sm text-blue-600 hover:underline break-all text-left cursor-pointer"
                       >
                         {botLinkWithShop}
-                      </a>
+                      </button>
                     </div>
-                    <button
-                      onClick={copyLink}
-                      className="self-end flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900"
-                    >
-                      {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-                      {copied ? "Скопировано" : "Копировать ссылку"}
-                    </button>
+                    {copied && (
+                      <div className="text-xs text-emerald-600 text-center animate-pulse">
+                        ✅ Ссылка скопирована!
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
