@@ -313,7 +313,14 @@ export default function TariffsPageContent() {
               </div>
 
               <div className="mt-auto pt-6">
-                {isCurrent ? (
+                {isCurrent && plan.price_monthly === 0 ? (
+                  <button
+                    disabled
+                    className="w-full rounded-lg border border-neutral-300 bg-transparent px-4 py-2 text-sm font-medium text-neutral-500 cursor-default"
+                  >
+                    Текущий тариф
+                  </button>
+                ) : isCurrent ? (
                   <button
                     onClick={() => handleActivate(plan.id)}
                     disabled={activating === plan.id}
