@@ -37,8 +37,21 @@ export default function ModuleEditPage() {
   });
 
   useEffect(() => {
-    if (!isNew) {
-      async function loadModule() {
+    async function loadData() {
+      if (isNew) {
+        // Для нового модуля — вычисляем следующий порядковый номер
+        const { data, error } = await supabase
+          .from("modules")
+          .select("sort_order")
+          .order("sort_order", { ascending: false })
+          .limit(1);
+
+        if (!error && data && data.length > 0) {
+          const nextOrder = data[0].sort_order + 1;
+          setModule((prev) => ({ ...prev, sort_order: nextOrder }));
+        }
+        setLoading(false);
+      } else {
         const { data, error } = await supabase
           .from("modules")
           .select("*")
@@ -54,9 +67,9 @@ export default function ModuleEditPage() {
         setModule(data);
         setLoading(false);
       }
-
-      loadModule();
     }
+
+    loadData();
   }, [params.id, isNew, router, supabase]);
 
   const saveModule = async () => {

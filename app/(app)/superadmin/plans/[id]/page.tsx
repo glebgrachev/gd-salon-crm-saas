@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, X } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,20 +25,6 @@ type Plan = {
   features: Record<string, number>;
   is_active: boolean;
   sort_order: number;
-};
-
-const MODULE_LABELS: Record<string, string> = {
-  clients: "Клиенты",
-  bookings: "Записи",
-  specialists: "Специалисты",
-  analytics: "Аналитика",
-  loyalty: "Лояльность",
-  newsletters: "Рассылки",
-  retention: "Возвращаемость",
-  promotions: "Акции",
-  certificates: "Сертификаты",
-  stock: "Склад",
-  waitlist: "Лист ожидания",
 };
 
 export default function PlanEditPage() {
@@ -70,7 +56,20 @@ export default function PlanEditPage() {
 
       setAllModules(modulesData || []);
 
-      if (!isNew) {
+      if (isNew) {
+        // Для нового тарифа — вычисляем следующий порядковый номер
+        const { data, error } = await supabase
+          .from("plans")
+          .select("sort_order")
+          .order("sort_order", { ascending: false })
+          .limit(1);
+
+        if (!error && data && data.length > 0) {
+          const nextOrder = data[0].sort_order + 1;
+          setPlan((prev) => ({ ...prev, sort_order: nextOrder }));
+        }
+        setLoading(false);
+      } else {
         const { data, error } = await supabase
           .from("plans")
           .select("*")
@@ -84,8 +83,8 @@ export default function PlanEditPage() {
         }
 
         setPlan(data);
+        setLoading(false);
       }
-      setLoading(false);
     }
 
     loadData();
@@ -231,7 +230,9 @@ export default function PlanEditPage() {
 
           <div className="mt-4 space-y-2">
             {allModules.map((mod) => {
-              const isActive = !!plan.features[mod.label.toLowerCase()];
+              const moduleKey = mod.label.toLowerCase();
+              const isActive = !!plan.features[moduleKey];
+              
               return (
                 <div
                   key={mod.id}
@@ -244,7 +245,7 @@ export default function PlanEditPage() {
                     )}
                   </div>
                   <button
-                    onClick={() => toggleModule(mod.label.toLowerCase())}
+                    onClick={() => toggleModule(moduleKey)}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
                       isActive ? "bg-neutral-900" : "bg-neutral-300"
                     }`}
@@ -261,7 +262,6 @@ export default function PlanEditPage() {
           </div>
         </div>
 
-        {/* Кнопки */}
         <div className="flex gap-3">
           <Button
             variant="outline"
