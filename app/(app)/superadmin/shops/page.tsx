@@ -134,16 +134,14 @@ export default function SuperAdminShops() {
                     {shop.blocked && (
                       <span className="text-xs text-red-500">🔒 Заблокирован</span>
                     )}
-                    {shop.subscription_expires_at && (
-                      <span className="text-xs text-neutral-400">
-                        до {formatDate(shop.subscription_expires_at)}
-                      </span>
-                    )}
                   </div>
                 </div>
               </div>
-              <span className="text-xs text-neutral-400">
-                {new Date(shop.created_at).toLocaleDateString("ru-RU")}
+              {/* Показываем дату окончания подписки */}
+              <span className="text-xs text-neutral-400 whitespace-nowrap ml-2">
+                {shop.subscription_expires_at 
+                  ? `до ${formatDate(shop.subscription_expires_at)}`
+                  : "без подписки"}
               </span>
             </div>
 
