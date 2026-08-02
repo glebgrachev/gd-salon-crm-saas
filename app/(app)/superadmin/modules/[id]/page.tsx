@@ -171,7 +171,7 @@ export default function ModuleEditPage() {
                 placeholder="Название иконки из Lucide (например: BarChart3)"
               />
               <p className="mt-1 text-xs text-neutral-400">
-                Используется для отображения в интерфейсе
+                Доступные иконки: BarChart3, Gift, Send, UserCheck, Megaphone, Ticket, Package, Bell, Users, CalendarCheck, Scissors
               </p>
             </div>
 

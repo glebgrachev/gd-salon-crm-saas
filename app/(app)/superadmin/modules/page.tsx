@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Package, Grid3x3 } from "lucide-react";
+import { Plus, Pencil, Trash2, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import * as LucideIcons from "lucide-react";
 
 type Module = {
   id: number;
@@ -16,6 +17,29 @@ type Module = {
   is_active: boolean;
   sort_order: number;
 };
+
+// Кеш для иконок, чтобы не создавать компонент каждый раз
+const iconCache: Record<string, any> = {};
+
+function getIconComponent(iconName: string | null) {
+  if (!iconName) return null;
+  
+  // Проверяем кеш
+  if (iconCache[iconName]) return iconCache[iconName];
+  
+  // Пробуем найти иконку в Lucide
+  try {
+    const Icon = (LucideIcons as any)[iconName];
+    if (Icon) {
+      iconCache[iconName] = Icon;
+      return Icon;
+    }
+  } catch {
+    // Игнорируем
+  }
+  
+  return null;
+}
 
 export default function SuperAdminModules() {
   const router = useRouter();
@@ -57,6 +81,16 @@ export default function SuperAdminModules() {
     }
   };
 
+  // Получаем иконку для модуля
+  const getModuleIcon = (module: Module) => {
+    const IconComponent = getIconComponent(module.icon);
+    if (IconComponent) {
+      return <IconComponent className="h-5 w-5 text-neutral-600" />;
+    }
+    // Заглушка, если иконка не найдена
+    return <Package className="h-5 w-5 text-neutral-400" />;
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -87,7 +121,7 @@ export default function SuperAdminModules() {
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
                 <div className="rounded-lg bg-neutral-100 p-2">
-                  <Package className="h-5 w-5 text-neutral-600" />
+                  {getModuleIcon(mod)}
                 </div>
                 <div>
                   <h3 className="font-semibold text-neutral-900">{mod.label}</h3>
