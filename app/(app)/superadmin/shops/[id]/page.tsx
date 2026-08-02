@@ -234,7 +234,7 @@ export default function ShopDetailPage() {
 
   const copyLink = () => {
     if (!shop?.bot_username) return;
-    const link = `https://t.me/${shop.bot_username}`;
+    const link = `https://t.me/${shop.bot_username}?start=shop_${shop.id}`;
     navigator.clipboard?.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -263,7 +263,9 @@ export default function ShopDetailPage() {
   }
 
   const currentPlan = plans.find((p) => p.id === shop.plan_id);
-  const botLink = shop.bot_username ? `https://t.me/${shop.bot_username}` : null;
+  const botLinkWithShop = shop.bot_username 
+    ? `https://t.me/${shop.bot_username}?start=shop_${shop.id}` 
+    : null;
 
   return (
     <div className="p-8">
@@ -424,17 +426,17 @@ export default function ShopDetailPage() {
                 {saving ? "Сохранение..." : "Сохранить бота"}
               </button>
 
-              {botLink && (
+              {botLinkWithShop && (
                 <div className="mt-3 flex items-center justify-between rounded-lg bg-neutral-50 px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-neutral-500">Ссылка:</span>
+                    <span className="text-xs text-neutral-500">Ссылка для клиентов:</span>
                     <a
-                      href={botLink}
+                      href={botLinkWithShop}
                       target="_blank"
                       rel="noreferrer"
                       className="text-sm text-blue-600 hover:underline truncate"
                     >
-                      {botLink}
+                      {botLinkWithShop}
                     </a>
                   </div>
                   <button
