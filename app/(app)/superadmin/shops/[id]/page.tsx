@@ -15,6 +15,9 @@ import {
   Users,
   CalendarCheck,
   CreditCard,
+  Bot,
+  Copy,
+  Check,
 } from "lucide-react";
 
 type Shop = {
@@ -34,6 +37,9 @@ type Shop = {
   total_specialists: number;
   created_at: string;
   subscription_expires_at: string | null;
+  bot_token: string | null;
+  bot_username: string | null;
+  bot_name: string | null;
 };
 
 type Plan = {
@@ -65,6 +71,7 @@ export default function ShopDetailPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -204,6 +211,35 @@ export default function ShopDetailPage() {
     setSaving(false);
   };
 
+  const saveBot = async () => {
+    if (!shop) return;
+    setSaving(true);
+
+    const { error } = await supabase
+      .from("shops")
+      .update({
+        bot_token: shop.bot_token,
+        bot_username: shop.bot_username,
+        bot_name: shop.bot_name,
+      })
+      .eq("id", shop.id);
+
+    if (error) {
+      toast.error("Не удалось сохранить данные бота");
+    } else {
+      toast.success("Данные бота сохранены");
+    }
+    setSaving(false);
+  };
+
+  const copyLink = () => {
+    if (!shop?.bot_username) return;
+    const link = `https://t.me/${shop.bot_username}`;
+    navigator.clipboard?.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -227,6 +263,7 @@ export default function ShopDetailPage() {
   }
 
   const currentPlan = plans.find((p) => p.id === shop.plan_id);
+  const botLink = shop.bot_username ? `https://t.me/${shop.bot_username}` : null;
 
   return (
     <div className="p-8">
@@ -250,38 +287,167 @@ export default function ShopDetailPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Левая колонка — данные салона */}
-        <div className="rounded-xl border border-neutral-200 bg-white p-6">
-          <h2 className="text-sm font-semibold text-neutral-900">Данные салона</h2>
-          <div className="mt-4 space-y-3">
-            {/* ... остальные поля без изменений ... */}
+        <div className="space-y-6">
+          {/* Основные данные */}
+          <div className="rounded-xl border border-neutral-200 bg-white p-6">
+            <h2 className="text-sm font-semibold text-neutral-900">Данные салона</h2>
+            <div className="mt-4 space-y-3">
+              <div className="flex items-center gap-3 border-b border-neutral-100 pb-3">
+                <Building2 className="h-5 w-5 text-neutral-400" />
+                <div>
+                  <p className="text-xs text-neutral-400">Название</p>
+                  <p className="font-medium text-neutral-900">{shop.name}</p>
+                </div>
+              </div>
+
+              {shop.contact_name && (
+                <div className="flex items-center gap-3 border-b border-neutral-100 pb-3">
+                  <User className="h-5 w-5 text-neutral-400" />
+                  <div>
+                    <p className="text-xs text-neutral-400">Контактное лицо</p>
+                    <p className="text-neutral-900">{shop.contact_name}</p>
+                  </div>
+                </div>
+              )}
+
+              {shop.email && (
+                <div className="flex items-center gap-3 border-b border-neutral-100 pb-3">
+                  <Mail className="h-5 w-5 text-neutral-400" />
+                  <div>
+                    <p className="text-xs text-neutral-400">Email</p>
+                    <p className="text-neutral-900">{shop.email}</p>
+                  </div>
+                </div>
+              )}
+
+              {shop.phone && (
+                <div className="flex items-center gap-3 border-b border-neutral-100 pb-3">
+                  <Phone className="h-5 w-5 text-neutral-400" />
+                  <div>
+                    <p className="text-xs text-neutral-400">Телефон</p>
+                    <p className="text-neutral-900">{shop.phone}</p>
+                  </div>
+                </div>
+              )}
+
+              {shop.address && (
+                <div className="flex items-center gap-3 border-b border-neutral-100 pb-3">
+                  <MapPin className="h-5 w-5 text-neutral-400" />
+                  <div>
+                    <p className="text-xs text-neutral-400">Адрес</p>
+                    <p className="text-neutral-900">{shop.address}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 grid grid-cols-3 gap-3 border-t border-neutral-100 pt-4">
+              <div className="text-center">
+                <p className="text-sm font-semibold text-neutral-900">{shop.total_clients}</p>
+                <p className="text-xs text-neutral-400">Клиентов</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-semibold text-neutral-900">{shop.total_bookings}</p>
+                <p className="text-xs text-neutral-400">Записей</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-semibold text-neutral-900">{shop.total_specialists}</p>
+                <p className="text-xs text-neutral-400">Специалистов</p>
+              </div>
+            </div>
+
+            <button
+              onClick={toggleBlock}
+              disabled={saving}
+              className={`mt-4 w-full rounded-lg px-4 py-2 text-sm font-medium transition ${
+                shop.blocked
+                  ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                  : "bg-red-600 text-white hover:bg-red-700"
+              } disabled:opacity-50`}
+            >
+              {shop.blocked ? "Разблокировать салон" : "Заблокировать салон"}
+            </button>
           </div>
 
-          <div className="mt-6 grid grid-cols-3 gap-3 border-t border-neutral-100 pt-4">
-            <div className="text-center">
-              <p className="text-sm font-semibold text-neutral-900">{shop.total_clients}</p>
-              <p className="text-xs text-neutral-400">Клиентов</p>
+          {/* Блок бота */}
+          <div className="rounded-xl border border-neutral-200 bg-white p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Bot className="h-5 w-5 text-neutral-400" />
+              <h2 className="text-sm font-semibold text-neutral-900">Telegram бот</h2>
             </div>
-            <div className="text-center">
-              <p className="text-sm font-semibold text-neutral-900">{shop.total_bookings}</p>
-              <p className="text-xs text-neutral-400">Записей</p>
-            </div>
-            <div className="text-center">
-              <p className="text-sm font-semibold text-neutral-900">{shop.total_specialists}</p>
-              <p className="text-xs text-neutral-400">Специалистов</p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Токен бота</label>
+                <input
+                  type="text"
+                  value={shop.bot_token || ""}
+                  onChange={(e) => setShop({ ...shop, bot_token: e.target.value || null })}
+                  placeholder="1234567890:ABCdefGHIjklmNOPqrstUVwxyz"
+                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                />
+                <p className="mt-1 text-xs text-neutral-400">
+                  Получите токен у <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">@BotFather</a>
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Username бота</label>
+                <input
+                  type="text"
+                  value={shop.bot_username || ""}
+                  onChange={(e) => setShop({ ...shop, bot_username: e.target.value || null })}
+                  placeholder="my_salon_bot"
+                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                />
+                <p className="mt-1 text-xs text-neutral-400">
+                  Без @, например: <span className="font-mono">my_salon_bot</span>
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Название бота</label>
+                <input
+                  type="text"
+                  value={shop.bot_name || ""}
+                  onChange={(e) => setShop({ ...shop, bot_name: e.target.value || null })}
+                  placeholder="Салон Красоты"
+                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                />
+              </div>
+
+              <button
+                onClick={saveBot}
+                disabled={saving}
+                className="w-full rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+              >
+                {saving ? "Сохранение..." : "Сохранить бота"}
+              </button>
+
+              {botLink && (
+                <div className="mt-3 flex items-center justify-between rounded-lg bg-neutral-50 px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-neutral-500">Ссылка:</span>
+                    <a
+                      href={botLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm text-blue-600 hover:underline truncate"
+                    >
+                      {botLink}
+                    </a>
+                  </div>
+                  <button
+                    onClick={copyLink}
+                    className="flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900"
+                  >
+                    {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                    {copied ? "Скопировано" : "Копировать"}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
-
-          <button
-            onClick={toggleBlock}
-            disabled={saving}
-            className={`mt-4 w-full rounded-lg px-4 py-2 text-sm font-medium transition ${
-              shop.blocked
-                ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                : "bg-red-600 text-white hover:bg-red-700"
-            } disabled:opacity-50`}
-          >
-            {shop.blocked ? "Разблокировать салон" : "Заблокировать салон"}
-          </button>
         </div>
 
         {/* Правая колонка — тариф и модули */}
