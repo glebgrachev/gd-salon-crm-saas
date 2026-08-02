@@ -47,7 +47,6 @@ const SUPERADMIN_NAV = [
   { href: "/superadmin/shops", label: "Салоны", icon: Building2 },
   { href: "/superadmin/users", label: "Пользователи", icon: Users },
   { href: "/superadmin/plans", label: "Тарифы", icon: CreditCard },
-  { href: "/superadmin/modules", label: "Модули", icon: Package },
   { href: "/superadmin/subscriptions", label: "Подписки", icon: CreditCard },
 ];
 
