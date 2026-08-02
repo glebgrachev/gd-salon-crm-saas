@@ -14,6 +14,7 @@ import {
   MapPin,
   Users,
   CalendarCheck,
+  CreditCard,
 } from "lucide-react";
 
 type Shop = {
@@ -25,13 +26,20 @@ type Shop = {
   address: string;
   inn: number | null;
   ogrn: number | null;
-  plan: string;
+  plan_id: number;
   modules: Record<string, boolean>;
   blocked: boolean;
   total_clients: number;
   total_bookings: number;
   total_specialists: number;
   created_at: string;
+  subscription_expires_at: string | null;
+};
+
+type Plan = {
+  id: number;
+  name: string;
+  price_monthly: number;
 };
 
 const ALL_MODULES = [
@@ -42,6 +50,7 @@ const ALL_MODULES = [
   { key: "broadcasts", label: "Рассылки" },
   { key: "stock", label: "Склад" },
   { key: "retention", label: "Удержание" },
+  { key: "waitlist", label: "Лист ожидания" },
 ];
 
 export default function ShopDetailPage() {
@@ -49,29 +58,66 @@ export default function ShopDetailPage() {
   const router = useRouter();
   const supabase = createClient();
   const [shop, setShop] = useState<Shop | null>(null);
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    async function loadShop() {
-      const { data, error } = await supabase
+    async function loadData() {
+      // Загружаем салон
+      const { data: shopData, error: shopError } = await supabase
         .from("shops")
         .select("*")
         .eq("id", params.id)
         .single();
 
-      if (error) {
+      if (shopError) {
         toast.error("Не удалось загрузить данные салона");
         router.push("/superadmin/shops");
         return;
       }
 
-      setShop(data);
+      // Загружаем планы
+      const { data: plansData } = await supabase
+        .from("plans")
+        .select("id, name, price_monthly")
+        .order("sort_order");
+
+      setShop(shopData);
+      setPlans(plansData || []);
       setLoading(false);
     }
 
-    loadShop();
+    loadData();
   }, [params.id, router, supabase]);
+
+  const changePlan = async (planId: number) => {
+    if (!shop) return;
+    setSaving(true);
+
+    // Получаем features выбранного плана
+    const { data: plan } = await supabase
+      .from("plans")
+      .select("features")
+      .eq("id", planId)
+      .single();
+
+    const { error } = await supabase
+      .from("shops")
+      .update({
+        plan_id: planId,
+        modules: plan?.features || {},
+      })
+      .eq("id", shop.id);
+
+    if (error) {
+      toast.error("Не удалось изменить тариф");
+    } else {
+      setShop({ ...shop, plan_id: planId, modules: plan?.features || {} });
+      toast.success("Тариф изменён");
+    }
+    setSaving(false);
+  };
 
   const toggleModule = async (key: string) => {
     if (!shop) return;
@@ -132,9 +178,11 @@ export default function ShopDetailPage() {
     );
   }
 
+  const currentPlan = plans.find((p) => p.id === shop.plan_id);
+
   return (
     <div className="p-8">
-      <div className="mb-6 flex items-center gap-4">
+      <div className="mb-6 flex items-center gap-4 flex-wrap">
         <Link
           href="/superadmin/shops"
           className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-900"
@@ -254,42 +302,74 @@ export default function ShopDetailPage() {
           </button>
         </div>
 
-        {/* Правая колонка — модули */}
-        <div className="rounded-xl border border-neutral-200 bg-white p-6">
-          <h2 className="text-sm font-semibold text-neutral-900">Модули</h2>
-          <p className="mt-1 text-xs text-neutral-400">
-            Включайте/выключайте функции для салона
-          </p>
-
-          <div className="mt-4 space-y-2">
-            {ALL_MODULES.map((mod) => (
-              <div
-                key={mod.key}
-                className="flex items-center justify-between rounded-lg border border-neutral-100 px-4 py-3"
+        {/* Правая колонка — тариф и модули */}
+        <div className="space-y-6">
+          {/* Управление тарифом */}
+          <div className="rounded-xl border border-neutral-200 bg-white p-6">
+            <div className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-neutral-400" />
+              <h2 className="text-sm font-semibold text-neutral-900">Тариф</h2>
+            </div>
+            
+            <div className="mt-4">
+              <select
+                value={shop.plan_id}
+                onChange={(e) => changePlan(Number(e.target.value))}
+                disabled={saving}
+                className="w-full rounded-lg border border-neutral-300 px-4 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900 disabled:opacity-50"
               >
-                <span className="text-sm text-neutral-700">{mod.label}</span>
-                <button
-                  onClick={() => toggleModule(mod.key)}
-                  disabled={saving}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                    shop.modules?.[mod.key] ? "bg-neutral-900" : "bg-neutral-300"
-                  } disabled:opacity-50`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                      shop.modules?.[mod.key] ? "translate-x-6" : "translate-x-1"
-                    }`}
-                  />
-                </button>
-              </div>
-            ))}
+                {plans.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.name} — {plan.price_monthly === 0 ? "Бесплатно" : `${plan.price_monthly} ₽/мес`}
+                  </option>
+                ))}
+              </select>
+              {currentPlan && (
+                <p className="mt-2 text-xs text-neutral-400">
+                  Текущий тариф: <span className="font-medium text-neutral-700">{currentPlan.name}</span>
+                </p>
+              )}
+              {shop.subscription_expires_at && (
+                <p className="mt-1 text-xs text-neutral-400">
+                  Действует до:{" "}
+                  <span className="font-medium text-neutral-700">
+                    {new Date(shop.subscription_expires_at).toLocaleDateString("ru-RU")}
+                  </span>
+                </p>
+              )}
+            </div>
           </div>
 
-          <div className="mt-4 rounded-lg bg-neutral-50 px-4 py-3 text-xs text-neutral-500">
-            Тариф:{" "}
-            <span className="font-medium text-neutral-700">
-              {shop.plan === "free" ? "Бесплатный" : "PRO"}
-            </span>
+          {/* Модули */}
+          <div className="rounded-xl border border-neutral-200 bg-white p-6">
+            <h2 className="text-sm font-semibold text-neutral-900">Модули</h2>
+            <p className="mt-1 text-xs text-neutral-400">
+              Включайте/выключайте функции для салона
+            </p>
+
+            <div className="mt-4 space-y-2">
+              {ALL_MODULES.map((mod) => (
+                <div
+                  key={mod.key}
+                  className="flex items-center justify-between rounded-lg border border-neutral-100 px-4 py-3"
+                >
+                  <span className="text-sm text-neutral-700">{mod.label}</span>
+                  <button
+                    onClick={() => toggleModule(mod.key)}
+                    disabled={saving}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                      shop.modules?.[mod.key] ? "bg-neutral-900" : "bg-neutral-300"
+                    } disabled:opacity-50`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                        shop.modules?.[mod.key] ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
