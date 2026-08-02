@@ -42,7 +42,7 @@ type Plan = {
   price_monthly: number;
 };
 
-// 🔥 Полный список модулей (синхронизирован с БД)
+// Полный список модулей (синхронизирован с БД)
 const ALL_MODULES = [
   // Базовые модули (всегда есть)
   { key: "clients", label: "Клиенты" },
@@ -102,27 +102,83 @@ export default function ShopDetailPage() {
     if (!shop) return;
     setSaving(true);
 
-    const { data: plan } = await supabase
-      .from("plans")
-      .select("features")
-      .eq("id", planId)
-      .single();
+    try {
+      // Получаем features выбранного плана
+      const { data: plan } = await supabase
+        .from("plans")
+        .select("features")
+        .eq("id", planId)
+        .single();
 
-    const { error } = await supabase
-      .from("shops")
-      .update({
+      // Рассчитываем новую дату окончания
+      let newExpiryDate = null;
+      
+      if (planId === 1) {
+        // Если переключаем на СТАРТ — очищаем дату
+        newExpiryDate = null;
+      } else {
+        // Для платных тарифов — продлеваем на месяц
+        const now = new Date();
+        
+        // Если у салона уже есть дата окончания и она в будущем — продлеваем от неё
+        if (shop.subscription_expires_at) {
+          const currentExpiry = new Date(shop.subscription_expires_at);
+          if (currentExpiry > now) {
+            // Продлеваем от текущей даты окончания
+            newExpiryDate = new Date(currentExpiry);
+            newExpiryDate.setMonth(newExpiryDate.getMonth() + 1);
+            newExpiryDate.setHours(23, 59, 59, 999);
+          } else {
+            // Если дата истекла — начинаем с сегодня
+            newExpiryDate = new Date();
+            newExpiryDate.setMonth(newExpiryDate.getMonth() + 1);
+            newExpiryDate.setHours(23, 59, 59, 999);
+          }
+        } else {
+          // Если нет даты — начинаем с сегодня
+          newExpiryDate = new Date();
+          newExpiryDate.setMonth(newExpiryDate.getMonth() + 1);
+          newExpiryDate.setHours(23, 59, 59, 999);
+        }
+      }
+
+      // Обновляем салон
+      const updateData: any = {
         plan_id: planId,
         modules: plan?.features || {},
-      })
-      .eq("id", shop.id);
+      };
+      
+      if (newExpiryDate !== null) {
+        updateData.subscription_expires_at = newExpiryDate.toISOString();
+      } else {
+        updateData.subscription_expires_at = null;
+      }
 
-    if (error) {
-      toast.error("Не удалось изменить тариф");
-    } else {
-      setShop({ ...shop, plan_id: planId, modules: plan?.features || {} });
-      toast.success("Тариф изменён");
+      const { error } = await supabase
+        .from("shops")
+        .update(updateData)
+        .eq("id", shop.id);
+
+      if (error) {
+        toast.error("Не удалось изменить тариф");
+      } else {
+        setShop({ 
+          ...shop, 
+          plan_id: planId, 
+          modules: plan?.features || {},
+          subscription_expires_at: newExpiryDate ? newExpiryDate.toISOString() : null
+        });
+        
+        const expiryText = newExpiryDate 
+          ? `до ${newExpiryDate.toLocaleDateString('ru-RU')}` 
+          : 'без подписки';
+        toast.success(`Тариф изменён (${expiryText})`);
+      }
+    } catch (error) {
+      toast.error("Ошибка при изменении тарифа");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const toggleModule = async (key: string) => {
@@ -343,6 +399,11 @@ export default function ShopDetailPage() {
                   </span>
                 </p>
               )}
+              {!shop.subscription_expires_at && shop.plan_id !== 1 && (
+                <p className="mt-1 text-xs text-amber-600">
+                  ⚠️ Подписка не активна
+                </p>
+              )}
             </div>
           </div>
 
@@ -355,7 +416,6 @@ export default function ShopDetailPage() {
 
             <div className="mt-4 space-y-2">
               {ALL_MODULES.map((mod) => {
-                // Проверяем, есть ли модуль в shop.modules
                 const isActive = shop.modules?.[mod.key] ?? false;
                 return (
                   <div
