@@ -16,8 +16,6 @@ import {
   CalendarCheck,
   CreditCard,
   Bot,
-  Copy,
-  Check,
 } from "lucide-react";
 
 type Shop = {
@@ -220,7 +218,7 @@ export default function ShopDetailPage() {
       .update({
         bot_token: shop.bot_token,
         bot_username: shop.bot_username,
-        bot_name: shop.bot_name,
+        bot_name: shop.bot_name || shop.name,
       })
       .eq("id", shop.id);
 
@@ -237,7 +235,7 @@ export default function ShopDetailPage() {
     const link = `https://t.me/${shop.bot_username}?start=shop_${shop.id}`;
     navigator.clipboard?.writeText(link);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   if (loading) {
@@ -411,11 +409,14 @@ export default function ShopDetailPage() {
                 <label className="block text-xs text-neutral-500 mb-1">Название бота</label>
                 <input
                   type="text"
-                  value={shop.bot_name || ""}
+                  value={shop.bot_name || shop.name}
                   onChange={(e) => setShop({ ...shop, bot_name: e.target.value || null })}
                   placeholder="Салон Красоты"
                   className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
                 />
+                <p className="mt-1 text-xs text-neutral-400">
+                  По умолчанию используется название салона: <span className="font-medium">{shop.name}</span>
+                </p>
               </div>
 
               <button
