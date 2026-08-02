@@ -427,25 +427,27 @@ export default function ShopDetailPage() {
               </button>
 
               {botLinkWithShop && (
-                <div className="mt-3 flex items-center justify-between rounded-lg bg-neutral-50 px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-neutral-500">Ссылка для клиентов:</span>
-                    <a
-                      href={botLinkWithShop}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-sm text-blue-600 hover:underline truncate"
+                <div className="mt-3 rounded-lg bg-neutral-50 px-3 py-2">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-start gap-2">
+                      <span className="text-xs text-neutral-500 whitespace-nowrap pt-0.5">Ссылка:</span>
+                      <a
+                        href={botLinkWithShop}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm text-blue-600 hover:underline break-all"
+                      >
+                        {botLinkWithShop}
+                      </a>
+                    </div>
+                    <button
+                      onClick={copyLink}
+                      className="self-end flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900"
                     >
-                      {botLinkWithShop}
-                    </a>
+                      {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                      {copied ? "Скопировано" : "Копировать ссылку"}
+                    </button>
                   </div>
-                  <button
-                    onClick={copyLink}
-                    className="flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900"
-                  >
-                    {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-                    {copied ? "Скопировано" : "Копировать"}
-                  </button>
                 </div>
               )}
             </div>
