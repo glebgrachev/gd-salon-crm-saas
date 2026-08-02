@@ -9,20 +9,12 @@ import {
   Scissors,
   Users,
   LayoutGrid,
-  Megaphone,
-  BarChart3,
-  Gift,
-  Ticket,
-  UserCheck,
-  Send,
   Wallet,
-  CalendarDays,
-  Package,
-  Bell,
   Settings,
   Shield,
   Building2,
   CreditCard,
+  Package,
   Star,
   LogOut,
 } from "lucide-react";
@@ -50,46 +42,29 @@ const SUPERADMIN_NAV = [
   { href: "/superadmin/subscriptions", label: "Подписки", icon: CreditCard },
 ];
 
-// Маппинг названий иконок из БД к компонентам Lucide
-const ICON_MAP: Record<string, any> = {
-  CalendarCheck,
-  Scissors,
-  Users,
-  LayoutGrid,
-  Megaphone,
-  BarChart3,
-  Gift,
-  Ticket,
-  UserCheck,
-  Send,
-  Wallet,
-  CalendarDays,
-  Package,
-  Bell,
-  Settings,
-  Shield,
-  Building2,
-  CreditCard,
-  Star,
-  LogOut,
+// Маппинг модулей → href
+const MODULE_HREF: Record<string, string> = {
+  analytics: "/analytics",
+  loyalty: "/loyalty",
+  newsletters: "/broadcasts",
+  retention: "/retention",
+  promotions: "/promotions",
+  certificates: "/certificates",
+  stock: "/stock",
+  waitlist: "/waitlist",
 };
 
-function getIconComponent(iconName: string | null) {
-  if (!iconName) return null;
-  // Пробуем найти иконку в маппинге
-  const Icon = ICON_MAP[iconName];
-  if (Icon) return Icon;
-  
-  // Пробуем динамически импортировать из Lucide
-  try {
-    const LucideIcon = (LucideIcons as any)[iconName];
-    if (LucideIcon) return LucideIcon;
-  } catch {
-    // Игнорируем
-  }
-  
-  return null;
-}
+// Маппинг модулей → label
+const MODULE_LABEL: Record<string, string> = {
+  analytics: "Аналитика",
+  loyalty: "Лояльность",
+  newsletters: "Рассылки",
+  retention: "Возвращаемость",
+  promotions: "Акции",
+  certificates: "Сертификаты",
+  stock: "Склад",
+  waitlist: "Лист ожидания",
+};
 
 export default function Sidebar({ email }: { email?: string | null }) {
   const pathname = usePathname();
@@ -97,7 +72,7 @@ export default function Sidebar({ email }: { email?: string | null }) {
   const supabase = createClient();
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [modules, setModules] = useState<Record<string, boolean> | null>(null);
-  const [moduleIcons, setModuleIcons] = useState<Record<string, string>>({});
+  const [allModules, setAllModules] = useState<{ key: string; icon: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [lockedModule, setLockedModule] = useState("");
@@ -107,6 +82,25 @@ export default function Sidebar({ email }: { email?: string | null }) {
       const { data: isSuper } = await supabase.rpc("is_superadmin");
       setIsSuperAdmin(!!isSuper);
 
+      // Загружаем все доступные модули из БД (для отображения в сайдбаре)
+      const { data: allModulesData } = await supabase
+        .from("modules")
+        .select("label, icon")
+        .eq("is_active", true)
+        .order("sort_order");
+
+      const modulesList = (allModulesData || [])
+        .map((m) => {
+          const key = m.label.toLowerCase();
+          // Пропускаем базовые модули (они уже в BASE_NAV)
+          if (["clients", "bookings", "specialists"].includes(key)) return null;
+          return { key, icon: m.icon };
+        })
+        .filter(Boolean) as { key: string; icon: string | null }[];
+
+      setAllModules(modulesList);
+
+      // Загружаем модули для текущего салона
       if (!isSuper) {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
@@ -125,20 +119,6 @@ export default function Sidebar({ email }: { email?: string | null }) {
             setModules(shop?.modules ?? {});
           }
         }
-
-        // Загружаем иконки для модулей из БД
-        const { data: modulesData } = await supabase
-          .from("modules")
-          .select("label, icon")
-          .eq("is_active", true);
-
-        const iconsMap: Record<string, string> = {};
-        (modulesData || []).forEach((m) => {
-          if (m.icon) {
-            iconsMap[m.label.toLowerCase()] = m.icon;
-          }
-        });
-        setModuleIcons(iconsMap);
       }
       setLoading(false);
     }
@@ -151,60 +131,36 @@ export default function Sidebar({ email }: { email?: string | null }) {
     setModalOpen(true);
   };
 
-  // Динамические пункты меню (модули)
-  const getModuleNavItems = () => {
-    if (isSuperAdmin) return [];
-
-    const moduleKeys = Object.keys(modules || {});
-    const moduleNavItems = moduleKeys
-      .filter((key) => key !== "clients" && key !== "bookings" && key !== "specialists")
-      .map((key) => {
-        const labelMap: Record<string, string> = {
-          analytics: "Аналитика",
-          loyalty: "Лояльность",
-          newsletters: "Рассылки",
-          retention: "Возвращаемость",
-          promotions: "Акции",
-          certificates: "Сертификаты",
-          stock: "Склад",
-          waitlist: "Лист ожидания",
-        };
-
-        const hrefMap: Record<string, string> = {
-          analytics: "/analytics",
-          loyalty: "/loyalty",
-          newsletters: "/broadcasts",
-          retention: "/retention",
-          promotions: "/promotions",
-          certificates: "/certificates",
-          stock: "/stock",
-          waitlist: "/waitlist",
-        };
-
-        const label = labelMap[key] || key;
-        const href = hrefMap[key] || `/${key}`;
-        const iconName = moduleIcons[key] || "Package";
-        const IconComponent = getIconComponent(iconName) || Package;
-
-        return {
-          href,
-          label,
-          icon: IconComponent,
-          module: key,
-          isLocked: !hasModule(modules, key as ModuleKey),
-        };
-      });
-
-    return moduleNavItems;
+  // Получаем иконку по имени
+  const getIconComponent = (iconName: string | null) => {
+    if (!iconName) return Package;
+    try {
+      const Icon = (LucideIcons as any)[iconName];
+      return Icon || Package;
+    } catch {
+      return Package;
+    }
   };
 
-  // Строим пункты меню
+  // Строим пункты меню для владельца салона
+  const ownerNavItems = [
+    ...BASE_NAV,
+    ...allModules.map(({ key, icon }) => {
+      const isLocked = !hasModule(modules, key as ModuleKey);
+      const IconComponent = getIconComponent(icon);
+      return {
+        href: MODULE_HREF[key] || `/${key}`,
+        label: MODULE_LABEL[key] || key,
+        icon: IconComponent,
+        module: key,
+        isLocked,
+      };
+    }),
+  ];
+
   const navItems = isSuperAdmin
-    ? SUPERADMIN_NAV
-    : [
-        ...BASE_NAV,
-        ...getModuleNavItems(),
-      ];
+    ? SUPERADMIN_NAV.map((item) => ({ ...item, isLocked: false }))
+    : ownerNavItems;
 
   if (loading) {
     return (
@@ -227,7 +183,7 @@ export default function Sidebar({ email }: { email?: string | null }) {
         </div>
 
         <nav className="flex-1 space-y-0.5 px-3">
-          {navItems.map(({ href, label, icon: Icon, module, isLocked }) => {
+          {navItems.map(({ href, label, icon: Icon, isLocked }) => {
             const isActive = isSuperAdmin
               ? href === "/superadmin"
                 ? pathname === "/superadmin"
