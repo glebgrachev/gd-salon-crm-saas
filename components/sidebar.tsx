@@ -3,19 +3,25 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import * as LucideIcons from "lucide-react";
 import {
   CalendarCheck,
   Scissors,
   Users,
   LayoutGrid,
-  CalendarDays,
+  Megaphone,
+  BarChart3,
+  Gift,
+  Ticket,
+  UserCheck,
+  Send,
   Wallet,
+  CalendarDays,
+  Package,
+  Bell,
   Settings,
   Shield,
   Building2,
   CreditCard,
-  Package,
   Star,
   LogOut,
 } from "lucide-react";
@@ -23,15 +29,23 @@ import { createClient } from "@/lib/supabase/client";
 import { hasModule, type ModuleKey } from "@/lib/permissions-client";
 import ProModal from "@/components/ProModal";
 
-// Базовые пункты (всегда есть, без модулей)
-const BASE_NAV = [
-  { href: "/", label: "Заказы", icon: CalendarCheck },
-  { href: "/specialists", label: "Специалисты", icon: Scissors },
-  { href: "/schedule", label: "График работы", icon: CalendarDays },
-  { href: "/clients", label: "Клиенты", icon: Users },
-  { href: "/services", label: "Услуги", icon: LayoutGrid },
-  { href: "/payouts", label: "Зарплаты", icon: Wallet },
-  { href: "/settings", label: "Настройки", icon: Settings },
+// Список пунктов для владельца салона не суперадминов
+const OWNER_NAV = [
+  { href: "/", label: "Заказы", icon: CalendarCheck, module: null },
+  { href: "/specialists", label: "Специалисты", icon: Scissors, module: null },
+  { href: "/schedule", label: "График работы", icon: CalendarDays, module: null },
+  { href: "/clients", label: "Клиенты", icon: Users, module: null },
+  { href: "/services", label: "Услуги", icon: LayoutGrid, module: null },
+  { href: "/promotions", label: "Акции", icon: Megaphone, module: "promotions" },
+  { href: "/loyalty", label: "Лояльность", icon: Gift, module: "loyalty" },
+  { href: "/certificates", label: "Сертификаты", icon: Ticket, module: "certificates" },
+  { href: "/retention", label: "Возвращаемость", icon: UserCheck, module: "retention" },
+  { href: "/broadcasts", label: "Рассылки", icon: Send, module: "broadcasts" },
+  { href: "/waitlist", label: "Лист ожидания", icon: Bell, module: "waitlist" },
+  { href: "/stock", label: "Склад", icon: Package, module: "stock" },
+  { href: "/payouts", label: "Зарплаты", icon: Wallet, module: null },
+  { href: "/analytics", label: "Аналитика", icon: BarChart3, module: "analytics" },
+  { href: "/settings", label: "Настройки", icon: Settings, module: null },
 ];
 
 // Список пунктов для суперадмина
@@ -39,33 +53,9 @@ const SUPERADMIN_NAV = [
   { href: "/superadmin", label: "Дашборд", icon: Shield },
   { href: "/superadmin/shops", label: "Салоны", icon: Building2 },
   { href: "/superadmin/users", label: "Пользователи", icon: Users },
-  { href: "/superadmin/plans", label: "Тарифы", icon: CreditCard },
+  { href: "/superadmin/plans", label: "Тарифы", icon: CreditCard }, // ← ДОБАВЛЕН
   { href: "/superadmin/subscriptions", label: "Подписки", icon: CreditCard },
 ];
-
-// Маппинг модулей → href
-const MODULE_HREF: Record<string, string> = {
-  analytics: "/analytics",
-  loyalty: "/loyalty",
-  newsletters: "/broadcasts",
-  retention: "/retention",
-  promotions: "/promotions",
-  certificates: "/certificates",
-  stock: "/stock",
-  waitlist: "/waitlist",
-};
-
-// Маппинг модулей → label
-const MODULE_LABEL: Record<string, string> = {
-  analytics: "Аналитика",
-  loyalty: "Лояльность",
-  newsletters: "Рассылки",
-  retention: "Возвращаемость",
-  promotions: "Акции",
-  certificates: "Сертификаты",
-  stock: "Склад",
-  waitlist: "Лист ожидания",
-};
 
 export default function Sidebar({ email }: { email?: string | null }) {
   const pathname = usePathname();
@@ -73,7 +63,6 @@ export default function Sidebar({ email }: { email?: string | null }) {
   const supabase = createClient();
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [modules, setModules] = useState<Record<string, boolean> | null>(null);
-  const [allModules, setAllModules] = useState<{ key: string; icon: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [lockedModule, setLockedModule] = useState("");
@@ -83,25 +72,7 @@ export default function Sidebar({ email }: { email?: string | null }) {
       const { data: isSuper } = await supabase.rpc("is_superadmin");
       setIsSuperAdmin(!!isSuper);
 
-      // Загружаем все доступные модули из БД (для отображения в сайдбаре)
-      const { data: allModulesData } = await supabase
-        .from("modules")
-        .select("label, icon")
-        .eq("is_active", true)
-        .order("sort_order");
-
-      const modulesList = (allModulesData || [])
-        .map((m) => {
-          const key = m.label.toLowerCase();
-          // Пропускаем базовые модули (они уже в BASE_NAV)
-          if (["clients", "bookings", "specialists"].includes(key)) return null;
-          return { key, icon: m.icon };
-        })
-        .filter(Boolean) as { key: string; icon: string | null }[];
-
-      setAllModules(modulesList);
-
-      // Загружаем модули для текущего салона
+      // Загружаем модули только для владельцев салонов
       if (!isSuper) {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
@@ -123,7 +94,6 @@ export default function Sidebar({ email }: { email?: string | null }) {
       }
       setLoading(false);
     }
-
     loadData();
   }, [supabase]);
 
@@ -132,36 +102,13 @@ export default function Sidebar({ email }: { email?: string | null }) {
     setModalOpen(true);
   };
 
-  // Получаем иконку по имени
-  const getIconComponent = (iconName: string | null) => {
-    if (!iconName) return Package;
-    try {
-      const Icon = (LucideIcons as any)[iconName];
-      return Icon || Package;
-    } catch {
-      return Package;
-    }
-  };
-
-  // Строим пункты меню для владельца салона
-  const ownerNavItems = [
-    ...BASE_NAV,
-    ...allModules.map(({ key, icon }) => {
-      const isLocked = !hasModule(modules, key as ModuleKey);
-      const IconComponent = getIconComponent(icon);
-      return {
-        href: MODULE_HREF[key] || `/${key}`,
-        label: MODULE_LABEL[key] || key,
-        icon: IconComponent,
-        module: key,
-        isLocked,
-      };
-    }),
-  ];
-
+  // Строим пункты меню с пометкой о блокировке
   const navItems = isSuperAdmin
-    ? SUPERADMIN_NAV.map((item) => ({ ...item, isLocked: false }))
-    : ownerNavItems;
+    ? SUPERADMIN_NAV
+    : OWNER_NAV.map((item) => {
+        const isLocked = item.module && !hasModule(modules, item.module as ModuleKey);
+        return { ...item, isLocked: !!isLocked };
+      });
 
   if (loading) {
     return (
@@ -193,14 +140,12 @@ export default function Sidebar({ email }: { email?: string | null }) {
               ? pathname === "/"
               : pathname.startsWith(href);
 
-            const locked = isSuperAdmin ? false : (isLocked ?? false);
-
             return (
               <Link
                 key={href}
-                href={locked ? "#" : href}
+                href={isLocked ? "#" : href}
                 onClick={(e) => {
-                  if (locked) {
+                  if (isLocked) {
                     e.preventDefault();
                     handleLockedClick(label);
                   }
@@ -208,14 +153,14 @@ export default function Sidebar({ email }: { email?: string | null }) {
                 className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
                   isActive
                     ? "bg-neutral-100 font-medium text-neutral-900"
-                    : locked
+                    : isLocked
                     ? "text-neutral-500 hover:bg-neutral-50"
                     : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
                 }`}
               >
                 <Icon size={17} strokeWidth={1.75} />
                 {label}
-                {locked && (
+                {isLocked && (
                   <Star className="ml-auto h-4 w-4 fill-amber-200 text-amber-400" />
                 )}
               </Link>
