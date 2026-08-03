@@ -70,7 +70,6 @@ export default function ShopDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [showToken, setShowToken] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -389,24 +388,13 @@ export default function ShopDetailPage() {
               {/* Поле для ввода токена (скрытое) */}
               <div>
                 <label className="block text-xs text-neutral-500 mb-1">Токен бота</label>
-                <div className="flex gap-2">
-                  <input
-                    type={showToken ? "text" : "password"}
-                    value={shop.bot_token || ""}
-                    onChange={(e) => setShop({ ...shop, bot_token: e.target.value || null })}
-                    placeholder={shop.bot_token ? "••••••••••••••••" : "Вставьте токен"}
-                    className="flex-1 rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
-                  />
-                  {shop.bot_token && (
-                    <button
-                      type="button"
-                      onClick={() => setShowToken(!showToken)}
-                      className="rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-50"
-                    >
-                      {showToken ? "🙈" : "👁️"}
-                    </button>
-                  )}
-                </div>
+                <input
+                  type="password"
+                  value={shop.bot_token || ""}
+                  onChange={(e) => setShop({ ...shop, bot_token: e.target.value || null })}
+                  placeholder={shop.bot_token ? "••••••••••••••••" : "Вставьте токен"}
+                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                />
                 <p className="mt-1 text-xs text-neutral-400">
                   {shop.bot_token ? "✅ Токен сохранён" : "Токен не сохранён"}
                 </p>
