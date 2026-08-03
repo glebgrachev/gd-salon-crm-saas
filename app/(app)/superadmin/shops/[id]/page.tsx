@@ -35,6 +35,7 @@ type Shop = {
   total_specialists: number;
   created_at: string;
   subscription_expires_at: string | null;
+  bot_token: string | null;
   bot_username: string | null;
   bot_name: string | null;
 };
@@ -74,7 +75,7 @@ export default function ShopDetailPage() {
     async function loadData() {
       const { data: shopData, error: shopError } = await supabase
         .from("shops")
-        .select("id, name, phone, email, contact_name, address, inn, ogrn, plan_id, modules, blocked, total_clients, total_bookings, total_specialists, created_at, subscription_expires_at, bot_username, bot_name")
+        .select("*")
         .eq("id", params.id)
         .single();
 
@@ -212,18 +213,27 @@ export default function ShopDetailPage() {
     if (!shop) return;
     setSaving(true);
 
+    const updates: any = {
+      bot_username: shop.bot_username,
+      bot_name: shop.bot_name || shop.name,
+    };
+
+    // Токен сохраняем только если он был введён (новый или изменённый)
+    if (shop.bot_token && shop.bot_token.trim()) {
+      updates.bot_token = shop.bot_token;
+    }
+
     const { error } = await supabase
       .from("shops")
-      .update({
-        bot_username: shop.bot_username,
-        bot_name: shop.bot_name || shop.name,
-      })
+      .update(updates)
       .eq("id", shop.id);
 
     if (error) {
       toast.error("Не удалось сохранить данные бота");
     } else {
       toast.success("Данные бота сохранены");
+      // После сохранения очищаем поле токена в состоянии, чтобы не отображался
+      setShop({ ...shop, bot_token: null });
     }
     setSaving(false);
   };
@@ -375,6 +385,21 @@ export default function ShopDetailPage() {
             </div>
 
             <div className="space-y-3">
+              {/* Поле для ввода токена (скрытое) */}
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Токен бота</label>
+                <input
+                  type="password"
+                  value={shop.bot_token || ""}
+                  onChange={(e) => setShop({ ...shop, bot_token: e.target.value || null })}
+                  placeholder="Вставьте токен (не будет отображаться)"
+                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+                />
+                <p className="mt-1 text-xs text-neutral-400">
+                  Токен виден только при вставке и не сохраняется в интерфейсе
+                </p>
+              </div>
+
               <div>
                 <label className="block text-xs text-neutral-500 mb-1">Username бота</label>
                 <input
