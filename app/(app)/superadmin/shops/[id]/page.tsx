@@ -213,19 +213,27 @@ export default function ShopDetailPage() {
     if (!shop) return;
     setSaving(true);
 
+    const updates: any = {
+      bot_username: shop.bot_username,
+      bot_name: shop.bot_name || shop.name,
+    };
+
+    // Токен сохраняем только если он был введён (новый или изменённый)
+    if (shop.bot_token && shop.bot_token.trim()) {
+      updates.bot_token = shop.bot_token;
+    }
+
     const { error } = await supabase
       .from("shops")
-      .update({
-        bot_token: shop.bot_token,
-        bot_username: shop.bot_username,
-        bot_name: shop.bot_name || shop.name,
-      })
+      .update(updates)
       .eq("id", shop.id);
 
     if (error) {
       toast.error("Не удалось сохранить данные бота");
     } else {
       toast.success("Данные бота сохранены");
+      // После сохранения очищаем поле токена в состоянии, чтобы не отображался
+      setShop({ ...shop, bot_token: null });
     }
     setSaving(false);
   };
@@ -235,7 +243,7 @@ export default function ShopDetailPage() {
     const link = `https://t.me/${shop.bot_username}?start=shop_${shop.id}`;
     navigator.clipboard?.writeText(link);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 2500);
   };
 
   if (loading) {
@@ -377,17 +385,18 @@ export default function ShopDetailPage() {
             </div>
 
             <div className="space-y-3">
+              {/* Поле для ввода токена (скрытое) */}
               <div>
                 <label className="block text-xs text-neutral-500 mb-1">Токен бота</label>
                 <input
-                  type="text"
+                  type="password"
                   value={shop.bot_token || ""}
                   onChange={(e) => setShop({ ...shop, bot_token: e.target.value || null })}
-                  placeholder="1234567890:ABCdefGHIjklmNOPqrstUVwxyz"
+                  placeholder="Вставьте токен (не будет отображаться)"
                   className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
                 />
                 <p className="mt-1 text-xs text-neutral-400">
-                  Получите токен у <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">@BotFather</a>
+                  Токен виден только при вставке и не сохраняется в интерфейсе
                 </p>
               </div>
 
