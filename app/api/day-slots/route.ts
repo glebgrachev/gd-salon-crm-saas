@@ -43,14 +43,27 @@ export async function GET(req: Request) {
     return json({ error: "bad_request" }, 400);
   }
 
+  // ===== 4. ПОЛУЧАЕМ busyRanges ИЗ ЗАПРОСА =====
+  let busyRanges: { starts_at: string; ends_at: string }[] = [];
+  const busyRangesParam = searchParams.get("busyRanges");
+  if (busyRangesParam) {
+    try {
+      busyRanges = JSON.parse(decodeURIComponent(busyRangesParam));
+    } catch {
+      // игнорируем ошибки парсинга
+    }
+  }
+
   // Получаем часовой пояс из заголовков или используем UTC
   const timezone = req.headers.get('x-timezone') || 'UTC';
 
+  // ===== 5. ВЫЗЫВАЕМ RPC С busyRanges =====
   const { data, error } = await admin.rpc("get_day_slots", {
     p_specialist_id: specialist,
     p_service_id: service,
     p_date: date,
     p_tz: timezone,
+    p_busy_ranges: busyRanges.length > 0 ? busyRanges : null,
   });
 
   if (error) return json({ error: error.message }, 500);
