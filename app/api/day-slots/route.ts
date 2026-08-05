@@ -16,11 +16,15 @@ export async function GET(req: Request) {
     return json({ error: "bad_request" }, 400);
   }
 
+  // Получаем часовой пояс из заголовков или используем UTC
+  const timezone = req.headers.get('x-timezone') || 'UTC';
+
   const admin = createAdmin();
   const { data, error } = await admin.rpc("get_day_slots", {
     p_specialist_id: specialist,
     p_service_id: service,
     p_date: date,
+    p_tz: timezone, // <-- ДОБАВЛЕНО!
   });
 
   if (error) return json({ error: error.message }, 500);
