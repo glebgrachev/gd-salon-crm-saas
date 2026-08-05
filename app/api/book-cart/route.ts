@@ -22,6 +22,7 @@ type InItem = {
 export async function POST(req: Request) {
   let body: {
     initData?: string;
+    shop_id?: string;
     items?: InItem[];
     points?: number;
     cert?: number;
@@ -34,19 +35,43 @@ export async function POST(req: Request) {
     return json({ error: "bad_json" }, 400);
   }
 
-  const user = validateInitData(body.initData ?? "", process.env.TELEGRAM_BOT_TOKEN!);
+  // ===== 1. ПОЛУЧАЕМ shop_id ИЗ ЗАПРОСА =====
+  const shopId = body.shop_id;
+  if (!shopId) {
+    console.error('❌ shop_id не передан');
+    return json({ error: "shop_id_required" }, 400);
+  }
+
+  const admin = createAdmin();
+
+  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА ИЗ ТАБЛИЦЫ shops =====
+  const { data: shop, error: shopError } = await admin
+    .from("shops")
+    .select("bot_token")
+    .eq("id", Number(shopId))
+    .maybeSingle();
+
+  if (shopError || !shop?.bot_token) {
+    console.error('❌ Токен для салона не найден:', shopId);
+    return json({ error: "bot_token_not_found" }, 500);
+  }
+
+  // ===== 3. ПРОВЕРЯЕМ initData С ТОКЕНОМ САЛОНА =====
+  const user = validateInitData(body.initData ?? "", shop.bot_token);
   if (!user) return json({ error: "unauthorized" }, 401);
+
   const items = body.items ?? [];
   if (items.length === 0) return json({ error: "empty" }, 400);
 
-  const admin = createAdmin();
+  // ===== 4. ОСТАЛЬНАЯ ЛОГИКА (без изменений) =====
 
   // длительности услуг (для ends_at)
   const serviceIds = [...new Set(items.map((i) => i.service_id))];
   const { data: svcRows } = await admin
     .from("services")
     .select("id, duration_min")
-    .in("id", serviceIds);
+    .in("id", serviceIds)
+    .eq("shop_id", Number(shopId)); // ← ДОБАВЛЯЕМ shop_id
   const durById = new Map(((svcRows as { id: string; duration_min: number }[]) ?? []).map((s) => [s.id, s.duration_min]));
 
   // легитимные подарки — пересчёт по обычным позициям
@@ -124,7 +149,6 @@ export async function POST(req: Request) {
     redeemTotal = Math.max(0, Math.min(reqPoints, maxByPct, balance));
 
     if (redeemTotal > 0) {
-      // метод наибольшего остатка: раздаём целые баллы пропорционально цене позиции
       const raw = rpcItems.map((r) => (redeemTotal * Number(r.final_price)) / cartTotal);
       const alloc = raw.map((x) => Math.floor(x));
       let left = redeemTotal - alloc.reduce((a, b) => a + b, 0);
@@ -160,7 +184,6 @@ export async function POST(req: Request) {
       certTotal = Math.max(0, Math.min(reqCert, Number(crow.balance), moneyAfterPoints));
 
       if (certTotal > 0) {
-        // распределяем рубли сертификата пропорционально цене позиции (наиб. остаток)
         const raw = rpcItems.map((r) => (certTotal * Number(r.final_price)) / cartTotal);
         const alloc = raw.map((x) => Math.floor(x));
         let left = certTotal - alloc.reduce((a, b) => a + b, 0);
@@ -180,13 +203,14 @@ export async function POST(req: Request) {
   }
   if (certTotal === 0) rpcItems.forEach((r) => { r.cert_to_redeem = 0; r.cert_id = null; });
 
-  // пользователь
+  // ===== 5. СОЗДАЁМ/ОБНОВЛЯЕМ ПОЛЬЗОВАТЕЛЯ С shop_id =====
   await admin.from("users").upsert(
     {
       telegram_id: user.id,
       first_name: user.first_name ?? null,
       last_name: user.last_name ?? null,
       username: user.username ?? null,
+      shop_id: Number(shopId), // ← ДОБАВЛЯЕМ shop_id
     },
     { onConflict: "telegram_id" },
   );
@@ -230,8 +254,8 @@ export async function POST(req: Request) {
   // сводное уведомление
   try {
     const [{ data: svcNames }, { data: spNames }] = await Promise.all([
-      admin.from("services").select("id, name").in("id", serviceIds),
-      admin.from("specialists").select("id, full_name").in("id", [...new Set(items.map((i) => i.specialist_id))]),
+      admin.from("services").select("id, name").in("id", serviceIds).eq("shop_id", Number(shopId)),
+      admin.from("specialists").select("id, full_name").in("id", [...new Set(items.map((i) => i.specialist_id))]).eq("shop_id", Number(shopId)),
     ]);
     const svcName = new Map(((svcNames as { id: string; name: string }[]) ?? []).map((s) => [s.id, s.name]));
     const spName = new Map(((spNames as { id: string; full_name: string }[]) ?? []).map((s) => [s.id, s.full_name]));
@@ -244,7 +268,6 @@ export async function POST(req: Request) {
       })
       .join("\n");
 
-    // блок товаров
     let productBlock = "";
     let productsTotal = 0;
 

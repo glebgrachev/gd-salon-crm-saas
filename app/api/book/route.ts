@@ -14,6 +14,7 @@ export function OPTIONS() {
 export async function POST(req: Request) {
   let body: {
     initData?: string;
+    shop_id?: string;
     service_id?: string;
     specialist_id?: string;
     starts_at?: string;
@@ -27,18 +28,41 @@ export async function POST(req: Request) {
     return json({ error: "bad_json" }, 400);
   }
 
-  const user = validateInitData(body.initData ?? "", process.env.TELEGRAM_BOT_TOKEN!);
+  // 1. Получаем shop_id из запроса
+  const shopId = body.shop_id;
+  if (!shopId) {
+    console.error('❌ shop_id не передан');
+    return json({ error: "shop_id_required" }, 400);
+  }
+
+  // 2. Создаём админ-клиент
+  const admin = createAdmin();
+
+  // 3. Получаем токен бота из таблицы shops по shop_id
+  const { data: shop, error: shopError } = await admin
+    .from("shops")
+    .select("bot_token")
+    .eq("id", Number(shopId))
+    .maybeSingle();
+
+  if (shopError || !shop?.bot_token) {
+    console.error('❌ Токен для салона не найден:', shopId);
+    return json({ error: "bot_token_not_found" }, 500);
+  }
+
+  // 4. Проверяем initData с токеном салона
+  const user = validateInitData(body.initData ?? "", shop.bot_token);
   if (!user) return json({ error: "unauthorized" }, 401);
+
   const { service_id, specialist_id, starts_at } = body;
   if (!service_id || !specialist_id || !starts_at) return json({ error: "bad_request" }, 400);
-
-  const admin = createAdmin();
 
   // длительность услуги
   const { data: svc } = await admin
     .from("services")
     .select("duration_min")
     .eq("id", service_id)
+    .eq("shop_id", Number(shopId))
     .maybeSingle();
   if (!svc) return json({ error: "service_not_found" }, 400);
 
@@ -46,13 +70,14 @@ export async function POST(req: Request) {
   const priced = await priceService(admin, service_id, specialist_id);
   if ("error" in priced) return json(priced, 400);
 
-  // клиент (создаём/обновляем, телефон не трогаем)
+  // клиент (создаём/обновляем)
   await admin.from("users").upsert(
     {
       telegram_id: user.id,
       first_name: user.first_name ?? null,
       last_name: user.last_name ?? null,
       username: user.username ?? null,
+      shop_id: Number(shopId),
     },
     { onConflict: "telegram_id" },
   );
@@ -61,7 +86,7 @@ export async function POST(req: Request) {
   if (isNaN(start.getTime())) return json({ error: "bad_time" }, 400);
   const end = new Date(start.getTime() + svc.duration_min * 60000);
 
-  // применение баллов: не больше запрошенного, лимита redeem_max_percent и баланса
+  // применение баллов
   const reqPoints = Math.max(0, Math.floor(Number(body.points ?? 0)));
   let redeem = 0;
   let pointValue = 1;
@@ -78,7 +103,7 @@ export async function POST(req: Request) {
   }
   const afterPoints = Math.max(0, priced.final_price - redeem * pointValue);
 
-  // применение сертификата: конкретный сертификат (cert_id), в пределах его остатка/срока
+  // применение сертификата
   const reqCert = Math.max(0, Math.floor(Number(body.cert ?? 0)));
   const certId = body.cert_id ?? null;
   let cert = 0;
@@ -104,6 +129,7 @@ export async function POST(req: Request) {
     .from("orders")
     .insert({
       client_id: user.id,
+      shop_id: Number(shopId),
       subtotal: priced.full_price,
       discount_total: priced.discount_amount,
       total: priced.final_price,
@@ -112,7 +138,7 @@ export async function POST(req: Request) {
     .single();
   if (oErr || !order) return json({ error: oErr?.message ?? "order_failed" }, 500);
 
-  // запись (бронь). Эксклюзивный constraint не даст пересечься по времени у мастера.
+  // запись (бронь)
   const { data: booking, error: bErr } = await admin
     .from("bookings")
     .insert({
@@ -136,13 +162,13 @@ export async function POST(req: Request) {
     .single();
 
   if (bErr || !booking) {
-    await admin.from("orders").delete().eq("id", order.id); // откат
+    await admin.from("orders").delete().eq("id", order.id);
     const overlap = bErr?.code === "23P01" || /overlap|exclusion/i.test(bErr?.message ?? "");
     if (overlap) return json({ error: "slot_taken" }, 409);
     return json({ error: bErr?.message ?? "booking_failed" }, 500);
   }
 
-  // мгновенное подтверждение в Telegram (не валит запись при сбое)
+  // уведомление в Telegram
   try {
     const [{ data: s2 }, { data: sp2 }] = await Promise.all([
       admin.from("services").select("name").eq("id", service_id).maybeSingle(),
