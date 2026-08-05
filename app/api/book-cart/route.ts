@@ -63,15 +63,13 @@ export async function POST(req: Request) {
   const items = body.items ?? [];
   if (items.length === 0) return json({ error: "empty" }, 400);
 
-  // ===== 4. ОСТАЛЬНАЯ ЛОГИКА (без изменений) =====
-
   // длительности услуг (для ends_at)
   const serviceIds = [...new Set(items.map((i) => i.service_id))];
   const { data: svcRows } = await admin
     .from("services")
     .select("id, duration_min")
     .in("id", serviceIds)
-    .eq("shop_id", Number(shopId)); // ← ДОБАВЛЯЕМ shop_id
+    .eq("shop_id", Number(shopId));
   const durById = new Map(((svcRows as { id: string; duration_min: number }[]) ?? []).map((s) => [s.id, s.duration_min]));
 
   // легитимные подарки — пересчёт по обычным позициям
@@ -210,7 +208,7 @@ export async function POST(req: Request) {
       first_name: user.first_name ?? null,
       last_name: user.last_name ?? null,
       username: user.username ?? null,
-      shop_id: Number(shopId), // ← ДОБАВЛЯЕМ shop_id
+      shop_id: Number(shopId),
     },
     { onConflict: "telegram_id" },
   );
