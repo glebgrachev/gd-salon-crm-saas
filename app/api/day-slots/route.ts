@@ -54,11 +54,12 @@ export async function GET(req: Request) {
     }
   }
 
-  // ===== 5. ВЫЗЫВАЕМ RPC (без p_tz) =====
+  // ===== 5. ВЫЗЫВАЕМ RPC С p_tz =====
   const { data, error } = await admin.rpc("get_day_slots", {
     p_specialist_id: specialist,
     p_service_id: service,
     p_date: date,
+    p_tz: 'Europe/Moscow', // ← ПОКАЗЫВАЕМ В MSK
     p_busy_ranges: busyRanges.length > 0 ? busyRanges : null,
   });
 
