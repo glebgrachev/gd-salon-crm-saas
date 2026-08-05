@@ -54,10 +54,10 @@ export async function GET(req: Request) {
     }
   }
 
-  // Получаем часовой пояс из заголовков или используем UTC
-  const timezone = req.headers.get('x-timezone') || 'UTC';
+  // ===== 5. ФИКСИРОВАННЫЙ ЧАСОВОЙ ПОЯС =====
+  const timezone = 'Europe/Moscow';
 
-  // ===== 5. ВЫЗЫВАЕМ RPC С busyRanges =====
+  // ===== 6. ВЫЗЫВАЕМ RPC С busyRanges =====
   const { data, error } = await admin.rpc("get_day_slots", {
     p_specialist_id: specialist,
     p_service_id: service,
