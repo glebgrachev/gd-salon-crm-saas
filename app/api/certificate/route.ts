@@ -12,10 +12,32 @@ export function OPTIONS() {
 // GET — список сертификатов клиента (по отдельности) + общий остаток.
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const user = validateInitData(url.searchParams.get("initData") ?? "", process.env.TELEGRAM_BOT_TOKEN!);
-  if (!user) return json({ error: "unauthorized" }, 401);
+  
+  // ===== 1. ПОЛУЧАЕМ shop_id ИЗ ЗАПРОСА =====
+  const shopId = url.searchParams.get("shop_id");
+  if (!shopId) {
+    console.error('❌ shop_id не передан');
+    return json({ error: "shop_id_required" }, 400);
+  }
 
   const admin = createAdmin();
+
+  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА ИЗ ТАБЛИЦЫ shops =====
+  const { data: shop, error: shopError } = await admin
+    .from("shops")
+    .select("bot_token")
+    .eq("id", Number(shopId))
+    .maybeSingle();
+
+  if (shopError || !shop?.bot_token) {
+    console.error('❌ Токен для салона не найден:', shopId);
+    return json({ error: "bot_token_not_found" }, 500);
+  }
+
+  // ===== 3. ПРОВЕРЯЕМ initData С ТОКЕНОМ САЛОНА =====
+  const user = validateInitData(url.searchParams.get("initData") ?? "", shop.bot_token);
+  if (!user) return json({ error: "unauthorized" }, 401);
+
   const today = new Date().toISOString().slice(0, 10);
 
   const { data } = await admin
@@ -47,21 +69,46 @@ export async function GET(req: Request) {
   return json({ ok: true, balance, certificates });
 }
 
-// POST — активация сертификата по коду. Тело: { initData, code }
+// POST — активация сертификата по коду. Тело: { initData, shop_id, code }
 export async function POST(req: Request) {
-  let body: { initData?: string; code?: string };
+  let body: {
+    initData?: string;
+    shop_id?: string;
+    code?: string;
+  };
   try {
     body = await req.json();
   } catch {
     return json({ error: "bad_json" }, 400);
   }
 
-  const user = validateInitData(body.initData ?? "", process.env.TELEGRAM_BOT_TOKEN!);
-  if (!user) return json({ error: "unauthorized" }, 401);
-  const code = (body.code ?? "").trim();
-  if (!code) return json({ ok: false, error: "empty_code" }, 400);
+  // ===== 1. ПОЛУЧАЕМ shop_id ИЗ ЗАПРОСА =====
+  const shopId = body.shop_id;
+  if (!shopId) {
+    console.error('❌ shop_id не передан');
+    return json({ error: "shop_id_required" }, 400);
+  }
 
   const admin = createAdmin();
+
+  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА ИЗ ТАБЛИЦЫ shops =====
+  const { data: shop, error: shopError } = await admin
+    .from("shops")
+    .select("bot_token")
+    .eq("id", Number(shopId))
+    .maybeSingle();
+
+  if (shopError || !shop?.bot_token) {
+    console.error('❌ Токен для салона не найден:', shopId);
+    return json({ error: "bot_token_not_found" }, 500);
+  }
+
+  // ===== 3. ПРОВЕРЯЕМ initData С ТОКЕНОМ САЛОНА =====
+  const user = validateInitData(body.initData ?? "", shop.bot_token);
+  if (!user) return json({ error: "unauthorized" }, 401);
+
+  const code = (body.code ?? "").trim();
+  if (!code) return json({ ok: false, error: "empty_code" }, 400);
 
   // на всякий случай убедимся, что пользователь есть в users (FK при активации)
   await admin.from("users").upsert(
@@ -70,6 +117,7 @@ export async function POST(req: Request) {
       first_name: user.first_name ?? null,
       last_name: user.last_name ?? null,
       username: user.username ?? null,
+      shop_id: Number(shopId),
     },
     { onConflict: "telegram_id" },
   );

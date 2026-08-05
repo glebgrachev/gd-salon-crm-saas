@@ -12,10 +12,32 @@ export function OPTIONS() {
 // GET — список избранного с деталями (для Профиля) + плоский список ключей.
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const user = validateInitData(url.searchParams.get("initData") ?? "", process.env.TELEGRAM_BOT_TOKEN!);
-  if (!user) return json({ error: "unauthorized" }, 401);
+  
+  // ===== 1. ПОЛУЧАЕМ shop_id ИЗ ЗАПРОСА =====
+  const shopId = url.searchParams.get("shop_id");
+  if (!shopId) {
+    console.error('❌ shop_id не передан');
+    return json({ error: "shop_id_required" }, 400);
+  }
 
   const admin = createAdmin();
+
+  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА ИЗ ТАБЛИЦЫ shops =====
+  const { data: shop, error: shopError } = await admin
+    .from("shops")
+    .select("bot_token")
+    .eq("id", Number(shopId))
+    .maybeSingle();
+
+  if (shopError || !shop?.bot_token) {
+    console.error('❌ Токен для салона не найден:', shopId);
+    return json({ error: "bot_token_not_found" }, 500);
+  }
+
+  // ===== 3. ПРОВЕРЯЕМ initData С ТОКЕНОМ САЛОНА =====
+  const user = validateInitData(url.searchParams.get("initData") ?? "", shop.bot_token);
+  if (!user) return json({ error: "unauthorized" }, 401);
+
   const { data: rows } = await admin
     .from("favorites")
     .select("kind, target_id")
@@ -44,22 +66,49 @@ export async function GET(req: Request) {
   });
 }
 
-// POST — переключить избранное. Тело: { initData, kind, target_id }
+// POST — переключить избранное. Тело: { initData, shop_id, kind, target_id }
 export async function POST(req: Request) {
-  let body: { initData?: string; kind?: string; target_id?: string };
+  let body: {
+    initData?: string;
+    shop_id?: string;
+    kind?: string;
+    target_id?: string;
+  };
   try {
     body = await req.json();
   } catch {
     return json({ error: "bad_json" }, 400);
   }
 
-  const user = validateInitData(body.initData ?? "", process.env.TELEGRAM_BOT_TOKEN!);
+  // ===== 1. ПОЛУЧАЕМ shop_id ИЗ ЗАПРОСА =====
+  const shopId = body.shop_id;
+  if (!shopId) {
+    console.error('❌ shop_id не передан');
+    return json({ error: "shop_id_required" }, 400);
+  }
+
+  const admin = createAdmin();
+
+  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА ИЗ ТАБЛИЦЫ shops =====
+  const { data: shop, error: shopError } = await admin
+    .from("shops")
+    .select("bot_token")
+    .eq("id", Number(shopId))
+    .maybeSingle();
+
+  if (shopError || !shop?.bot_token) {
+    console.error('❌ Токен для салона не найден:', shopId);
+    return json({ error: "bot_token_not_found" }, 500);
+  }
+
+  // ===== 3. ПРОВЕРЯЕМ initData С ТОКЕНОМ САЛОНА =====
+  const user = validateInitData(body.initData ?? "", shop.bot_token);
   if (!user) return json({ error: "unauthorized" }, 401);
+
   if ((body.kind !== "specialist" && body.kind !== "service") || !body.target_id) {
     return json({ error: "bad_request" }, 400);
   }
 
-  const admin = createAdmin();
   const { data: existing } = await admin
     .from("favorites")
     .select("id")

@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdmin } from "@/lib/supabase/admin";
 import { json, options } from "@/lib/cors";
 import { sendBatch, SYNC_LIMIT } from "@/lib/broadcast";
+import { validateInitData } from "@/lib/telegram";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,17 +14,50 @@ export function OPTIONS() {
 type Recipient = { client_id: number };
 
 export async function POST(req: Request) {
+  // ===== 1. Проверяем, что запрос пришёл от администратора =====
   const supabase = await createClient();
   const { data: isAdmin } = await supabase.rpc("is_admin");
   if (!isAdmin) return json({ error: "forbidden" }, 403);
 
-  let body: { segments?: string[]; text?: string; cta_url?: string };
+  // ===== 2. Получаем shop_id из запроса =====
+  let body: {
+    segments?: string[];
+    text?: string;
+    cta_url?: string;
+    shop_id?: string;
+    initData?: string;
+  };
   try {
     body = await req.json();
   } catch {
     return json({ error: "bad_json" }, 400);
   }
 
+  const shopId = body.shop_id;
+  if (!shopId) {
+    console.error('❌ shop_id не передан');
+    return json({ error: "shop_id_required" }, 400);
+  }
+
+  const admin = createAdmin();
+
+  // ===== 3. Получаем токен бота из таблицы shops =====
+  const { data: shop, error: shopError } = await admin
+    .from("shops")
+    .select("bot_token")
+    .eq("id", Number(shopId))
+    .maybeSingle();
+
+  if (shopError || !shop?.bot_token) {
+    console.error('❌ Токен для салона не найден:', shopId);
+    return json({ error: "bot_token_not_found" }, 500);
+  }
+
+  // ===== 4. Проверяем initData с токеном салона =====
+  const user = validateInitData(body.initData ?? "", shop.bot_token);
+  if (!user) return json({ error: "unauthorized" }, 401);
+
+  // ===== 5. Остальная логика =====
   const segments = Array.isArray(body.segments) ? body.segments.filter((s) => typeof s === "string") : [];
   const text = (body.text ?? "").trim();
   const cta_url = (body.cta_url ?? "").trim() || null;
@@ -33,12 +67,6 @@ export async function POST(req: Request) {
   if (segs.length === 0) return json({ error: "no_segments" }, 400);
   if (!text) return json({ error: "empty_text" }, 400);
   if (text.length > 3500) return json({ error: "text_too_long" }, 400);
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const admin = createAdmin();
 
   const { data: recData, error: recErr } = await admin.rpc("broadcast_recipients_for_segments", { p_segments: segs });
   if (recErr) return json({ error: recErr.message }, 500);
@@ -51,7 +79,7 @@ export async function POST(req: Request) {
   const { data: bc, error: bcErr } = await admin
     .from("broadcasts")
     .insert({
-      author_id: user?.id ?? null,
+      author_id: user.id ?? null,
       segments: segs,
       text,
       cta_url,

@@ -19,17 +19,41 @@ type Row = {
 
 // Мои отложенные и купленные товары
 export async function POST(req: Request) {
-  let body: { initData?: string };
+  let body: {
+    initData?: string;
+    shop_id?: string;
+  };
   try {
     body = await req.json();
   } catch {
     return json({ error: "bad_json" }, 400);
   }
 
-  const user = validateInitData(body.initData ?? "", process.env.TELEGRAM_BOT_TOKEN!);
-  if (!user) return json({ error: "unauthorized" }, 401);
+  // ===== 1. ПОЛУЧАЕМ shop_id ИЗ ЗАПРОСА =====
+  const shopId = body.shop_id;
+  if (!shopId) {
+    console.error('❌ shop_id не передан');
+    return json({ error: "shop_id_required" }, 400);
+  }
 
   const admin = createAdmin();
+
+  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА ИЗ ТАБЛИЦЫ shops =====
+  const { data: shop, error: shopError } = await admin
+    .from("shops")
+    .select("bot_token")
+    .eq("id", Number(shopId))
+    .maybeSingle();
+
+  if (shopError || !shop?.bot_token) {
+    console.error('❌ Токен для салона не найден:', shopId);
+    return json({ error: "bot_token_not_found" }, 500);
+  }
+
+  // ===== 3. ПРОВЕРЯЕМ initData С ТОКЕНОМ САЛОНА =====
+  const user = validateInitData(body.initData ?? "", shop.bot_token);
+  if (!user) return json({ error: "unauthorized" }, 401);
+
   const { data } = await admin
     .from("product_sales")
     .select("id, qty, price, total, status, created_at, paid_at, product:products ( name, photo_url )")

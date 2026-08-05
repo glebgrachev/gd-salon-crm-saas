@@ -12,20 +12,46 @@ export function OPTIONS() {
 }
 
 export async function POST(req: Request) {
-  let body: { initData?: string; booking_id?: string; specialist_id?: string; starts_at?: string };
+  let body: {
+    initData?: string;
+    shop_id?: string;
+    booking_id?: string;
+    specialist_id?: string;
+    starts_at?: string;
+  };
   try {
     body = await req.json();
   } catch {
     return json({ error: "bad_json" }, 400);
   }
 
-  const user = validateInitData(body.initData ?? "", process.env.TELEGRAM_BOT_TOKEN!);
+  // ===== 1. ПОЛУЧАЕМ shop_id ИЗ ЗАПРОСА =====
+  const shopId = body.shop_id;
+  if (!shopId) {
+    console.error('❌ shop_id не передан');
+    return json({ error: "shop_id_required" }, 400);
+  }
+
+  const admin = createAdmin();
+
+  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА ИЗ ТАБЛИЦЫ shops =====
+  const { data: shop, error: shopError } = await admin
+    .from("shops")
+    .select("bot_token")
+    .eq("id", Number(shopId))
+    .maybeSingle();
+
+  if (shopError || !shop?.bot_token) {
+    console.error('❌ Токен для салона не найден:', shopId);
+    return json({ error: "bot_token_not_found" }, 500);
+  }
+
+  // ===== 3. ПРОВЕРЯЕМ initData С ТОКЕНОМ САЛОНА =====
+  const user = validateInitData(body.initData ?? "", shop.bot_token);
   if (!user) return json({ error: "unauthorized" }, 401);
 
   const { booking_id, specialist_id, starts_at } = body;
   if (!booking_id || !specialist_id || !starts_at) return json({ error: "bad_request" }, 400);
-
-  const admin = createAdmin();
 
   // старая бронь: должна быть клиента, 'new', в процессе переноса
   const { data: oldB } = await admin
@@ -46,6 +72,7 @@ export async function POST(req: Request) {
     .from("services")
     .select("duration_min")
     .eq("id", service_id)
+    .eq("shop_id", Number(shopId))
     .maybeSingle();
   if (!svc) return json({ error: "service_not_found" }, 400);
 
@@ -83,6 +110,7 @@ export async function POST(req: Request) {
     .from("orders")
     .insert({
       client_id: user.id,
+      shop_id: Number(shopId),
       subtotal: priced.full_price,
       discount_total: priced.discount_amount,
       total: priced.final_price,

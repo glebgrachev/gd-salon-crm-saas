@@ -28,7 +28,7 @@ type Row = {
 export async function POST(req: Request) {
   let body: {
     initData?: string;
-    shop_id?: string; // ✅ ДОБАВЛЯЕМ shop_id
+    shop_id?: string;
   };
   try {
     body = await req.json();
