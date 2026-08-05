@@ -138,7 +138,7 @@ export async function POST(req: Request) {
     .single();
   if (oErr || !order) return json({ error: oErr?.message ?? "order_failed" }, 500);
 
-  // запись (бронь)
+  // запись (бронь) — ДОБАВЛЕН shop_id!
   const { data: booking, error: bErr } = await admin
     .from("bookings")
     .insert({
@@ -149,6 +149,7 @@ export async function POST(req: Request) {
       starts_at: start.toISOString(),
       ends_at: end.toISOString(),
       status: "new",
+      shop_id: Number(shopId), // ← ДОБАВЛЕНО!
       full_price: priced.full_price,
       discount_amount: priced.discount_amount,
       final_price: priced.final_price,
