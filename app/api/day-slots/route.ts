@@ -54,15 +54,11 @@ export async function GET(req: Request) {
     }
   }
 
-  // ===== 5. ФИКСИРОВАННЫЙ ЧАСОВОЙ ПОЯС =====
-  const timezone = 'Europe/Moscow';
-
-  // ===== 6. ВЫЗЫВАЕМ RPC С busyRanges =====
+  // ===== 5. ВЫЗЫВАЕМ RPC (без p_tz) =====
   const { data, error } = await admin.rpc("get_day_slots", {
     p_specialist_id: specialist,
     p_service_id: service,
     p_date: date,
-    p_tz: timezone,
     p_busy_ranges: busyRanges.length > 0 ? busyRanges : null,
   });
 
