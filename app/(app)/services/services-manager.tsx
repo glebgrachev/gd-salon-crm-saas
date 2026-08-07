@@ -51,7 +51,7 @@ export type Service = {
   duration_min: number;
   image_url?: string | null; // 👈 Добавлено
   description?: string | null; // 👈 Добавлено
-  price?: number; // 👈 Добавлено
+  //price?: number; // 👈 Добавлено
 };
 
 type DialogState =

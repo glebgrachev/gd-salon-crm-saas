@@ -24,14 +24,14 @@ export default async function ServicesPage() {
   const [{ data: cats }, { data: svcs }] = await Promise.all([
     supabase
       .from("categories")
-      .select("id, parent_id, name, level, sort_order, image_url") // 👈 Добавили image_url
+      .select("id, parent_id, name, level, sort_order, image_url")
       .eq("shop_id", shopId)
       .order("level")
       .order("sort_order")
       .order("name"),
     supabase
       .from("services")
-      .select("id, category_id, name, duration_min, image_url, description, price") // 👈 Добавили image_url, description, price
+      .select("id, category_id, name, duration_min, image_url, description") // 👈 Убрали price
       .eq("shop_id", shopId)
       .order("name"),
   ]);
