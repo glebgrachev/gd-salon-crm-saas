@@ -218,7 +218,6 @@ export default function ShopDetailPage() {
       bot_name: shop.bot_name || shop.name,
     };
 
-    // Токен сохраняем только если он был введён (новый или изменённый)
     if (shop.bot_token && shop.bot_token.trim()) {
       updates.bot_token = shop.bot_token;
     }
@@ -232,7 +231,6 @@ export default function ShopDetailPage() {
       toast.error("Не удалось сохранить данные бота");
     } else {
       toast.success("Данные бота сохранены");
-      // После сохранения очищаем поле токена в состоянии, чтобы не отображался
       setShop({ ...shop, bot_token: null });
     }
     setSaving(false);
@@ -244,6 +242,17 @@ export default function ShopDetailPage() {
     navigator.clipboard?.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
+  };
+
+  // Формируем Webhook URL
+  const webhookUrl = shop?.bot_token ? `https://api.telegram.org/bot${shop.bot_token}/setWebhook?url=${encodeURIComponent(
+    `https://cmzqpjfckzftlptrozdf.supabase.co/functions/v1/bot?apikey=${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}&shop_id=${shop?.id}`
+  )}` : null;
+
+  const copyWebhookUrl = () => {
+    if (!webhookUrl) return;
+    navigator.clipboard?.writeText(webhookUrl);
+    toast.success("Webhook URL скопирован!");
   };
 
   if (loading) {
@@ -385,7 +394,6 @@ export default function ShopDetailPage() {
             </div>
 
             <div className="space-y-3">
-              {/* Поле для ввода токена (скрытое) */}
               <div>
                 <label className="block text-xs text-neutral-500 mb-1">Токен бота</label>
                 <input
@@ -458,6 +466,45 @@ export default function ShopDetailPage() {
               )}
             </div>
           </div>
+
+          {/* ===== БЛОК WEBHOOK URL ===== */}
+          {shop.bot_token && shop.bot_username && webhookUrl && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <div className="flex items-start gap-2">
+                <div className="mt-0.5 text-blue-500">🔗</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-blue-800">
+                    Webhook URL для активации бота
+                  </div>
+                  <div className="mt-1">
+                    <div className="text-xs text-blue-600 break-all font-mono bg-blue-100/50 p-2 rounded border border-blue-200">
+                      {webhookUrl}
+                    </div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      onClick={copyWebhookUrl}
+                      className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition"
+                    >
+                      📋 Копировать
+                    </button>
+                    <a
+                      href={webhookUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 transition"
+                    >
+                      🚀 Открыть в браузере
+                    </a>
+                  </div>
+                  <p className="mt-2 text-xs text-blue-600">
+                    ⚡ Откройте ссылку в браузере, чтобы настроить Webhook для бота.
+                    После этого бот будет отвечать на команду /start.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Правая колонка — тариф и модули */}
@@ -537,7 +584,6 @@ export default function ShopDetailPage() {
               })}
             </div>
             
-            {/* Информация о базовых модулях */}
             <div className="mt-4 rounded-lg bg-neutral-50 px-4 py-3 text-xs text-neutral-500">
               <p>Базовые модули (всегда активны):</p>
               <div className="mt-1 flex flex-wrap gap-2">
