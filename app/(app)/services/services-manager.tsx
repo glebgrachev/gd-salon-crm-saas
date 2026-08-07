@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { toast } from "sonner";
 import {
   ChevronRight,
@@ -10,9 +10,14 @@ import {
   Pencil,
   Trash2,
   Clock,
+  Upload,
+  Loader2,
+  X,
+  Image as ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { uploadImage } from "@/lib/upload";
 import {
   createCategory,
   renameCategory,
@@ -35,19 +41,24 @@ export type Category = {
   name: string;
   level: number;
   sort_order: number | null;
+  image_url?: string | null; // 👈 Добавлено
 };
+
 export type Service = {
   id: string;
   category_id: string;
   name: string;
   duration_min: number;
+  image_url?: string | null; // 👈 Добавлено
+  description?: string | null; // 👈 Добавлено
+  price?: number; // 👈 Добавлено
 };
 
 type DialogState =
   | { kind: "cat-create"; parentId: string | null; parentName?: string }
-  | { kind: "cat-edit"; id: string; name: string }
+  | { kind: "cat-edit"; id: string; name: string; image_url?: string | null }
   | { kind: "svc-create"; categoryId: string; categoryName: string }
-  | { kind: "svc-edit"; id: string; name: string; duration: number }
+  | { kind: "svc-edit"; id: string; name: string; duration: number; image_url?: string | null; description?: string | null }
   | null;
 
 export default function ServicesManager({
@@ -198,6 +209,19 @@ function CategoryNode({
           )}
         </button>
 
+        {/* Изображение категории */}
+        {category.image_url ? (
+          <img 
+            src={category.image_url} 
+            alt={category.name}
+            className="w-6 h-6 rounded object-cover"
+          />
+        ) : (
+          <div className="w-6 h-6 rounded bg-neutral-100 flex items-center justify-center">
+            <ImageIcon className="w-3 h-3 text-neutral-400" />
+          </div>
+        )}
+
         <span className="flex-1 text-sm font-medium text-neutral-800">
           {category.name}
         </span>
@@ -234,12 +258,13 @@ function CategoryNode({
           <Button
             variant="ghost"
             size="icon-sm"
-            title="Переименовать"
+            title="Редактировать"
             onClick={() =>
               setDialog({
                 kind: "cat-edit",
                 id: category.id,
                 name: category.name,
+                image_url: category.image_url,
               })
             }
           >
@@ -264,10 +289,25 @@ function CategoryNode({
               className="group flex items-center gap-2 rounded-lg bg-neutral-50 px-3 py-1.5"
               style={{ marginLeft: (depth + 1) * 20 }}
             >
+              {/* Изображение услуги */}
+              {s.image_url ? (
+                <img 
+                  src={s.image_url} 
+                  alt={s.name}
+                  className="w-5 h-5 rounded object-cover"
+                />
+              ) : (
+                <div className="w-5 h-5 rounded bg-neutral-200 flex items-center justify-center">
+                  <ImageIcon className="w-3 h-3 text-neutral-400" />
+                </div>
+              )}
+              
               <span className="flex-1 text-sm text-neutral-700">{s.name}</span>
+              
               <span className="flex items-center gap-1 text-xs text-neutral-400">
                 <Clock size={12} /> {s.duration_min} мин
               </span>
+              
               <div className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
                 <Button
                   variant="ghost"
@@ -279,6 +319,8 @@ function CategoryNode({
                       id: s.id,
                       name: s.name,
                       duration: s.duration_min,
+                      image_url: s.image_url,
+                      description: s.description,
                     })
                   }
                 >
@@ -329,6 +371,10 @@ function EditDialog({
 }) {
   const [name, setName] = useState("");
   const [duration, setDuration] = useState("60");
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [description, setDescription] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   // синхронизируем поля при открытии конкретного диалога
   const [lastKey, setLastKey] = useState<string>("");
@@ -341,14 +387,42 @@ function EditDialog({
       // закрытие
     } else if (dialog.kind === "cat-edit") {
       setName(dialog.name);
+      setImageUrl(dialog.image_url || null);
+      setDescription("");
     } else if (dialog.kind === "svc-edit") {
       setName(dialog.name);
       setDuration(String(dialog.duration));
+      setImageUrl(dialog.image_url || null);
+      setDescription(dialog.description || "");
     } else {
       setName("");
       setDuration("60");
+      setImageUrl(null);
+      setDescription("");
     }
   }
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const url = await uploadImage(file, "services");
+      setImageUrl(url);
+    } catch (err) {
+      toast.error("Не удалось загрузить изображение");
+      console.error(err);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setImageUrl(null);
+    if (fileRef.current) fileRef.current.value = "";
+  };
 
   if (!dialog) return null;
 
@@ -356,37 +430,41 @@ function EditDialog({
     "cat-create": dialog.kind === "cat-create" && dialog.parentName
       ? `Подкатегория в «${dialog.parentName}»`
       : "Новая категория",
-    "cat-edit": "Переименовать категорию",
+    "cat-edit": "Редактировать категорию",
     "svc-create":
       dialog.kind === "svc-create"
         ? `Услуга в «${dialog.categoryName}»`
         : "Новая услуга",
-    "svc-edit": "Изменить услугу",
+    "svc-edit": "Редактировать услугу",
   };
 
   const isService = dialog.kind === "svc-create" || dialog.kind === "svc-edit";
+  const isCategory = dialog.kind === "cat-create" || dialog.kind === "cat-edit";
 
   function submit() {
     if (!dialog) return;
     const d = Number(duration);
-    if (dialog.kind === "cat-create")
-      run(() => createCategory(dialog.parentId, name));
-    else if (dialog.kind === "cat-edit")
-      run(() => renameCategory(dialog.id, name));
-    else if (dialog.kind === "svc-create")
-      run(() => createService(dialog.categoryId, name, d));
-    else if (dialog.kind === "svc-edit")
-      run(() => updateService(dialog.id, name, d));
+    
+    if (dialog.kind === "cat-create") {
+      run(() => createCategory(dialog.parentId, name, imageUrl));
+    } else if (dialog.kind === "cat-edit") {
+      run(() => renameCategory(dialog.id, name, imageUrl));
+    } else if (dialog.kind === "svc-create") {
+      run(() => createService(dialog.categoryId, name, d, imageUrl, description));
+    } else if (dialog.kind === "svc-edit") {
+      run(() => updateService(dialog.id, name, d, imageUrl, description));
+    }
   }
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{titles[dialog.kind]}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <div className="space-y-4">
+          {/* Название */}
           <div className="space-y-1.5">
             <label className="text-xs text-neutral-500">Название</label>
             <Input
@@ -400,6 +478,7 @@ function EditDialog({
             />
           </div>
 
+          {/* Длительность (только для услуг) */}
           {isService && (
             <div className="space-y-1.5">
               <label className="text-xs text-neutral-500">
@@ -414,14 +493,76 @@ function EditDialog({
               />
             </div>
           )}
+
+          {/* Описание (только для услуг) */}
+          {isService && (
+            <div className="space-y-1.5">
+              <label className="text-xs text-neutral-500">Описание</label>
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Краткое описание услуги"
+                rows={2}
+              />
+            </div>
+          )}
+
+          {/* Загрузка изображения */}
+          <div className="space-y-1.5">
+            <label className="text-xs text-neutral-500">
+              {isCategory ? "Изображение категории" : "Изображение услуги"}
+            </label>
+            
+            {imageUrl ? (
+              <div className="relative mt-1">
+                <img 
+                  src={imageUrl} 
+                  alt="Preview" 
+                  className="h-32 w-full rounded-lg object-cover border border-neutral-200"
+                />
+                <button
+                  type="button"
+                  onClick={handleRemoveImage}
+                  className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                  disabled={uploading}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                {uploading && (
+                  <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 text-white animate-spin" />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <input 
+                  ref={fileRef} 
+                  type="file" 
+                  accept="image/*" 
+                  className="hidden" 
+                  onChange={handleImageUpload} 
+                />
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  disabled={uploading} 
+                  onClick={() => fileRef.current?.click()}
+                >
+                  {uploading ? <Loader2 className="animate-spin" /> : <Upload />}
+                  Загрузить изображение
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={pending}>
             Отмена
           </Button>
-          <Button onClick={submit} disabled={pending || !name.trim()}>
-            Сохранить
+          <Button onClick={submit} disabled={pending || !name.trim() || uploading}>
+            {pending ? "Сохранение..." : "Сохранить"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -20,7 +20,26 @@ async function guard() {
   return { supabase, shopId: admin.shop_id };
 }
 
-export async function createCategory(parentId: string | null, name: string) {
+export type CategoryInput = {
+  id?: string;
+  parent_id: string | null;
+  name: string;
+  image_url?: string | null;
+  level: number;
+  sort_order?: number | null;
+};
+
+export type ServiceInput = {
+  id?: string;
+  category_id: string;
+  name: string;
+  description?: string | null;
+  image_url?: string | null;
+  duration_min: number;
+  price?: number;
+};
+
+export async function createCategory(parentId: string | null, name: string, image_url?: string | null) {
   const n = name.trim();
   if (!n) return { ok: false, error: "Введите название" };
 
@@ -40,20 +59,26 @@ export async function createCategory(parentId: string | null, name: string) {
 
   const { error } = await supabase
     .from("categories")
-    .insert({ parent_id: parentId, name: n, level, shop_id: shopId });
+    .insert({ 
+      parent_id: parentId, 
+      name: n, 
+      level, 
+      shop_id: shopId,
+      image_url: image_url || null
+    });
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/services");
   return { ok: true };
 }
 
-export async function renameCategory(id: string, name: string) {
+export async function renameCategory(id: string, name: string, image_url?: string | null) {
   const n = name.trim();
   if (!n) return { ok: false, error: "Введите название" };
 
   const g = await guard();
   if (!g) return { ok: false, error: "Нет доступа" };
-  const { supabase } = g;
+  const { supabase, shopId } = g;
 
   // Проверяем, что категория принадлежит этому салону
   const { data: category } = await supabase
@@ -62,13 +87,18 @@ export async function renameCategory(id: string, name: string) {
     .eq("id", id)
     .single();
 
-  if (!category || category.shop_id !== g.shopId) {
+  if (!category || category.shop_id !== shopId) {
     return { ok: false, error: "Нет доступа к этой категории" };
+  }
+
+  const updateData: any = { name: n };
+  if (image_url !== undefined) {
+    updateData.image_url = image_url;
   }
 
   const { error } = await supabase
     .from("categories")
-    .update({ name: n })
+    .update(updateData)
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
@@ -103,6 +133,8 @@ export async function createService(
   categoryId: string,
   name: string,
   durationMin: number,
+  image_url?: string | null,
+  description?: string | null,
 ) {
   const n = name.trim();
   if (!n) return { ok: false, error: "Введите название" };
@@ -131,6 +163,8 @@ export async function createService(
       name: n,
       duration_min: Math.round(durationMin),
       shop_id: shopId,
+      image_url: image_url || null,
+      description: description || null,
     });
   if (error) return { ok: false, error: error.message };
 
@@ -142,6 +176,8 @@ export async function updateService(
   id: string,
   name: string,
   durationMin: number,
+  image_url?: string | null,
+  description?: string | null,
 ) {
   const n = name.trim();
   if (!n) return { ok: false, error: "Введите название" };
@@ -163,9 +199,20 @@ export async function updateService(
     return { ok: false, error: "Услуга не найдена или не принадлежит вашему салону" };
   }
 
+  const updateData: any = { 
+    name: n, 
+    duration_min: Math.round(durationMin) 
+  };
+  if (image_url !== undefined) {
+    updateData.image_url = image_url;
+  }
+  if (description !== undefined) {
+    updateData.description = description;
+  }
+
   const { error } = await supabase
     .from("services")
-    .update({ name: n, duration_min: Math.round(durationMin) })
+    .update(updateData)
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
