@@ -38,6 +38,7 @@ type Shop = {
   bot_token: string | null;
   bot_username: string | null;
   bot_name: string | null;
+  webapp_url: string | null;
 };
 
 type Plan = {
@@ -209,13 +210,20 @@ export default function ShopDetailPage() {
     setSaving(false);
   };
 
+  // ============================================================
+  // 🔥 ГЛАВНОЕ ИСПРАВЛЕНИЕ: saveBot теперь сохраняет webapp_url
+  // ============================================================
   const saveBot = async () => {
     if (!shop) return;
     setSaving(true);
 
+    // 🔥 Формируем правильный webapp_url с параметром shop_id
+    const webappUrl = `https://beauty-miniapp-saas.vercel.app/?startapp=shop_${shop.id}`;
+
     const updates: any = {
       bot_username: shop.bot_username,
       bot_name: shop.bot_name || shop.name,
+      webapp_url: webappUrl, // 👈 ВСЕГДА ПЕРЕЗАПИСЫВАЕМ
     };
 
     if (shop.bot_token && shop.bot_token.trim()) {
@@ -231,7 +239,7 @@ export default function ShopDetailPage() {
       toast.error("Не удалось сохранить данные бота");
     } else {
       toast.success("Данные бота сохранены");
-      setShop({ ...shop, bot_token: null });
+      setShop({ ...shop, ...updates, bot_token: null });
     }
     setSaving(false);
   };
@@ -433,6 +441,17 @@ export default function ShopDetailPage() {
                 />
                 <p className="mt-1 text-xs text-neutral-400">
                   По умолчанию используется название салона: <span className="font-medium">{shop.name}</span>
+                </p>
+              </div>
+
+              {/* 🔥 ДОБАВЛЯЕМ ИНФОРМАЦИЮ О WEBAPP_URL */}
+              <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+                <p className="text-xs text-blue-700 font-medium">WebApp URL:</p>
+                <p className="text-xs text-blue-600 break-all font-mono mt-1">
+                  {`https://beauty-miniapp-saas.vercel.app/?startapp=shop_${shop.id}`}
+                </p>
+                <p className="text-xs text-blue-500 mt-1">
+                  🔄 Автоматически обновляется при сохранении бота
                 </p>
               </div>
 
