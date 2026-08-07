@@ -6,8 +6,8 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   icons: {
-    icon: "/admin-icon.png",
-    apple: "/admin-icon.png",
+    icon: "/admin-icon.png?v=2",
+    apple: "/admin-icon.png?v=2",
   },
 };
 
