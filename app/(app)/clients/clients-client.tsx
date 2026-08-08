@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { fmtPrice } from "@/lib/bookings";
-import { AlertTriangle, ArrowUpRight } from "lucide-react";
+import { AlertTriangle, ArrowRight } from "lucide-react";
 
 export type ClientRow = {
   telegram_id: number;
@@ -66,14 +66,6 @@ export default function ClientsClient({
   const [q, setQ] = useState("");
   const [seg, setSeg] = useState<string>("all");
 
-  // ===== 🔥 ДОБАВЬ ЭТОТ БЛОК =====
-  console.log('🔍 ДАННЫЕ КЛИЕНТОВ:');
-  console.log('  clientLimit:', clientLimit);
-  console.log('  clientsCount:', clientsCount);
-  console.log('  isLimitReached:', clientLimit !== -1 && clientsCount >= clientLimit);
-  console.log('  isNearLimit:', clientLimit !== -1 && clientsCount >= clientLimit * 0.7 && !(clientLimit !== -1 && clientsCount >= clientLimit));
-  // ================================
-  
   const query = q.trim().toLowerCase();
   const visible = initial.filter((c) => {
     if (seg !== "all" && c.segment !== seg) return false;
@@ -142,10 +134,10 @@ export default function ClientsClient({
           </div>
           <Link 
             href="/tariffs"
-            className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition"
+            className="flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 transition"
           >
             Выбрать тариф
-            <ArrowUpRight className="h-4 w-4" />
+            <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
       )}
@@ -165,10 +157,10 @@ export default function ClientsClient({
           </div>
           <Link 
             href="/tariffs"
-            className="flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 transition"
+            className="flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 transition"
           >
             Выбрать тариф
-            <ArrowUpRight className="h-4 w-4" />
+            <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
       )}
