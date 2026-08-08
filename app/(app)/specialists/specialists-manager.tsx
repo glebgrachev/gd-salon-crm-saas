@@ -62,6 +62,14 @@ function initials(name: string) {
     .toUpperCase();
 }
 
+// ===== ФУНКЦИЯ ДЛЯ СКЛОНЕНИЯ =====
+function pluralizeMe(count: number): string {
+  if (count === 0) return "мест";
+  if (count === 1) return "место";
+  if (count >= 2 && count <= 4) return "места";
+  return "мест";
+}
+
 export default function SpecialistsManager({
   initial,
 }: {
@@ -176,7 +184,7 @@ export default function SpecialistsManager({
                 Мастеров: {currentCount}/{limit}
                 {isNearLimit && !isLimitReached && (
                   <span className="ml-2 text-amber-600">
-                    ⚠️ Осталось {limit - currentCount} мест
+                    ⚠️ Осталось {limit - currentCount} {pluralizeMe(limit - currentCount)}
                   </span>
                 )}
                 {isLimitReached && (
