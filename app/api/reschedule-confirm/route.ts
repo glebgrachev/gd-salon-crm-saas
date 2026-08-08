@@ -63,7 +63,8 @@ export async function POST(req: Request) {
     try {
       await tgSend(
         user.id,
-        '🔒 Функционал приложения временно ограничен.\n\nПожалуйста, обратитесь к администратору салона.'
+        '🔒 Функционал приложения временно ограничен.\n\nПожалуйста, обратитесь к администратору салона.',
+        shop.bot_token // 👈 ПЕРЕДАЁМ ТОКЕН
       );
     } catch {}
     return json({ 
@@ -186,7 +187,7 @@ export async function POST(req: Request) {
     return json({ error: "reschedule_failed" }, 409);
   }
 
-  // уведомление
+  // ===== 🔥 УВЕДОМЛЕНИЕ — ПЕРЕДАЁМ ТОКЕН =====
   try {
     const [{ data: s2 }, { data: sp2 }] = await Promise.all([
       admin.from("services").select("name").eq("id", service_id).maybeSingle(),
@@ -198,6 +199,7 @@ export async function POST(req: Request) {
         `${s2?.name ?? "Услуга"} · ${sp2?.full_name ?? ""}\n` +
         `🗓 ${fmtMsk(booking.starts_at)}\n` +
         `💰 ${priced.final_price} ₽`,
+      shop.bot_token // 👈 ПЕРЕДАЁМ ТОКЕН
     );
   } catch {
     /* noop */

@@ -14,6 +14,7 @@ type Offer = {
   specialist_id: string;
   service_name: string;
   specialist_name: string;
+  shop_id: number; // 👈 Добавляем shop_id
 };
 
 /**
@@ -40,9 +41,34 @@ export async function POST(req: Request) {
   const botName = process.env.NEXT_PUBLIC_BOT_NAME ?? "beautyapp_salon_bot";
   const appName = process.env.NEXT_PUBLIC_APP_NAME ?? "app";
 
+  // ===== КЭШ ТОКЕНОВ ДЛЯ САЛОНОВ =====
+  const tokenCache = new Map<number, string>();
+
+  async function getBotToken(shopId: number): Promise<string | null> {
+    if (tokenCache.has(shopId)) return tokenCache.get(shopId)!;
+    
+    const { data: shop, error } = await admin
+      .from("shops")
+      .select("bot_token")
+      .eq("id", shopId)
+      .maybeSingle();
+    
+    if (error || !shop?.bot_token) {
+      console.error(`❌ Токен для салона ${shopId} не найден`);
+      return null;
+    }
+    
+    tokenCache.set(shopId, shop.bot_token);
+    return shop.bot_token;
+  }
+
   let sent = 0;
 
   for (const o of offers) {
+    // Получаем токен для салона
+    const botToken = await getBotToken(o.shop_id);
+    if (!botToken) continue;
+
     // deep-link открывает Mini App сразу на нужном слоте
     const link = `https://t.me/${botName}/${appName}?startapp=wl_${o.id}`;
 
@@ -56,11 +82,16 @@ export async function POST(req: Request) {
       `Успейте записаться, иначе оно уйдёт следующему в очереди.`;
 
     try {
-      await tgSend(o.client_id, text, {
-        reply_markup: {
-          inline_keyboard: [[{ text: "Записаться", url: link }]],
-        },
-      });
+      await tgSend(
+        o.client_id,
+        text,
+        botToken, // 👈 ПЕРЕДАЁМ ТОКЕН
+        {
+          reply_markup: {
+            inline_keyboard: [[{ text: "Записаться", url: link }]],
+          },
+        }
+      );
       sent += 1;
     } catch {
       /* клиент мог заблокировать бота — не роняем рассылку */

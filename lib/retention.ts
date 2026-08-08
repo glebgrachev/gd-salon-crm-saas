@@ -13,6 +13,7 @@ export async function sendReactivation(
   clientId: number,
   firstName: string | null,
   daysSinceLast: number | null,
+  botToken: string, // 👈 ДОБАВЛЯЕМ ПАРАМЕТР
 ): Promise<boolean> {
   const hello = firstName ? `${firstName}, ` : "";
   const days = daysSinceLast ?? 0;
@@ -22,6 +23,7 @@ export async function sendReactivation(
     `💜 <b>Мы соскучились!</b>\n\n` +
       `${hello}давно не виделись — прошло ${days} дн. с вашего последнего визита.\n` +
       `Возвращайтесь, будем рады!`,
+    botToken, // 👈 ПЕРЕДАЁМ ТОКЕН
     {
       reply_markup: {
         inline_keyboard: [[{ text: "Записаться", web_app: { url: MINIAPP } }]],

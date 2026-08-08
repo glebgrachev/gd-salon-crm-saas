@@ -12,6 +12,7 @@ type DocRow = {
   expires_at: string;
   expiry_status: string;
   days_left: number | null;
+  shop_id: number; // 👈 Добавляем shop_id
 };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -42,9 +43,36 @@ export async function POST(req: Request) {
     return new Response(JSON.stringify({ ok: true, skipped: "no_chat_id" }), { status: 200 });
   }
 
+  // ===== ПОЛУЧАЕМ ТОКЕН БОТА =====
+  // document_settings может быть привязана к салону, получаем shop_id
+  const { data: settings } = await admin
+    .from("document_settings")
+    .select("shop_id")
+    .eq("id", 1)
+    .maybeSingle();
+
+  let botToken: string | null = null;
+
+  if (settings?.shop_id) {
+    const { data: shop } = await admin
+      .from("shops")
+      .select("bot_token")
+      .eq("id", settings.shop_id)
+      .maybeSingle();
+    
+    if (shop?.bot_token) {
+      botToken = shop.bot_token;
+    }
+  }
+
+  if (!botToken) {
+    console.error('❌ Токен бота не найден для document_settings');
+    return new Response(JSON.stringify({ ok: false, error: "bot_token_not_found" }), { status: 500 });
+  }
+
   const { data } = await admin
     .from("v_specialist_documents")
-    .select("id, title, doc_type, specialist_name, expires_at, expiry_status, days_left")
+    .select("id, title, doc_type, specialist_name, expires_at, expiry_status, days_left, shop_id")
     .in("expiry_status", ["expiring", "expired"])
     .order("expires_at", { ascending: true });
 
@@ -69,7 +97,11 @@ export async function POST(req: Request) {
       expiring.map((r) => `${line(r)} — через ${r.days_left} дн.`).join("\n");
   }
 
-  const ok = await tgSend(chatId, text.trim());
+  const ok = await tgSend(
+    chatId,
+    text.trim(),
+    botToken, // 👈 ПЕРЕДАЁМ ТОКЕН
+  );
 
   return new Response(JSON.stringify({ ok: true, count: rows.length, sent: ok }), {
     status: 200,

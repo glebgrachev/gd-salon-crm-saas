@@ -72,7 +72,8 @@ export async function POST(req: Request) {
     try {
       await tgSend(
         user.id,
-        '🔒 Функционал приложения временно ограничен.\n\nПожалуйста, обратитесь к администратору салона.'
+        '🔒 Функционал приложения временно ограничен.\n\nПожалуйста, обратитесь к администратору салона.',
+        shop.bot_token // 👈 ПЕРЕДАЁМ ТОКЕН
       );
     } catch {}
     return json({ 
@@ -271,7 +272,7 @@ export async function POST(req: Request) {
     else soldOut.push(it.product_id);
   }
 
-  // сводное уведомление
+  // ===== 🔥 СВОДНОЕ УВЕДОМЛЕНИЕ — ПЕРЕДАЁМ ТОКЕН =====
   try {
     const [{ data: svcNames }, { data: spNames }] = await Promise.all([
       admin.from("services").select("id, name").in("id", serviceIds).eq("shop_id", Number(shopId)),
@@ -323,6 +324,7 @@ export async function POST(req: Request) {
         `💰 К оплате: ${moneyDue + Math.round(productsTotal)} ₽` +
         (productsTotal > 0 ? `\n   (услуги ${moneyDue} ₽ + товары ${Math.round(productsTotal)} ₽)` : "") +
         soldOutBlock,
+      shop.bot_token // 👈 ПЕРЕДАЁМ ТОКЕН
     );
   } catch {
     /* noop */

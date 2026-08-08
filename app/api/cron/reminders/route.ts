@@ -9,32 +9,26 @@ type Row = {
   client_id: number;
   starts_at: string;
   ends_at: string;
+  shop_id: number; // 👈 Добавляем shop_id
   service: { name: string } | null;
   specialist: { full_name: string } | null;
 };
 
 const SELECT =
-  "id, client_id, starts_at, ends_at, service:services ( name ), specialist:specialists ( full_name )";
+  "id, client_id, starts_at, ends_at, shop_id, service:services ( name ), specialist:specialists ( full_name )"; // 👈 Добавляем shop_id
 
 type Admin = ReturnType<typeof createAdmin>;
 type Mark = "reminded_day_at" | "reminded_3h_at" | "review_requested_at";
 
 /**
  * Помечает запись как обработанную ДО отправки сообщения.
- *
- * Условие `.is(field, null)` делает операцию идемпотентной: если два
- * запуска cron наложатся, метку поставит только первый — второй получит
- * пустой результат и не отправит дубль.
- *
- * Возвращает false, если пометить не удалось. Тогда сообщение НЕ шлём:
- * лучше пропустить одно уведомление, чем зациклиться и отправить сотню.
  */
 async function claim(admin: Admin, id: string, field: Mark): Promise<boolean> {
   const { data, error } = await admin
     .from("bookings")
     .update({ [field]: new Date().toISOString() })
     .eq("id", id)
-    .is(field, null)          // ещё не помечено — иначе кто-то нас опередил
+    .is(field, null)
     .select("id");
 
   if (error) {
@@ -52,9 +46,6 @@ export async function POST(req: Request) {
   const admin = createAdmin();
   const now = new Date();
 
-  // Напоминание уходит за 4 часа, а отменить запись можно до 3 часов.
-  // Разница в час — чтобы клиент успел среагировать: раньше напоминание
-  // приходило ровно на границе отмены, и кнопка в нём уже не работала.
   const REMIND_H = 4;
   const CANCEL_H = 3;
 
@@ -66,8 +57,30 @@ export async function POST(req: Request) {
   let three = 0;
   let review = 0;
 
-  // напоминание за сутки (с кнопкой «Приду»)
   const miniApp = process.env.MINIAPP_URL ?? "https://beauty-miniapp-tawny.vercel.app";
+
+  // ===== КЭШ ТОКЕНОВ ДЛЯ САЛОНОВ =====
+  const tokenCache = new Map<number, string>();
+
+  async function getBotToken(shopId: number): Promise<string | null> {
+    if (tokenCache.has(shopId)) return tokenCache.get(shopId)!;
+    
+    const { data: shop, error } = await admin
+      .from("shops")
+      .select("bot_token")
+      .eq("id", shopId)
+      .maybeSingle();
+    
+    if (error || !shop?.bot_token) {
+      console.error(`❌ Токен для салона ${shopId} не найден`);
+      return null;
+    }
+    
+    tokenCache.set(shopId, shop.bot_token);
+    return shop.bot_token;
+  }
+
+  // ===== НАПОМИНАНИЕ ЗА СУТКИ =====
   const { data: dayRows } = await admin
     .from("bookings")
     .select(SELECT)
@@ -77,17 +90,19 @@ export async function POST(req: Request) {
     .gt("starts_at", remindAt.toISOString())
     .lte("starts_at", in24h.toISOString())
     .limit(50);
+  
   for (const b of (dayRows as unknown as Row[]) ?? []) {
-    // Сначала занимаем запись, только потом шлём.
-    // Если метка не сохранится, клиент не получит сообщение —
-    // это лучше, чем получить его сто раз подряд.
     if (!(await claim(admin, b.id, "reminded_day_at"))) continue;
+
+    const botToken = await getBotToken(b.shop_id);
+    if (!botToken) continue;
 
     await tgSend(
       b.client_id,
       `📅 Напоминание: завтра вы записаны\n\n` +
         `${b.service?.name ?? "Услуга"} · ${b.specialist?.full_name ?? ""}\n` +
         `🗓 ${fmtMsk(b.starts_at)}`,
+      botToken, // 👈 ПЕРЕДАЁМ ТОКЕН
       {
         reply_markup: {
           inline_keyboard: [
@@ -99,7 +114,7 @@ export async function POST(req: Request) {
     day++;
   }
 
-  // напоминание за 4 часа — пока отмена ещё доступна
+  // ===== НАПОМИНАНИЕ ЗА 4 ЧАСА =====
   const { data: threeRows } = await admin
     .from("bookings")
     .select(SELECT)
@@ -109,10 +124,13 @@ export async function POST(req: Request) {
     .gt("starts_at", now.toISOString())
     .lte("starts_at", remindAt.toISOString())
     .limit(50);
+  
   for (const b of (threeRows as unknown as Row[]) ?? []) {
     if (!(await claim(admin, b.id, "reminded_3h_at"))) continue;
 
-    // до какого момента ещё можно отменить
+    const botToken = await getBotToken(b.shop_id);
+    if (!botToken) continue;
+
     const cancelUntil = new Date(new Date(b.starts_at).getTime() - CANCEL_H * 3600_000);
     const canStillCancel = cancelUntil.getTime() > now.getTime();
 
@@ -123,6 +141,7 @@ export async function POST(req: Request) {
         (canStillCancel
           ? `\nНе сможете прийти? Отменить можно до ${fmtTimeMsk(cancelUntil.toISOString())}.`
           : `Ждём вас! 💅`),
+      botToken, // 👈 ПЕРЕДАЁМ ТОКЕН
       canStillCancel
         ? {
             reply_markup: {
@@ -136,7 +155,7 @@ export async function POST(req: Request) {
     three++;
   }
 
-  // запрос отзыва после визита (с кнопкой «Оставить отзыв»)
+  // ===== ЗАПРОС ОТЗЫВА =====
   const { data: reviewRows } = await admin
     .from("bookings")
     .select(SELECT)
@@ -146,14 +165,19 @@ export async function POST(req: Request) {
     .lte("ends_at", now.toISOString())
     .gt("ends_at", ago24h.toISOString())
     .limit(50);
+  
   for (const b of (reviewRows as unknown as Row[]) ?? []) {
     if (!(await claim(admin, b.id, "review_requested_at"))) continue;
+
+    const botToken = await getBotToken(b.shop_id);
+    if (!botToken) continue;
 
     await tgSend(
       b.client_id,
       `Спасибо, что были у нас! 💖\n\n` +
         `Как прошёл визит — ${b.service?.name ?? "услуга"} у ${b.specialist?.full_name ?? "мастера"}? ` +
         `Будем благодарны за отзыв.`,
+      botToken, // 👈 ПЕРЕДАЁМ ТОКЕН
       {
         reply_markup: {
           inline_keyboard: [

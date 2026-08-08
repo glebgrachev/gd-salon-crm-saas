@@ -66,7 +66,8 @@ export async function POST(req: Request) {
     try {
       await tgSend(
         user.id,
-        '🔒 Функционал приложения временно ограничен.\n\nПожалуйста, обратитесь к администратору салона.'
+        '🔒 Функционал приложения временно ограничен.\n\nПожалуйста, обратитесь к администратору салона.',
+        shop.bot_token // 👈 ПЕРЕДАЁМ ТОКЕН
       );
     } catch {}
     return json({ 
@@ -160,7 +161,7 @@ export async function POST(req: Request) {
     .single();
   if (oErr || !order) return json({ error: oErr?.message ?? "order_failed" }, 500);
 
-  // запись (бронь) — ДОБАВЛЕН shop_id!
+  // запись (бронь)
   const { data: booking, error: bErr } = await admin
     .from("bookings")
     .insert({
@@ -171,7 +172,7 @@ export async function POST(req: Request) {
       starts_at: start.toISOString(),
       ends_at: end.toISOString(),
       status: "new",
-      shop_id: Number(shopId), // ← ДОБАВЛЕНО!
+      shop_id: Number(shopId),
       full_price: priced.full_price,
       discount_amount: priced.discount_amount,
       final_price: priced.final_price,
@@ -191,7 +192,7 @@ export async function POST(req: Request) {
     return json({ error: bErr?.message ?? "booking_failed" }, 500);
   }
 
-  // уведомление в Telegram
+  // ===== 🔥 УВЕДОМЛЕНИЕ — ПЕРЕДАЁМ ТОКЕН =====
   try {
     const [{ data: s2 }, { data: sp2 }] = await Promise.all([
       admin.from("services").select("name").eq("id", service_id).maybeSingle(),
@@ -206,6 +207,7 @@ export async function POST(req: Request) {
         (redeem > 0 ? `⭐ Списываем баллов: ${redeem}\n` : "") +
         (cert > 0 ? `🎟 Сертификат: −${cert} ₽\n` : "") +
         `💰 К оплате: ${moneyDue} ₽`,
+      shop.bot_token // 👈 ПЕРЕДАЁМ ТОКЕН
     );
   } catch {
     /* noop */

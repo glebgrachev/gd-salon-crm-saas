@@ -9,7 +9,12 @@ type Pending = {
   client_id: number;
 };
 
-type Broadcast = { id: string; text: string; cta_url: string | null };
+type Broadcast = { 
+  id: string; 
+  text: string; 
+  cta_url: string | null; 
+  shop_id: number; // 👈 Добавляем shop_id
+};
 
 export async function POST(req: Request) {
   if (req.headers.get("x-cron-secret") !== process.env.CRON_SECRET) {
@@ -42,7 +47,7 @@ export async function POST(req: Request) {
   const ids = [...byBroadcast.keys()];
   const { data: bcData } = await admin
     .from("broadcasts")
-    .select("id, text, cta_url")
+    .select("id, text, cta_url, shop_id") // 👈 ДОБАВЛЯЕМ shop_id
     .in("id", ids);
   const bcMap = new Map<string, Broadcast>();
   for (const b of (bcData as Broadcast[]) ?? []) bcMap.set(b.id, b);
@@ -51,6 +56,8 @@ export async function POST(req: Request) {
   for (const [broadcastId, clientIds] of byBroadcast) {
     const bc = bcMap.get(broadcastId);
     if (!bc) continue;
+    
+    // sendBatch теперь сам получит токен по shop_id из broadcast
     await sendBatch(admin, broadcastId, clientIds, bc.text, bc.cta_url);
     await admin.rpc("broadcast_recalc", { p_broadcast: broadcastId });
     processed += clientIds.length;

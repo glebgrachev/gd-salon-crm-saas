@@ -1,6 +1,7 @@
 import { createAdmin } from "@/lib/supabase/admin";
 import { validateInitData } from "@/lib/telegram";
 import { json, options } from "@/lib/cors";
+import { tgSend } from "@/lib/notify"; // 👈 Добавляем импорт
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,6 +56,14 @@ export async function POST(req: Request) {
 
   if (!userError && userData?.frozen === true) {
     console.warn('⚠️ Попытка начала переноса записи замороженным пользователем:', user.id);
+    // Отправляем сообщение в Telegram
+    try {
+      await tgSend(
+        user.id,
+        '🔒 Функционал приложения временно ограничен.\n\nПожалуйста, обратитесь к администратору салона.',
+        shop.bot_token // 👈 ПЕРЕДАЁМ ТОКЕН
+      );
+    } catch {}
     return json({ 
       ok: false, 
       error: 'User is frozen',
