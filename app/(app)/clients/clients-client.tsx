@@ -66,6 +66,14 @@ export default function ClientsClient({
   const [q, setQ] = useState("");
   const [seg, setSeg] = useState<string>("all");
 
+  // ===== 🔥 ДОБАВЬ ЭТОТ БЛОК =====
+  console.log('🔍 ДАННЫЕ КЛИЕНТОВ:');
+  console.log('  clientLimit:', clientLimit);
+  console.log('  clientsCount:', clientsCount);
+  console.log('  isLimitReached:', clientLimit !== -1 && clientsCount >= clientLimit);
+  console.log('  isNearLimit:', clientLimit !== -1 && clientsCount >= clientLimit * 0.7 && !(clientLimit !== -1 && clientsCount >= clientLimit));
+  // ================================
+  
   const query = q.trim().toLowerCase();
   const visible = initial.filter((c) => {
     if (seg !== "all" && c.segment !== seg) return false;
