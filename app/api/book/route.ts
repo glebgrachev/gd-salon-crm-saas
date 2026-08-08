@@ -63,7 +63,6 @@ export async function POST(req: Request) {
 
   if (!userError && userData?.frozen === true) {
     console.warn('⚠️ Попытка записи замороженным пользователем:', user.id);
-    // Отправляем сообщение в Telegram
     try {
       await tgSend(
         user.id,
@@ -72,7 +71,7 @@ export async function POST(req: Request) {
     } catch {}
     return json({ 
       ok: false, 
-      error: 'User is frozen',
+      error: 'frozen',
       message: 'Функционал приложения временно ограничен. Пожалуйста, обратитесь к администратору салона.'
     }, 403);
   }

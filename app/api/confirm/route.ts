@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     console.warn('⚠️ Попытка подтверждения записи замороженным пользователем:', user.id);
     return json({ 
       ok: false, 
-      error: 'User is frozen',
+      error: 'frozen',
       message: 'Функционал приложения временно ограничен. Пожалуйста, обратитесь к администратору салона.'
     }, 403);
   }
