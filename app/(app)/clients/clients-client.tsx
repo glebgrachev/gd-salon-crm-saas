@@ -51,6 +51,14 @@ function fmtDate(iso: string) {
   }).format(new Date(iso));
 }
 
+// ===== ФУНКЦИЯ ДЛЯ СКЛОНЕНИЯ =====
+function pluralizeMe(count: number): string {
+  if (count === 0) return "мест";
+  if (count === 1) return "место";
+  if (count >= 2 && count <= 4) return "места";
+  return "мест";
+}
+
 export default function ClientsClient({ 
   initial,
   shopId,
@@ -147,7 +155,7 @@ export default function ClientsClient({
           <div className="flex items-center gap-3 text-sm text-amber-700">
             <AlertTriangle className="h-5 w-5 flex-shrink-0" />
             <div>
-              <div className="font-semibold">Осталось {clientLimit - clientsCount} мест</div>
+              <div className="font-semibold">Осталось {clientLimit - clientsCount} {pluralizeMe(clientLimit - clientsCount)}</div>
               <div className="text-amber-600">
                 {clientLimit - clientsCount <= 10 
                   ? "Скоро достигнете лимита. Рекомендуем обновить тариф." 
