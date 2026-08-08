@@ -120,15 +120,6 @@ export default function ClientsClient({
                   Лимит достигнут
                 </span>
               )}
-              {(isNearLimit || isLimitReached) && (
-                <Link 
-                  href="/tariffs"
-                  className="inline-flex items-center gap-1 rounded-md bg-neutral-900 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700 transition"
-                >
-                  Выбрать тариф
-                  <ArrowRight className="h-3 w-3" />
-                </Link>
-              )}
             </div>
           )}
           {clientLimit === -1 && (
@@ -137,6 +128,17 @@ export default function ClientsClient({
             </p>
           )}
         </div>
+        
+        {/* Кнопка "Выбрать тариф" — справа */}
+        {(isNearLimit || isLimitReached) && (
+          <Link 
+            href="/tariffs"
+            className="flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 transition"
+          >
+            Выбрать тариф
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        )}
       </header>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
