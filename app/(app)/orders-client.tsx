@@ -97,7 +97,7 @@ export default function OrdersClient({
 
       {visible.length === 0 ? (
         <div className="rounded-xl border border-dashed border-neutral-300 bg-white px-8 py-16 text-center text-sm text-neutral-500">
-          Заказов пока нет. Как только клиент запишется — запись появится здесь.
+          Записей пока нет. Как только клиент запишется — запись появится здесь.
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
