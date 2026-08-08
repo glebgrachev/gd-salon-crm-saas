@@ -78,17 +78,17 @@ export default function SpecialistsManager({
   const currentCount = initial.length;
   const limit = limits.specialists;
   const isLimitReached = limit !== -1 && currentCount >= limit;
+  const isNearLimit = limit !== -1 && currentCount >= Math.floor(limit * 0.7) && !isLimitReached;
 
-  // ===== 🔥 ДОБАВЬ ЭТОТ БЛОК =====
-console.log('🔍 specialists-manager - ЛИМИТЫ:');
-console.log('  limits:', limits);
-console.log('  limits.specialists:', limits.specialists);
-console.log('  currentCount:', currentCount);
-console.log('  limit:', limit);
-console.log('  isLimitReached:', isLimitReached);
-console.log('🔍 limit для отображения:', limit);
-console.log('🔍 limitsLoading:', limitsLoading);
-// ================================
+  // ===== 🔥 ЛОГИ ДЛЯ ОТЛАДКИ =====
+  console.log('🔍 specialists-manager - ЛИМИТЫ:');
+  console.log('  limits:', limits);
+  console.log('  limits.specialists:', limits.specialists);
+  console.log('  currentCount:', currentCount);
+  console.log('  limit:', limit);
+  console.log('  isLimitReached:', isLimitReached);
+  console.log('  isNearLimit:', isNearLimit);
+  // ================================
 
   function openCreate() {
     // 🔥 НЕ блокируем кнопку, а показываем модалку
@@ -174,8 +174,13 @@ console.log('🔍 limitsLoading:', limitsLoading);
             {!limitsLoading && limit !== -1 && (
               <p className="mt-1 text-xs text-neutral-400">
                 Мастеров: {currentCount}/{limit}
-                {isLimitReached && (
+                {isNearLimit && !isLimitReached && (
                   <span className="ml-2 text-amber-600">
+                    ⚠️ Осталось {limit - currentCount} мест
+                  </span>
+                )}
+                {isLimitReached && (
+                  <span className="ml-2 text-red-600">
                     ⚠️ Лимит достигнут
                   </span>
                 )}
