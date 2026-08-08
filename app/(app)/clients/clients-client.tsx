@@ -111,7 +111,7 @@ export default function ClientsClient({
               {isNearLimit && !isLimitReached && (
                 <span className="flex items-center gap-1 text-amber-600">
                   <AlertTriangle className="h-3 w-3" />
-                  Приближаетесь к лимиту
+                  Осталось {clientLimit - clientsCount} {pluralizeMe(clientLimit - clientsCount)}
                 </span>
               )}
               {isLimitReached && (
@@ -119,6 +119,15 @@ export default function ClientsClient({
                   <AlertTriangle className="h-3 w-3" />
                   Лимит достигнут
                 </span>
+              )}
+              {(isNearLimit || isLimitReached) && (
+                <Link 
+                  href="/tariffs"
+                  className="inline-flex items-center gap-1 rounded-md bg-neutral-900 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700 transition"
+                >
+                  Выбрать тариф
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
               )}
             </div>
           )}
@@ -129,49 +138,6 @@ export default function ClientsClient({
           )}
         </div>
       </header>
-
-      {/* 🔥 ПРЕДУПРЕЖДЕНИЕ О ЛИМИТЕ С КНОПКОЙ "ВЫБРАТЬ ТАРИФ" */}
-      {isLimitReached && (
-        <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-4 flex items-center justify-between">
-          <div className="flex items-center gap-3 text-sm text-red-700">
-            <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-            <div>
-              <div className="font-semibold">Лимит клиентов достигнут!</div>
-              <div className="text-red-600">Вы не можете добавлять новых клиентов на текущем тарифе.</div>
-            </div>
-          </div>
-          <Link 
-            href="/tariffs"
-            className="flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 transition"
-          >
-            Выбрать тариф
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
-      )}
-
-      {isNearLimit && !isLimitReached && (
-        <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 p-4 flex items-center justify-between">
-          <div className="flex items-center gap-3 text-sm text-amber-700">
-            <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-            <div>
-              <div className="font-semibold">Осталось {clientLimit - clientsCount} {pluralizeMe(clientLimit - clientsCount)}</div>
-              <div className="text-amber-600">
-                {clientLimit - clientsCount <= 10 
-                  ? "Скоро достигнете лимита. Рекомендуем обновить тариф." 
-                  : "При достижении лимита вы не сможете добавлять новых клиентов."}
-              </div>
-            </div>
-          </div>
-          <Link 
-            href="/tariffs"
-            className="flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 transition"
-          >
-            Выбрать тариф
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
-      )}
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="max-w-xs flex-1">
