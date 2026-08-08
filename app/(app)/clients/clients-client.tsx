@@ -89,7 +89,7 @@ export default function ClientsClient({
   }, {});
 
   const isLimitReached = clientLimit !== -1 && clientsCount >= clientLimit;
-  const isNearLimit = clientLimit !== -1 && clientsCount >= clientLimit * 0.7 && !isLimitReached;
+  const isNearLimit = clientLimit !== -1 && clientsCount >= Math.floor(clientLimit * 0.7) && !isLimitReached;
 
   return (
     <div className="mx-auto max-w-5xl px-8 py-8">
