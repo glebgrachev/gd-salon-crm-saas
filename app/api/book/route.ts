@@ -54,6 +54,29 @@ export async function POST(req: Request) {
   const user = validateInitData(body.initData ?? "", shop.bot_token);
   if (!user) return json({ error: "unauthorized" }, 401);
 
+  // ===== 🔥 ПРОВЕРКА НА ЗАМОРОЗКУ =====
+  const { data: userData, error: userError } = await admin
+    .from("users")
+    .select("frozen")
+    .eq("telegram_id", user.id)
+    .maybeSingle();
+
+  if (!userError && userData?.frozen === true) {
+    console.warn('⚠️ Попытка записи замороженным пользователем:', user.id);
+    // Отправляем сообщение в Telegram
+    try {
+      await tgSend(
+        user.id,
+        '🔒 Функционал приложения временно ограничен.\n\nПожалуйста, обратитесь к администратору салона.'
+      );
+    } catch {}
+    return json({ 
+      ok: false, 
+      error: 'User is frozen',
+      message: 'Функционал приложения временно ограничен. Пожалуйста, обратитесь к администратору салона.'
+    }, 403);
+  }
+
   const { service_id, specialist_id, starts_at } = body;
   if (!service_id || !specialist_id || !starts_at) return json({ error: "bad_request" }, 400);
 

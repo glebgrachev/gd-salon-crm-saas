@@ -46,6 +46,22 @@ export async function POST(req: Request) {
   const user = validateInitData(body.initData ?? "", shop.bot_token);
   if (!user) return json({ error: "unauthorized" }, 401);
 
+  // ===== 🔥 ПРОВЕРКА НА ЗАМОРОЗКУ =====
+  const { data: userData, error: userError } = await admin
+    .from("users")
+    .select("frozen")
+    .eq("telegram_id", user.id)
+    .maybeSingle();
+
+  if (!userError && userData?.frozen === true) {
+    console.warn('⚠️ Попытка отмены переноса записи замороженным пользователем:', user.id);
+    return json({ 
+      ok: false, 
+      error: 'User is frozen',
+      message: 'Функционал приложения временно ограничен. Пожалуйста, обратитесь к администратору салона.'
+    }, 403);
+  }
+
   if (!body.booking_id) return json({ error: "bad_request" }, 400);
 
   const { data, error } = await admin.rpc("cancel_reschedule", {

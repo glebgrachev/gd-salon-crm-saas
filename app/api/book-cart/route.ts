@@ -44,7 +44,7 @@ export async function POST(req: Request) {
 
   const admin = createAdmin();
 
-  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА ИЗ ТАБЛИЦЫ shops =====
+  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА =====
   const { data: shop, error: shopError } = await admin
     .from("shops")
     .select("bot_token")
@@ -56,9 +56,32 @@ export async function POST(req: Request) {
     return json({ error: "bot_token_not_found" }, 500);
   }
 
-  // ===== 3. ПРОВЕРЯЕМ initData С ТОКЕНОМ САЛОНА =====
+  // ===== 3. ПРОВЕРЯЕМ initData =====
   const user = validateInitData(body.initData ?? "", shop.bot_token);
   if (!user) return json({ error: "unauthorized" }, 401);
+
+  // ===== 🔥 ПРОВЕРКА НА ЗАМОРОЗКУ =====
+  const { data: userData, error: userError } = await admin
+    .from("users")
+    .select("frozen")
+    .eq("telegram_id", user.id)
+    .maybeSingle();
+
+  if (!userError && userData?.frozen === true) {
+    console.warn('⚠️ Попытка оформления заказа замороженным пользователем:', user.id);
+    // Отправляем сообщение в Telegram
+    try {
+      await tgSend(
+        user.id,
+        '🔒 Функционал приложения временно ограничен.\n\nПожалуйста, обратитесь к администратору салона.'
+      );
+    } catch {}
+    return json({ 
+      ok: false, 
+      error: 'User is frozen',
+      message: 'Функционал приложения временно ограничен. Пожалуйста, обратитесь к администратору салона.'
+    }, 403);
+  }
 
   const items = body.items ?? [];
   if (items.length === 0) return json({ error: "empty" }, 400);
