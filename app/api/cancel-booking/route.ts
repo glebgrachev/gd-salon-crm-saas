@@ -1,6 +1,7 @@
 import { createAdmin } from "@/lib/supabase/admin";
 import { validateInitData } from "@/lib/telegram";
 import { json, options } from "@/lib/cors";
+import { tgSend } from "@/lib/notify"; // 👈 Добавляем импорт
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
 
   const { data: booking } = await admin
     .from("bookings")
-    .select("id, client_id, status, starts_at")
+    .select("id, client_id, status, starts_at, service:services ( name ), specialist:specialists ( full_name )")
     .eq("id", body.booking_id)
     .maybeSingle();
 
@@ -69,6 +70,31 @@ export async function POST(req: Request) {
     .update({ status: "cancelled" })
     .eq("id", booking.id);
   if (error) return json({ error: error.message }, 500);
+
+  // ===== 🔥 ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ ОБ ОТМЕНЕ =====
+  try {
+    const serviceName = booking.service?.name ?? "Услуга";
+    const specialistName = booking.specialist?.full_name ?? "";
+    const when = new Date(booking.starts_at).toLocaleString("ru-RU", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Europe/Moscow",
+    });
+
+    await tgSend(
+      user.id,
+      `❌ <b>Запись отменена</b>\n\n` +
+        `${serviceName} · ${specialistName}\n` +
+        `🗓 ${when}\n\n` +
+        `Слот освобождён. Будем рады видеть вас снова! 💅`,
+      shop.bot_token // 👈 ПЕРЕДАЁМ ТОКЕН
+    );
+  } catch {
+    /* noop */
+  }
 
   // слот освободился — сразу предлагаем его тем, кто ждёт в очереди,
   // не дожидаясь планового сканирования (раз в 5 минут)
