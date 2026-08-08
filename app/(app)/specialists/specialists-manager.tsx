@@ -79,6 +79,15 @@ export default function SpecialistsManager({
   const limit = limits.specialists;
   const isLimitReached = limit !== -1 && currentCount >= limit;
 
+  // ===== 🔥 ДОБАВЬ ЭТОТ БЛОК =====
+console.log('🔍 specialists-manager - ЛИМИТЫ:');
+console.log('  limits:', limits);
+console.log('  limits.specialists:', limits.specialists);
+console.log('  currentCount:', currentCount);
+console.log('  limit:', limit);
+console.log('  isLimitReached:', isLimitReached);
+// ================================
+
   function openCreate() {
     // 🔥 НЕ блокируем кнопку, а показываем модалку
     if (isLimitReached) {
