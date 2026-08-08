@@ -86,6 +86,8 @@ console.log('  limits.specialists:', limits.specialists);
 console.log('  currentCount:', currentCount);
 console.log('  limit:', limit);
 console.log('  isLimitReached:', isLimitReached);
+console.log('🔍 limit для отображения:', limit);
+console.log('🔍 limitsLoading:', limitsLoading);
 // ================================
 
   function openCreate() {
