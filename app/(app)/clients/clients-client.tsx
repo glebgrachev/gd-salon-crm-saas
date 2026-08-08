@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Table,
   TableBody,
@@ -12,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { fmtPrice } from "@/lib/bookings";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ArrowUpRight } from "lucide-react";
 
 export type ClientRow = {
   telegram_id: number;
@@ -92,6 +93,7 @@ export default function ClientsClient({
           <p className="mt-1 text-sm text-neutral-500">
             База клиентов с записями и суммой по каждому.
           </p>
+          
           {/* Индикатор лимита */}
           {clientLimit !== -1 && (
             <div className="mt-1 flex items-center gap-2 text-xs">
@@ -118,8 +120,50 @@ export default function ClientsClient({
             </p>
           )}
         </div>
-        {/* 🔥 Кнопка УБРАНА — клиенты только из Telegram */}
       </header>
+
+      {/* 🔥 ПРЕДУПРЕЖДЕНИЕ О ЛИМИТЕ С КНОПКОЙ "ВЫБРАТЬ ТАРИФ" */}
+      {isLimitReached && (
+        <div className="mb-4 rounded-lg bg-red-50 border border-red-200 p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3 text-sm text-red-700">
+            <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+            <div>
+              <div className="font-semibold">Лимит клиентов достигнут!</div>
+              <div className="text-red-600">Вы не можете добавлять новых клиентов на текущем тарифе.</div>
+            </div>
+          </div>
+          <Link 
+            href="/tariffs"
+            className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition"
+          >
+            Выбрать тариф
+            <ArrowUpRight className="h-4 w-4" />
+          </Link>
+        </div>
+      )}
+
+      {isNearLimit && !isLimitReached && (
+        <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3 text-sm text-amber-700">
+            <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+            <div>
+              <div className="font-semibold">Осталось {clientLimit - clientsCount} мест</div>
+              <div className="text-amber-600">
+                {clientLimit - clientsCount <= 10 
+                  ? "Скоро достигнете лимита. Рекомендуем обновить тариф." 
+                  : "При достижении лимита вы не сможете добавлять новых клиентов."}
+              </div>
+            </div>
+          </div>
+          <Link 
+            href="/tariffs"
+            className="flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 transition"
+          >
+            Выбрать тариф
+            <ArrowUpRight className="h-4 w-4" />
+          </Link>
+        </div>
+      )}
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="max-w-xs flex-1">
