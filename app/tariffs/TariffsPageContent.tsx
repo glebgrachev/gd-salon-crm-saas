@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Check, ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -197,13 +196,13 @@ export default function TariffsPageContent() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="mb-6">
-        <Link
-          href="/settings"
+        <button
+          onClick={() => router.back()}
           className="inline-flex items-center gap-2 text-sm text-neutral-500 hover:text-neutral-900 transition"
         >
           <ArrowLeft className="h-4 w-4" />
-          Назад в настройки
-        </Link>
+          Назад
+        </button>
       </div>
 
       <div className="mb-8 text-center">
