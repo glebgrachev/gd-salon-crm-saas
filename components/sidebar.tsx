@@ -31,7 +31,7 @@ import ProModal from "@/components/ProModal";
 
 // Список пунктов для владельца салона не суперадминов
 const OWNER_NAV = [
-  { href: "/", label: "Заказы", icon: CalendarCheck, module: null },
+  { href: "/", label: "Записи", icon: CalendarCheck, module: null },
   { href: "/specialists", label: "Специалисты", icon: Scissors, module: null },
   { href: "/schedule", label: "График работы", icon: CalendarDays, module: null },
   { href: "/clients", label: "Клиенты", icon: Users, module: null },

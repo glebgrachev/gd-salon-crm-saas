@@ -71,7 +71,7 @@ export default function OrdersClient({
     <div className="mx-auto max-w-5xl px-8 py-8">
       <header className="mb-6">
         <h1 className="text-xl font-semibold tracking-tight text-neutral-900">
-          Заказы
+          Записи
         </h1>
         <p className="mt-1 text-sm text-neutral-500">
           Записи клиентов. Обновляются в реальном времени.
