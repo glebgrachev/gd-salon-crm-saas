@@ -1,7 +1,7 @@
 import { createAdmin } from "@/lib/supabase/admin";
 import { validateInitData } from "@/lib/telegram";
 import { json, options } from "@/lib/cors";
-import { tgSend, fmtMsk } from "@/lib/notify";
+import { tgSend } from "@/lib/notify"; // 👈 УБИРАЕМ fmtMsk
 import { priceService } from "@/lib/pricing";
 
 export const runtime = "nodejs";
@@ -64,7 +64,7 @@ export async function POST(req: Request) {
       await tgSend(
         user.id,
         '🔒 Функционал приложения временно ограничен.\n\nПожалуйста, обратитесь к администратору салона.',
-        shop.bot_token // 👈 ПЕРЕДАЁМ ТОКЕН
+        shop.bot_token
       );
     } catch {}
     return json({ 
@@ -187,19 +187,30 @@ export async function POST(req: Request) {
     return json({ error: "reschedule_failed" }, 409);
   }
 
-  // ===== 🔥 УВЕДОМЛЕНИЕ — ПЕРЕДАЁМ ТОКЕН =====
+  // ===== 🔥 УВЕДОМЛЕНИЕ — ФОРМАТИРУЕМ ВРЕМЯ КАК В СПИСКЕ ЗАПИСЕЙ =====
   try {
     const [{ data: s2 }, { data: sp2 }] = await Promise.all([
       admin.from("services").select("name").eq("id", service_id).maybeSingle(),
       admin.from("specialists").select("full_name").eq("id", specialist_id).maybeSingle(),
     ]);
+    
+    // 🔥 Форматируем время так же, как в списке записей
+    const when = new Date(booking.starts_at).toLocaleString("ru-RU", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "UTC"
+    });
+    
     await tgSend(
       user.id,
       `🔄 <b>Запись перенесена!</b>\n\n` +
         `${s2?.name ?? "Услуга"} · ${sp2?.full_name ?? ""}\n` +
-        `🗓 ${fmtMsk(booking.starts_at)}\n` +
+        `🗓 ${when}\n` +
         `💰 ${priced.final_price} ₽`,
-      shop.bot_token // 👈 ПЕРЕДАЁМ ТОКЕН
+      shop.bot_token
     );
   } catch {
     /* noop */

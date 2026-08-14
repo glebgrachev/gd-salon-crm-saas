@@ -1,7 +1,7 @@
 import { createAdmin } from "@/lib/supabase/admin";
 import { validateInitData } from "@/lib/telegram";
 import { priceService, priceCart, type CartItemIn } from "@/lib/pricing";
-import { tgSend, fmtMsk } from "@/lib/notify";
+import { tgSend } from "@/lib/notify"; // 👈 УБИРАЕМ fmtMsk
 import { json, options } from "@/lib/cors";
 
 export const runtime = "nodejs";
@@ -73,7 +73,7 @@ export async function POST(req: Request) {
       await tgSend(
         user.id,
         '🔒 Функционал приложения временно ограничен.\n\nПожалуйста, обратитесь к администратору салона.',
-        shop.bot_token // 👈 ПЕРЕДАЁМ ТОКЕН
+        shop.bot_token
       );
     } catch {}
     return json({ 
@@ -272,7 +272,7 @@ export async function POST(req: Request) {
     else soldOut.push(it.product_id);
   }
 
-  // ===== 🔥 СВОДНОЕ УВЕДОМЛЕНИЕ — ПЕРЕДАЁМ ТОКЕН =====
+  // ===== 🔥 СВОДНОЕ УВЕДОМЛЕНИЕ — ФОРМАТИРУЕМ ВРЕМЯ КАК В СПИСКЕ ЗАПИСЕЙ =====
   try {
     const [{ data: svcNames }, { data: spNames }] = await Promise.all([
       admin.from("services").select("id, name").in("id", serviceIds).eq("shop_id", Number(shopId)),
@@ -282,10 +282,20 @@ export async function POST(req: Request) {
     const spName = new Map(((spNames as { id: string; full_name: string }[]) ?? []).map((s) => [s.id, s.full_name]));
     const total = rpcItems.reduce((s, r) => s + Number(r.final_price), 0);
     const moneyDue = Math.max(0, total - redeemTotal * pointValue - certTotal);
+    
+    // 🔥 Форматируем каждое время так же, как в списке записей
     const lines = items
       .map((it, idx) => {
         const gift = rpcItems[idx].is_gift ? " 🎁" : "";
-        return `• ${svcName.get(it.service_id) ?? "Услуга"}${gift} — ${spName.get(it.specialist_id) ?? ""}\n   ${fmtMsk(it.starts_at)}`;
+        const time = new Date(it.starts_at).toLocaleString("ru-RU", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZone: "UTC"
+        });
+        return `• ${svcName.get(it.service_id) ?? "Услуга"}${gift} — ${spName.get(it.specialist_id) ?? ""}\n   ${time}`;
       })
       .join("\n");
 
@@ -324,7 +334,7 @@ export async function POST(req: Request) {
         `💰 К оплате: ${moneyDue + Math.round(productsTotal)} ₽` +
         (productsTotal > 0 ? `\n   (услуги ${moneyDue} ₽ + товары ${Math.round(productsTotal)} ₽)` : "") +
         soldOutBlock,
-      shop.bot_token // 👈 ПЕРЕДАЁМ ТОКЕН
+      shop.bot_token
     );
   } catch {
     /* noop */

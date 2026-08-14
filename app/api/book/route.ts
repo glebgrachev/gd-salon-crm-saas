@@ -2,7 +2,7 @@ import { createAdmin } from "@/lib/supabase/admin";
 import { validateInitData } from "@/lib/telegram";
 import { priceService } from "@/lib/pricing";
 import { json, options } from "@/lib/cors";
-import { tgSend, fmtMsk } from "@/lib/notify";
+import { tgSend } from "@/lib/notify"; // 👈 УБИРАЕМ fmtMsk, он больше не нужен
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
       await tgSend(
         user.id,
         '🔒 Функционал приложения временно ограничен.\n\nПожалуйста, обратитесь к администратору салона.',
-        shop.bot_token // 👈 ПЕРЕДАЁМ ТОКЕН
+        shop.bot_token
       );
     } catch {}
     return json({ 
@@ -192,13 +192,23 @@ export async function POST(req: Request) {
     return json({ error: bErr?.message ?? "booking_failed" }, 500);
   }
 
-  // ===== 🔥 УВЕДОМЛЕНИЕ — ПЕРЕДАЁМ ТОКЕН =====
+  // ===== 🔥 УВЕДОМЛЕНИЕ — ФОРМАТИРУЕМ ВРЕМЯ КАК В СПИСКЕ ЗАПИСЕЙ =====
   try {
     const [{ data: s2 }, { data: sp2 }] = await Promise.all([
       admin.from("services").select("name").eq("id", service_id).maybeSingle(),
       admin.from("specialists").select("full_name").eq("id", specialist_id).maybeSingle(),
     ]);
-    const when = fmtMsk(booking.starts_at);
+    
+    // 🔥 Форматируем время так же, как в списке записей (без перевода часовых поясов)
+    const when = new Date(booking.starts_at).toLocaleString("ru-RU", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "UTC"
+    });
+    
     await tgSend(
       user.id,
       `✅ <b>Вы записаны!</b>\n\n` +
@@ -207,7 +217,7 @@ export async function POST(req: Request) {
         (redeem > 0 ? `⭐ Списываем баллов: ${redeem}\n` : "") +
         (cert > 0 ? `🎟 Сертификат: −${cert} ₽\n` : "") +
         `💰 К оплате: ${moneyDue} ₽`,
-      shop.bot_token // 👈 ПЕРЕДАЁМ ТОКЕН
+      shop.bot_token
     );
   } catch {
     /* noop */
