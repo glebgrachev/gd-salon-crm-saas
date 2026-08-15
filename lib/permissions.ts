@@ -33,12 +33,15 @@ export const MODULE_NAV: Record<ModuleKey, { href: string; label: string }> = {
   waitlist: { href: "/waitlist", label: "Лист ожидания" },
 };
 
-export function hasModule(modules: Record<string, boolean> | null, key: string): boolean {
+export function hasModule(modules: Record<string, any> | null, key: string): boolean {
   if (!modules) return false;
-  return modules[key] === true;
+  const value = modules[key];
+  // -1, 1, true → true
+  // 0, false, null → false
+  return value !== 0 && value !== false && value !== null && value !== undefined;
 }
 
-export async function getShopModules(shopId: number): Promise<Record<string, boolean>> {
+export async function getShopModules(shopId: number): Promise<Record<string, any>> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("shops")
