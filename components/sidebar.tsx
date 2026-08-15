@@ -61,7 +61,7 @@ export default function Sidebar({ email }: { email?: string | null }) {
   const router = useRouter();
   const supabase = createClient();
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-  const [modules, setModules] = useState<Record<string, boolean> | null>(null);
+  const [modules, setModules] = useState<Record<string, any> | null>(null);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [lockedModule, setLockedModule] = useState("");
@@ -71,6 +71,7 @@ export default function Sidebar({ email }: { email?: string | null }) {
       const { data: isSuper } = await supabase.rpc("is_superadmin");
       setIsSuperAdmin(!!isSuper);
 
+      // Загружаем модули только для владельцев салонов
       if (!isSuper) {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
@@ -87,8 +88,6 @@ export default function Sidebar({ email }: { email?: string | null }) {
               .eq("id", admin.shop_id)
               .single();
             setModules(shop?.modules ?? {});
-            console.log('🔍 Модули загружены:', shop?.modules);
-            console.log('🔍 newsletters в модулях:', shop?.modules?.newsletters);
           }
         }
       }
@@ -98,19 +97,22 @@ export default function Sidebar({ email }: { email?: string | null }) {
   }, [supabase]);
 
   const handleLockedClick = (label: string) => {
+    console.log('🔒 handleLockedClick вызван для:', label);
     setLockedModule(label);
     setModalOpen(true);
   };
 
+  // Строим пункты меню с пометкой о блокировке
   const navItems = isSuperAdmin
     ? SUPERADMIN_NAV
     : OWNER_NAV.map((item) => {
         const isLocked = item.module && !hasModule(modules, item.module as ModuleKey);
         
         // 👇 ЛОГ ДЛЯ ВСЕХ МОДУЛЕЙ
-        if (item.module) {
+        if (item.module === "newsletters") {
           console.log(`🔍 ${item.label}:`, {
             module: item.module,
+            modules,
             hasModule: hasModule(modules, item.module as ModuleKey),
             isLocked
           });
@@ -154,6 +156,7 @@ export default function Sidebar({ email }: { email?: string | null }) {
                 key={href}
                 href={isLocked ? "#" : href}
                 onClick={(e) => {
+                  console.log(`🔍 Клик по ${label}:`, { isLocked, href });
                   if (isLocked) {
                     e.preventDefault();
                     handleLockedClick(label);
