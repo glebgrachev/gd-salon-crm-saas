@@ -71,7 +71,6 @@ export default function Sidebar({ email }: { email?: string | null }) {
       const { data: isSuper } = await supabase.rpc("is_superadmin");
       setIsSuperAdmin(!!isSuper);
 
-      // Загружаем модули только для владельцев салонов
       if (!isSuper) {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
@@ -88,6 +87,8 @@ export default function Sidebar({ email }: { email?: string | null }) {
               .eq("id", admin.shop_id)
               .single();
             setModules(shop?.modules ?? {});
+            console.log('🔍 Модули загружены:', shop?.modules);
+            console.log('🔍 newsletters в модулях:', shop?.modules?.newsletters);
           }
         }
       }
@@ -101,17 +102,15 @@ export default function Sidebar({ email }: { email?: string | null }) {
     setModalOpen(true);
   };
 
-  // Строим пункты меню с пометкой о блокировке
   const navItems = isSuperAdmin
     ? SUPERADMIN_NAV
     : OWNER_NAV.map((item) => {
         const isLocked = item.module && !hasModule(modules, item.module as ModuleKey);
         
-        // 👇 ЛОГ ДЛЯ ОТЛАДКИ РАССЫЛОК
-        if (item.module === "newsletters") {
-          console.log('🔍 Рассылки (sidebar):', {
+        // 👇 ЛОГ ДЛЯ ВСЕХ МОДУЛЕЙ
+        if (item.module) {
+          console.log(`🔍 ${item.label}:`, {
             module: item.module,
-            modules,
             hasModule: hasModule(modules, item.module as ModuleKey),
             isLocked
           });
