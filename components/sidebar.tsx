@@ -53,7 +53,7 @@ const SUPERADMIN_NAV = [
   { href: "/superadmin", label: "Дашборд", icon: Shield },
   { href: "/superadmin/shops", label: "Салоны", icon: Building2 },
   { href: "/superadmin/users", label: "Пользователи", icon: Users },
-  { href: "/superadmin/plans", label: "Тарифы", icon: CreditCard }, // ← ДОБАВЛЕН
+  { href: "/superadmin/plans", label: "Тарифы", icon: CreditCard },
 ];
 
 export default function Sidebar({ email }: { email?: string | null }) {
@@ -106,6 +106,17 @@ export default function Sidebar({ email }: { email?: string | null }) {
     ? SUPERADMIN_NAV
     : OWNER_NAV.map((item) => {
         const isLocked = item.module && !hasModule(modules, item.module as ModuleKey);
+        
+        // 👇 ЛОГ ДЛЯ ОТЛАДКИ РАССЫЛОК
+        if (item.module === "newsletters") {
+          console.log('🔍 Рассылки (sidebar):', {
+            module: item.module,
+            modules,
+            hasModule: hasModule(modules, item.module as ModuleKey),
+            isLocked
+          });
+        }
+        
         return { ...item, isLocked: !!isLocked };
       });
 
