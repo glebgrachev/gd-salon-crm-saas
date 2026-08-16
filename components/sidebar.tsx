@@ -121,10 +121,10 @@ export default function Sidebar({ email }: { email?: string | null }) {
     <>
       <aside className="flex w-60 shrink-0 flex-col border-r border-neutral-200 bg-white">
         <div className="px-5 py-5">
-          <span className="text-sm font-semibold tracking-tight text-neutral-900">
+          <span className="text-xl font-semibold tracking-tight text-neutral-900">
             BeautyApp
           </span>
-          <span className="block text-xl text-neutral-400">
+          <span className="block text-xs text-neutral-400">
             {isSuperAdmin ? "Управление платформой" : "Админ-панель салона"}
           </span>
         </div>
