@@ -124,7 +124,7 @@ export default function Sidebar({ email }: { email?: string | null }) {
           <span className="text-sm font-semibold tracking-tight text-neutral-900">
             BeautyApp
           </span>
-          <span className="block text-xs text-neutral-400">
+          <span className="block text-xl text-neutral-400">
             {isSuperAdmin ? "Управление платформой" : "Админ-панель салона"}
           </span>
         </div>
