@@ -40,8 +40,7 @@ const OWNER_NAV = [
   { href: "/loyalty", label: "Лояльность", icon: Gift, module: "loyalty" },
   { href: "/certificates", label: "Сертификаты", icon: Ticket, module: "certificates" },
   { href: "/retention", label: "Возвращаемость", icon: UserCheck, module: "retention" },
-  { href: "/broadcasts", label: "Рассылки", icon: Send, module: "newsletters" },
-  { href: "/mailing", label: "📨 Рассылки (новая)", icon: Send, module: null }, // 👈 НОВЫЙ ПУНКТ
+  { href: "/mailing", label: "Рассылки", icon: Send, module: null },
   { href: "/waitlist", label: "Лист ожидания", icon: Bell, module: "waitlist" },
   { href: "/stock", label: "Склад", icon: Package, module: "stock" },
   { href: "/payouts", label: "Зарплаты", icon: Wallet, module: null },
