@@ -41,6 +41,7 @@ const OWNER_NAV = [
   { href: "/certificates", label: "Сертификаты", icon: Ticket, module: "certificates" },
   { href: "/retention", label: "Возвращаемость", icon: UserCheck, module: "retention" },
   { href: "/broadcasts", label: "Рассылки", icon: Send, module: "newsletters" },
+  { href: "/mailing", label: "📨 Рассылки (новая)", icon: Send, module: null }, // 👈 НОВЫЙ ПУНКТ
   { href: "/waitlist", label: "Лист ожидания", icon: Bell, module: "waitlist" },
   { href: "/stock", label: "Склад", icon: Package, module: "stock" },
   { href: "/payouts", label: "Зарплаты", icon: Wallet, module: null },
@@ -97,7 +98,6 @@ export default function Sidebar({ email }: { email?: string | null }) {
   }, [supabase]);
 
   const handleLockedClick = (label: string) => {
-    console.log('🔒 handleLockedClick вызван для:', label);
     setLockedModule(label);
     setModalOpen(true);
   };
@@ -107,17 +107,6 @@ export default function Sidebar({ email }: { email?: string | null }) {
     ? SUPERADMIN_NAV
     : OWNER_NAV.map((item) => {
         const isLocked = item.module && !hasModule(modules, item.module as ModuleKey);
-        
-        // 👇 ЛОГ ДЛЯ ВСЕХ МОДУЛЕЙ
-        if (item.module === "newsletters") {
-          console.log(`🔍 ${item.label}:`, {
-            module: item.module,
-            modules,
-            hasModule: hasModule(modules, item.module as ModuleKey),
-            isLocked
-          });
-        }
-        
         return { ...item, isLocked: !!isLocked };
       });
 
@@ -156,7 +145,6 @@ export default function Sidebar({ email }: { email?: string | null }) {
                 key={href}
                 href={isLocked ? "#" : href}
                 onClick={(e) => {
-                  console.log(`🔍 Клик по ${label}:`, { isLocked, href });
                   if (isLocked) {
                     e.preventDefault();
                     handleLockedClick(label);
