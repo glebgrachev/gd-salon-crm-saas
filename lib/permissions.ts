@@ -14,7 +14,7 @@ export type ModuleKey =
 export const MODULE_PATHS: Record<ModuleKey, string> = {
   analytics: "/analytics",
   loyalty: "/loyalty",
-  newsletters: "/broadcasts",
+  newsletters: "/mailing", // 👈 Меняем с "/broadcasts" на "/mailing"
   promotions: "/promotions",
   certificates: "/certificates",
   stock: "/stock",
@@ -25,7 +25,7 @@ export const MODULE_PATHS: Record<ModuleKey, string> = {
 export const MODULE_NAV: Record<ModuleKey, { href: string; label: string }> = {
   analytics: { href: "/analytics", label: "Аналитика" },
   loyalty: { href: "/loyalty", label: "Лояльность" },
-  newsletters: { href: "/broadcasts", label: "Рассылки" },
+  newsletters: { href: "/mailing", label: "Рассылки" }, // 👈 Меняем с "/broadcasts" на "/mailing"
   promotions: { href: "/promotions", label: "Акции" },
   certificates: { href: "/certificates", label: "Сертификаты" },
   stock: { href: "/stock", label: "Склад" },
