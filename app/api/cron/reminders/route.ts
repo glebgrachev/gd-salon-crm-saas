@@ -9,13 +9,13 @@ type Row = {
   client_id: number;
   starts_at: string;
   ends_at: string;
-  shop_id: number; // 👈 Добавляем shop_id
+  shop_id: number;
   service: { name: string } | null;
   specialist: { full_name: string } | null;
 };
 
 const SELECT =
-  "id, client_id, starts_at, ends_at, shop_id, service:services ( name ), specialist:specialists ( full_name )"; // 👈 Добавляем shop_id
+  "id, client_id, starts_at, ends_at, shop_id, service:services ( name ), specialist:specialists ( full_name )";
 
 type Admin = ReturnType<typeof createAdmin>;
 type Mark = "reminded_day_at" | "reminded_3h_at" | "review_requested_at";
@@ -57,7 +57,8 @@ export async function POST(req: Request) {
   let three = 0;
   let review = 0;
 
-  const miniApp = process.env.MINIAPP_URL ?? "https://beauty-miniapp-tawny.vercel.app";
+  // ✅ ИСПРАВЛЕНО: добавлены кавычки
+  const miniApp = process.env.MINIAPP_URL ?? "https://beauty-miniapp-saas.vercel.app";
 
   // ===== КЭШ ТОКЕНОВ ДЛЯ САЛОНОВ =====
   const tokenCache = new Map<number, string>();
@@ -102,7 +103,7 @@ export async function POST(req: Request) {
       `📅 Напоминание: завтра вы записаны\n\n` +
         `${b.service?.name ?? "Услуга"} · ${b.specialist?.full_name ?? ""}\n` +
         `🗓 ${fmtMsk(b.starts_at)}`,
-      botToken, // 👈 ПЕРЕДАЁМ ТОКЕН
+      botToken,
       {
         reply_markup: {
           inline_keyboard: [
@@ -141,7 +142,7 @@ export async function POST(req: Request) {
         (canStillCancel
           ? `\nНе сможете прийти? Отменить можно до ${fmtTimeMsk(cancelUntil.toISOString())}.`
           : `Ждём вас! 💅`),
-      botToken, // 👈 ПЕРЕДАЁМ ТОКЕН
+      botToken,
       canStillCancel
         ? {
             reply_markup: {
@@ -177,7 +178,7 @@ export async function POST(req: Request) {
       `Спасибо, что были у нас! 💖\n\n` +
         `Как прошёл визит — ${b.service?.name ?? "услуга"} у ${b.specialist?.full_name ?? "мастера"}? ` +
         `Будем благодарны за отзыв.`,
-      botToken, // 👈 ПЕРЕДАЁМ ТОКЕН
+      botToken,
       {
         reply_markup: {
           inline_keyboard: [
