@@ -182,7 +182,7 @@ export default function MailingClient({
           <input
             value={ctaUrl}
             onChange={(e) => setCtaUrl(e.target.value)}
-            placeholder="https://beauty-miniapp-tawny.vercel.app/ (по умолчанию — Записаться)"
+            placeholder="https://beauty-miniapp-saas.vercel.app/ (по умолчанию — Записаться)"
             className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
           />
           <p className="mt-1 text-xs text-neutral-400">

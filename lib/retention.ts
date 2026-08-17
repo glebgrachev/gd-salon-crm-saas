@@ -1,7 +1,7 @@
 import { tgSend } from "@/lib/notify";
 
 const MINIAPP =
-  process.env.MINIAPP_URL ?? "https://beauty-miniapp-tawny.vercel.app";
+  process.env.MINIAPP_URL ?? "https://beauty-miniapp-saas.vercel.app";
 
 /**
  * Сообщение-реактивация «спящему» клиенту.

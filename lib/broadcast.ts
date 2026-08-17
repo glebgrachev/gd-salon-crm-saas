@@ -5,7 +5,7 @@ export const SYNC_LIMIT = 50; // до 50 получателей отправля
 export const WORKER_BATCH = 200; // сколько pending разгребаем за один тик воркера
 
 export function buildReplyMarkup(broadcastId: string, cta_url: string | null) {
-  const miniApp = process.env.MINIAPP_URL ?? "https://beauty-miniapp-tawny.vercel.app";
+  const miniApp = process.env.MINIAPP_URL ?? "https://beauty-miniapp-saas.vercel.app";
   const buttons: Array<Array<Record<string, unknown>>> = [];
   if (cta_url) {
     buttons.push([{ text: "Открыть", web_app: { url: cta_url } }]);
