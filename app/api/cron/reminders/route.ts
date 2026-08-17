@@ -106,7 +106,7 @@ export async function POST(req: Request) {
       {
         reply_markup: {
           inline_keyboard: [
-            [{ text: "✅ Приду", web_app: { url: `${miniApp}/?confirm=${b.id}` } }],
+            [{ text: "✅ Приду", web_app: { url: `${miniApp}/?startapp=confirm_${b.id}&shop_id=${b.shop_id}` } }],
           ],
         },
       },
@@ -146,7 +146,7 @@ export async function POST(req: Request) {
         ? {
             reply_markup: {
               inline_keyboard: [
-                [{ text: "Отменить запись", web_app: { url: `${miniApp}/?cancel=${b.id}` } }],
+                [{ text: "Отменить запись", web_app: { url: `${miniApp}/?cancel=${b.id}&shop_id=${b.shop_id}` } }],
               ],
             },
           }
@@ -181,7 +181,7 @@ export async function POST(req: Request) {
       {
         reply_markup: {
           inline_keyboard: [
-            [{ text: "⭐ Оставить отзыв", web_app: { url: `${miniApp}/?review=${b.id}` } }],
+            [{ text: "⭐ Оставить отзыв", web_app: { url: `${miniApp}/?review=${b.id}&shop_id=${b.shop_id}` } }],
           ],
         },
       },
