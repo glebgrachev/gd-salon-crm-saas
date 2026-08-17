@@ -59,6 +59,7 @@ export async function GET(req: Request) {
     p_specialist_id: specialist,
     p_service_id: service,
     p_date: date,
+    p_tz: "Europe/Moscow",  // 👈 ДОБАВЬ ЭТУ СТРОКУ
     p_busy_ranges: busyRanges.length > 0 ? busyRanges : null,
   });
 
