@@ -99,11 +99,23 @@ export default function ShopDetailPage() {
     loadData();
   }, [params.id, router, supabase]);
 
+  // ============================================================
+  // 🔥 ИЗМЕНЕНИЕ ТАРИФА: читаем trial_days из таблицы constants
+  // ============================================================
   const changePlan = async (planId: number) => {
     if (!shop) return;
     setSaving(true);
 
     try {
+      // 🔥 Забираем trial_days из таблицы constants
+      const { data: constantsData } = await supabase
+        .from("constants")
+        .select("value")
+        .eq("key", "trial_days")
+        .single();
+
+      const trialDays = constantsData?.value || 14; // fallback 14 дней
+
       const { data: plan } = await supabase
         .from("plans")
         .select("features")
@@ -113,24 +125,29 @@ export default function ShopDetailPage() {
       let newExpiryDate = null;
       
       if (planId === 1) {
+        // 🔥 СТАРТ → обнуляем подписку
         newExpiryDate = null;
       } else {
+        // 🔥 Платный тариф → +trialDays дней
         const now = new Date();
         
         if (shop.subscription_expires_at) {
           const currentExpiry = new Date(shop.subscription_expires_at);
           if (currentExpiry > now) {
+            // Если текущая подписка ещё активна → продлеваем
             newExpiryDate = new Date(currentExpiry);
-            newExpiryDate.setMonth(newExpiryDate.getMonth() + 1);
+            newExpiryDate.setDate(newExpiryDate.getDate() + trialDays);
             newExpiryDate.setHours(23, 59, 59, 999);
           } else {
+            // Если истекла → начинаем с сегодня
             newExpiryDate = new Date();
-            newExpiryDate.setMonth(newExpiryDate.getMonth() + 1);
+            newExpiryDate.setDate(newExpiryDate.getDate() + trialDays);
             newExpiryDate.setHours(23, 59, 59, 999);
           }
         } else {
+          // Нет подписки → начинаем с сегодня
           newExpiryDate = new Date();
-          newExpiryDate.setMonth(newExpiryDate.getMonth() + 1);
+          newExpiryDate.setDate(newExpiryDate.getDate() + trialDays);
           newExpiryDate.setHours(23, 59, 59, 999);
         }
       }
@@ -161,10 +178,12 @@ export default function ShopDetailPage() {
           subscription_expires_at: newExpiryDate ? newExpiryDate.toISOString() : null
         });
         
-        const expiryText = newExpiryDate 
-          ? `до ${newExpiryDate.toLocaleDateString('ru-RU')}` 
-          : 'без подписки';
-        toast.success(`Тариф изменён (${expiryText})`);
+        const planName = plans.find(p => p.id === planId)?.name || '';
+        if (planId === 1) {
+          toast.success(`Тариф изменён на ${planName}`);
+        } else {
+          toast.success(`Тариф изменён на ${planName} (на ${trialDays} дней, до ${newExpiryDate?.toLocaleDateString('ru-RU')})`);
+        }
       }
     } catch (error) {
       toast.error("Ошибка при изменении тарифа");
