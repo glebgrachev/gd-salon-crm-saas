@@ -40,6 +40,7 @@ export async function tgSend(
 }
 
 // Форматирование даты/времени по МСК
+// ВНИМАНИЕ: время в БД уже хранится в МСК, поэтому НЕ используем timeZone
 export function fmtMsk(iso: string): string {
   return new Intl.DateTimeFormat("ru-RU", {
     weekday: "long",
@@ -47,7 +48,6 @@ export function fmtMsk(iso: string): string {
     month: "long",
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "Europe/Moscow",
   }).format(new Date(iso));
 }
 
@@ -55,7 +55,6 @@ export function fmtTimeMsk(iso: string): string {
   return new Intl.DateTimeFormat("ru-RU", {
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "Europe/Moscow",
   }).format(new Date(iso));
 }
 
