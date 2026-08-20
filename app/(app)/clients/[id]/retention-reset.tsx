@@ -24,13 +24,11 @@ export default function RetentionResetButton({
   const label = alreadySent ? "Отправить снова" : "Отправить";
 
   const handleClick = () => {
-    // 🔥 Если нет модуля — показываем модалку
     if (!hasRetention) {
       setShowProModal(true);
       return;
     }
 
-    // Есть модуль — отправляем
     startTransition(async () => {
       const r = await sendReactivationNow(clientId);
       if (!r.ok) toast.error(r.error ?? "Ошибка");
