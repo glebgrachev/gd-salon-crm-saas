@@ -72,6 +72,7 @@ export default function Sidebar({ email }: { email?: string | null }) {
       const { data: isSuper } = await supabase.rpc("is_superadmin");
       setIsSuperAdmin(!!isSuper);
 
+      // Загружаем модули и название салона только для владельцев салонов
       if (!isSuper) {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
@@ -103,6 +104,7 @@ export default function Sidebar({ email }: { email?: string | null }) {
     setModalOpen(true);
   };
 
+  // Строим пункты меню с пометкой о блокировке
   const navItems = isSuperAdmin
     ? SUPERADMIN_NAV
     : OWNER_NAV.map((item) => {
@@ -121,7 +123,7 @@ export default function Sidebar({ email }: { email?: string | null }) {
   return (
     <>
       <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-neutral-200 bg-white">
-        {/* Шапка сайдбара — фиксированная */}
+        {/* Шапка сайдбара */}
         <div className="px-5 py-5">
           <span className="text-xl font-semibold tracking-tight text-neutral-900">
             {isSuperAdmin ? "BeautyApp" : shopName || "BeautyApp"}
@@ -171,9 +173,10 @@ export default function Sidebar({ email }: { email?: string | null }) {
         </nav>
 
         {/* Футер сайдбара — прижат к низу */}
-        <div className="shrink-0 border-t border-neutral-200 p-3">
+        <div className="shrink-0 border-t border-neutral-200 px-3 py-2">
+          {/* Почта для суперадмина */}
           {isSuperAdmin && email && (
-            <div className="truncate px-3 pb-2 text-xs text-neutral-400">
+            <div className="truncate px-3 pb-1.5 text-xs text-neutral-400">
               {email}
             </div>
           )}
@@ -181,17 +184,18 @@ export default function Sidebar({ email }: { email?: string | null }) {
           <form action="/auth/signout" method="post">
             <button
               type="submit"
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-neutral-600 transition hover:bg-neutral-50 hover:text-neutral-900"
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-sm text-neutral-600 transition hover:bg-neutral-50 hover:text-neutral-900"
             >
               <LogOut size={17} strokeWidth={1.75} />
               Выйти
             </button>
           </form>
           
+          {/* Копирайт для владельцев салонов */}
           {!isSuperAdmin && (
-            <div className="mt-3 border-t border-neutral-100 pt-3 text-center">
-              <span className="text-[10px] text-neutral-400">
-                © {new Date().getFullYear()} Студия D&G Digital Lab
+            <div className="mt-2 border-t border-neutral-100 pt-2 text-center">
+              <span className="text-[10px] text-neutral-500">
+                © {new Date().getFullYear()} Студия D&G Digital Labs
               </span>
             </div>
           )}
