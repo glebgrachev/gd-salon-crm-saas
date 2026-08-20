@@ -53,21 +53,30 @@ export default async function ClientPage({
     notFound();
   }
 
-  // 3. Загружаем данные только для этого салона
+  // 🔥 3. Загружаем модули салона
+  const { data: shop } = await supabase
+    .from("shops")
+    .select("modules")
+    .eq("id", shopId)
+    .single();
+
+  const shopModules = shop?.modules ?? null;
+
+  // 4. Загружаем данные только для этого салона
   const { data: bookingsData } = await supabase
     .from("bookings")
     .select(
       "id, starts_at, status, price_snapshot, shop_id, specialist:specialists ( full_name ), service:services ( name )",
     )
     .eq("client_id", id)
-    .eq("shop_id", shopId) // 👈 КЛЮЧЕВОЙ ФИЛЬТР
+    .eq("shop_id", shopId)
     .order("starts_at", { ascending: false });
 
   const { data: loyalty } = await supabase
     .from("loyalty_accounts")
     .select("balance, total_earned, total_spent")
     .eq("client_id", id)
-    .eq("shop_id", shopId) // 👈 ФИЛЬТР ПО САЛОНУ
+    .eq("shop_id", shopId)
     .maybeSingle();
   const points = Number(loyalty?.balance ?? 0);
 
@@ -75,7 +84,7 @@ export default async function ClientPage({
     .from("v_client_segments")
     .select("segment, last_visit, days_since_last, visits, retention_notified_at")
     .eq("client_id", id)
-    .eq("shop_id", shopId) // 👈 ФИЛЬТР ПО САЛОНУ
+    .eq("shop_id", shopId)
     .maybeSingle();
 
   const bookings = (bookingsData as unknown as B[]) ?? [];
@@ -161,8 +170,9 @@ export default async function ClientPage({
             </span>
             {(seg.segment === "sleeping" || seg.segment === "lost") && (
               <RetentionResetButton
-                clientId={id}
+                clientId={parseInt(id)}
                 alreadySent={!!seg.retention_notified_at}
+                shopModules={shopModules} // 🔥 Передаём модули
               />
             )}
           </div>
