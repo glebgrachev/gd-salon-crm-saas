@@ -193,12 +193,12 @@ export default function Sidebar({ email }: { email?: string | null }) {
           
           {/* Копирайт для владельцев салонов */}
           {!isSuperAdmin && (
-            <div className="mt-2 border-t border-neutral-100 pt-2.5">
+            <div className="border-t border-neutral-100 pt-2">
     <a
       href="https://www.gddlab.ru/"
       target="_blank"
       rel="noopener noreferrer"
-      className="block px-3 text-sm text-neutral-500 transition hover:text-neutral-700"
+      className="block px-3 text-[12px] text-neutral-500 transition hover:text-neutral-700"
     >
       © {new Date().getFullYear()} Студия D&G Digital Lab
     </a>
