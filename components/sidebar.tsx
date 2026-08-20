@@ -72,7 +72,6 @@ export default function Sidebar({ email }: { email?: string | null }) {
       const { data: isSuper } = await supabase.rpc("is_superadmin");
       setIsSuperAdmin(!!isSuper);
 
-      // Загружаем модули и название салона только для владельцев салонов
       if (!isSuper) {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
@@ -104,7 +103,6 @@ export default function Sidebar({ email }: { email?: string | null }) {
     setModalOpen(true);
   };
 
-  // Строим пункты меню с пометкой о блокировке
   const navItems = isSuperAdmin
     ? SUPERADMIN_NAV
     : OWNER_NAV.map((item) => {
@@ -114,7 +112,7 @@ export default function Sidebar({ email }: { email?: string | null }) {
 
   if (loading) {
     return (
-      <aside className="flex w-60 shrink-0 flex-col border-r border-neutral-200 bg-white p-4">
+      <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-neutral-200 bg-white p-4">
         <div className="text-sm text-neutral-400">Загрузка...</div>
       </aside>
     );
@@ -122,8 +120,8 @@ export default function Sidebar({ email }: { email?: string | null }) {
 
   return (
     <>
-      <aside className="flex w-60 shrink-0 flex-col border-r border-neutral-200 bg-white">
-        {/* Шапка сайдбара */}
+      <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-neutral-200 bg-white">
+        {/* Шапка сайдбара — фиксированная */}
         <div className="px-5 py-5">
           <span className="text-xl font-semibold tracking-tight text-neutral-900">
             {isSuperAdmin ? "BeautyApp" : shopName || "BeautyApp"}
@@ -133,7 +131,8 @@ export default function Sidebar({ email }: { email?: string | null }) {
           </span>
         </div>
 
-        <nav className="flex-1 space-y-0.5 px-3">
+        {/* Навигация — скроллится, занимает всё свободное пространство */}
+        <nav className="flex-1 space-y-0.5 overflow-y-auto px-3">
           {navItems.map(({ href, label, icon: Icon, isLocked }) => {
             const isActive = isSuperAdmin
               ? href === "/superadmin"
@@ -171,9 +170,8 @@ export default function Sidebar({ email }: { email?: string | null }) {
           })}
         </nav>
 
-        {/* Футер сайдбара */}
-        <div className="border-t border-neutral-200 p-3">
-          {/* Почта для суперадмина */}
+        {/* Футер сайдбара — прижат к низу */}
+        <div className="shrink-0 border-t border-neutral-200 p-3">
           {isSuperAdmin && email && (
             <div className="truncate px-3 pb-2 text-xs text-neutral-400">
               {email}
@@ -190,7 +188,6 @@ export default function Sidebar({ email }: { email?: string | null }) {
             </button>
           </form>
           
-          {/* Копирайт для владельцев салонов */}
           {!isSuperAdmin && (
             <div className="mt-3 border-t border-neutral-100 pt-3 text-center">
               <span className="text-[10px] text-neutral-400">
