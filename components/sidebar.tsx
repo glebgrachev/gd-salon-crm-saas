@@ -193,9 +193,9 @@ export default function Sidebar({ email }: { email?: string | null }) {
           
           {/* Копирайт для владельцев салонов */}
           {!isSuperAdmin && (
-            <div className="mt-2 border-t border-neutral-100 pt-2 text-center">
+            <div className="mt-2 border-t border-neutral-100 pt-2">
               <span className="text-[10px] text-neutral-500">
-                © {new Date().getFullYear()} Студия D&G Digital Labs
+                © {new Date().getFullYear()} Студия D&G Digital Lab
               </span>
             </div>
           )}
