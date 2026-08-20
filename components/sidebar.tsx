@@ -191,7 +191,7 @@ export default function Sidebar({ email }: { email?: string | null }) {
           {!isSuperAdmin && (
             <div className="mt-3 border-t border-neutral-100 pt-3 text-center">
               <span className="text-[10px] text-neutral-400">
-                © {new Date().getFullYear()} Студия D&G Digital Labs
+                © {new Date().getFullYear()} Студия D&G Digital Lab
               </span>
             </div>
           )}
