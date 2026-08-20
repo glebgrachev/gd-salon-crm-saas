@@ -62,6 +62,7 @@ export default function Sidebar({ email }: { email?: string | null }) {
   const supabase = createClient();
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [modules, setModules] = useState<Record<string, any> | null>(null);
+  const [shopName, setShopName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [lockedModule, setLockedModule] = useState("");
@@ -71,7 +72,7 @@ export default function Sidebar({ email }: { email?: string | null }) {
       const { data: isSuper } = await supabase.rpc("is_superadmin");
       setIsSuperAdmin(!!isSuper);
 
-      // Загружаем модули только для владельцев салонов
+      // Загружаем модули и название салона только для владельцев салонов
       if (!isSuper) {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
@@ -84,9 +85,11 @@ export default function Sidebar({ email }: { email?: string | null }) {
           if (admin?.shop_id) {
             const { data: shop } = await supabase
               .from("shops")
-              .select("modules")
+              .select("name, modules")
               .eq("id", admin.shop_id)
               .single();
+            
+            setShopName(shop?.name ?? null);
             setModules(shop?.modules ?? {});
           }
         }
@@ -120,12 +123,13 @@ export default function Sidebar({ email }: { email?: string | null }) {
   return (
     <>
       <aside className="flex w-60 shrink-0 flex-col border-r border-neutral-200 bg-white">
+        {/* Шапка сайдбара */}
         <div className="px-5 py-5">
           <span className="text-xl font-semibold tracking-tight text-neutral-900">
-            BeautyApp
+            {isSuperAdmin ? "BeautyApp" : shopName || "BeautyApp"}
           </span>
           <span className="block text-xs text-neutral-400">
-            {isSuperAdmin ? "Управление платформой" : "Админ-панель салона"}
+            {isSuperAdmin ? "Управление платформой" : "Платформа BeautyApp"}
           </span>
         </div>
 
@@ -167,10 +171,15 @@ export default function Sidebar({ email }: { email?: string | null }) {
           })}
         </nav>
 
+        {/* Футер сайдбара */}
         <div className="border-t border-neutral-200 p-3">
-          <div className="truncate px-3 pb-2 text-xs text-neutral-400">
-            {email}
-          </div>
+          {/* Почта для суперадмина */}
+          {isSuperAdmin && email && (
+            <div className="truncate px-3 pb-2 text-xs text-neutral-400">
+              {email}
+            </div>
+          )}
+
           <form action="/auth/signout" method="post">
             <button
               type="submit"
@@ -180,6 +189,15 @@ export default function Sidebar({ email }: { email?: string | null }) {
               Выйти
             </button>
           </form>
+          
+          {/* Копирайт для владельцев салонов */}
+          {!isSuperAdmin && (
+            <div className="mt-3 border-t border-neutral-100 pt-3 text-center">
+              <span className="text-[10px] text-neutral-400">
+                © {new Date().getFullYear()} Студия D&G Digital Labs
+              </span>
+            </div>
+          )}
         </div>
       </aside>
 
