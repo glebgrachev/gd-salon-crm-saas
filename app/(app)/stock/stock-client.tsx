@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { uploadImage } from "@/lib/upload";
 import { useRealtime } from "@/lib/use-realtime";
+import { useShop } from "@/contexts/ShopContext";
 import {
   saveProduct,
   deleteProduct,
@@ -43,9 +44,6 @@ const MOVE_LABEL: Record<string, { text: string; cls: string }> = {
   adjust: { text: "Корректировка", cls: "bg-neutral-200 text-neutral-700" },
 };
 
-const rub = (v: number | null | undefined) =>
-  v == null ? "—" : new Intl.NumberFormat("ru-RU").format(Math.round(Number(v))) + " ₽";
-
 const num = (v: number) =>
   new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(Number(v));
 
@@ -80,13 +78,19 @@ export default function StockClient({
   specialists: SpecOpt[];
   clients: ClientOpt[];
 }) {
+  const { formatPrice } = useShop();
+  
+  const rub = (v: number | null | undefined) => {
+    if (v == null) return "—";
+    return formatPrice(v);
+  };
+
   const [tab, setTab] = useState<Tab>("sale");
   const [editing, setEditing] = useState<ProductRow | "new" | null>(null);
   const [purchasing, setPurchasing] = useState(false);
   const [selling, setSelling] = useState(false);
   const [historyFor, setHistoryFor] = useState<ProductRow | "all" | null>(null);
 
-  // живое обновление: клиент отложил/отменил товар — таблица обновится сама
   const [salesVersion, setSalesVersion] = useState(0);
   useRealtime(["products", "product_sales", "stock_movements"], () =>
     setSalesVersion((v) => v + 1),
@@ -142,7 +146,6 @@ export default function StockClient({
         </div>
       )}
 
-      {/* вкладки */}
       <div className="mt-6 flex gap-2">
         <TabBtn on={tab === "sale"} onClick={() => setTab("sale")}>
           На продажу
@@ -207,6 +210,7 @@ export default function StockClient({
                   p={p}
                   onEdit={() => setEditing(p)}
                   onHistory={() => setHistoryFor(p)}
+                  rub={rub}
                 />
               ))}
             </tbody>
@@ -219,6 +223,7 @@ export default function StockClient({
           product={editing === "new" ? null : editing}
           defaultKind={tab === "supply" ? "supply" : "sale"}
           onClose={() => setEditing(null)}
+          rub={rub}
         />
       )}
 
@@ -227,6 +232,7 @@ export default function StockClient({
           products={products.filter((p) => p.is_active)}
           suppliers={suppliers}
           onClose={() => setPurchasing(false)}
+          rub={rub}
         />
       )}
 
@@ -236,6 +242,7 @@ export default function StockClient({
           specialists={specialists}
           clients={clients}
           onClose={() => setSelling(false)}
+          rub={rub}
         />
       )}
 
@@ -243,6 +250,7 @@ export default function StockClient({
         <MovementsModal
           product={historyFor === "all" ? null : historyFor}
           onClose={() => setHistoryFor(null)}
+          rub={rub}
         />
       )}
     </div>
@@ -270,16 +278,16 @@ function TabBtn({
   );
 }
 
-/* ---------- строка товара ---------- */
-
 function ProductRowView({
   p,
   onEdit,
   onHistory,
+  rub,
 }: {
   p: ProductRow;
   onEdit: () => void;
   onHistory: () => void;
+  rub: (v: number | null | undefined) => string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -425,8 +433,6 @@ function ProductRowView({
   );
 }
 
-/* ---------- модалка товара ---------- */
-
 function Modal({
   title,
   onClose,
@@ -466,10 +472,12 @@ function ProductModal({
   product,
   defaultKind,
   onClose,
+  rub,
 }: {
   product: ProductRow | null;
   defaultKind: ProductKind;
   onClose: () => void;
+  rub: (v: number | null | undefined) => string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -617,7 +625,7 @@ function ProductModal({
         {kind === "certificate" && (
           <>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Номинал, ₽">
+              <Field label={`Номинал, ${currency?.symbol || '₽'}`}>
                 <input
                   type="number"
                   min={0}
@@ -651,7 +659,7 @@ function ProductModal({
 
         {(kind === "sale" || kind === "certificate") && (
           <>
-            <Field label={kind === "certificate" ? "Цена продажи, ₽" : "Цена продажи, ₽"}>
+            <Field label={`Цена продажи, ${currency?.symbol || '₽'}`}>
               <input
                 type="number"
                 min={0}
@@ -738,16 +746,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-/* ---------- приход ---------- */
-
 function PurchaseModal({
   products,
   suppliers,
   onClose,
+  rub,
 }: {
   products: ProductRow[];
   suppliers: SupplierRow[];
   onClose: () => void;
+  rub: (v: number | null | undefined) => string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -843,7 +851,7 @@ function PurchaseModal({
             <span>Позиция</span>
             <span className="text-right">Упаковок</span>
             <span className="text-right">Фасовка</span>
-            <span className="text-right">Сумма, ₽</span>
+            <span className="text-right">Сумма, {currency?.symbol || '₽'}</span>
             <span />
           </div>
 
@@ -966,14 +974,14 @@ function PurchaseModal({
   );
 }
 
-/* ---------- движения ---------- */
-
 function MovementsModal({
   product,
   onClose,
+  rub,
 }: {
   product: ProductRow | null;
   onClose: () => void;
+  rub: (v: number | null | undefined) => string;
 }) {
   const [rows, setRows] = useState<MovementRow[] | null>(null);
   const productId = product?.id ?? null;
@@ -1034,8 +1042,6 @@ function MovementsModal({
     </Modal>
   );
 }
-
-/* ---------- поставщики ---------- */
 
 function SuppliersTab({ suppliers }: { suppliers: SupplierRow[] }) {
   const router = useRouter();
@@ -1204,8 +1210,6 @@ function SupplierModal({
   );
 }
 
-/* ---------- нормы расхода ---------- */
-
 function ConsumablesTab({
   services,
   products,
@@ -1215,6 +1219,13 @@ function ConsumablesTab({
   products: ProductRow[];
   consumables: ConsumableRow[];
 }) {
+  const { formatPrice } = useShop();
+  
+  const rub = (v: number | null | undefined) => {
+    if (v == null) return "—";
+    return formatPrice(v);
+  };
+
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [svcId, setSvcId] = useState(services[0]?.id ?? "");
@@ -1382,9 +1393,14 @@ function ConsumablesTab({
   );
 }
 
-/* ---------- продажи ---------- */
-
 function SalesTab({ specialists, version }: { specialists: SpecOpt[]; version: number }) {
+  const { formatPrice } = useShop();
+  
+  const rub = (v: number | null | undefined) => {
+    if (v == null) return "—";
+    return formatPrice(v);
+  };
+
   const router = useRouter();
   const [rows, setRows] = useState<SaleRow[] | null>(null);
   const [pending, startTransition] = useTransition();
@@ -1412,7 +1428,7 @@ function SalesTab({ specialists, version }: { specialists: SpecOpt[]; version: n
       if (r.ok) setRows(r.rows);
       else toast.error(r.error);
     });
-  }, [version]);   // version меняется при realtime-событии
+  }, [version]);
 
   function cancel(id: string) {
     if (!confirm("Отменить продажу? Товар вернётся на склад.")) return;
@@ -1585,18 +1601,18 @@ function SalesTab({ specialists, version }: { specialists: SpecOpt[]; version: n
   );
 }
 
-/* ---------- модалка продажи ---------- */
-
 function SellModal({
   products,
   specialists,
   clients,
   onClose,
+  rub,
 }: {
   products: ProductRow[];
   specialists: SpecOpt[];
   clients: ClientOpt[];
   onClose: () => void;
+  rub: (v: number | null | undefined) => string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -1731,8 +1747,6 @@ function SellModal({
   );
 }
 
-/* ---------- сертификаты на продажу ---------- */
-
 function CertificatesTab({
   items,
   onEdit,
@@ -1740,6 +1754,13 @@ function CertificatesTab({
   items: ProductRow[];
   onEdit: (p: ProductRow | "new") => void;
 }) {
+  const { formatPrice } = useShop();
+  
+  const rub = (v: number | null | undefined) => {
+    if (v == null) return "—";
+    return formatPrice(v);
+  };
+
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
