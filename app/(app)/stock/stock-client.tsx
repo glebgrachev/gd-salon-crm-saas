@@ -479,6 +479,7 @@ function ProductModal({
   onClose: () => void;
   rub: (v: number | null | undefined) => string;
 }) {
+  const { currency } = useShop(); // 👈 ДОБАВИТЬ ЭТУ СТРОКУ
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
@@ -757,6 +758,7 @@ function PurchaseModal({
   onClose: () => void;
   rub: (v: number | null | undefined) => string;
 }) {
+  const { currency } = useShop(); // 👈 ДОБАВИТЬ ЭТУ СТРОКУ
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
