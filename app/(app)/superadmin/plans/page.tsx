@@ -124,9 +124,9 @@ export default function SuperAdminPlans() {
                         <span className="text-neutral-400">Бесплатно</span>
                       ) : (
                         <>
-                          <span className="text-neutral-600">₽ {plan.price_monthly}</span>
-                          <span className="text-neutral-300">/</span>
-                          <span className="text-neutral-600">Br {plan.price_byn}</span>
+                          <span className="text-neutral-600">{plan.price_monthly} ₽</span>
+      <span className="text-neutral-300">/</span>
+      <span className="text-neutral-600">{plan.price_byn} Br</span>
                         </>
                       )}
                       <span className="text-neutral-400">/мес</span>
