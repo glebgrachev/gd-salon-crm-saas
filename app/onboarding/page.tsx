@@ -115,7 +115,7 @@ export default function OnboardingPage() {
         address: form.address.trim() || null,
         inn: form.inn ? Number(form.inn) : null,
         ogrn: form.ogrn ? Number(form.ogrn) : null,
-        plan: 1,
+        plan_id: 1,
         currency_id: 1,
       })
       .select()
