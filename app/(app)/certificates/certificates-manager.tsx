@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Copy, Check } from "lucide-react";
+import { useShop } from "@/contexts/ShopContext"; // 👈 Добавляем
 import { issueCertificate, setCertificateDisabled } from "./actions";
 
 type Row = {
@@ -27,15 +28,20 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   expired: { label: "Просрочен", cls: "bg-amber-100 text-amber-700" },
 };
 
-function fmtRub(n: number) {
-  return new Intl.NumberFormat("ru-RU").format(n) + " ₽";
-}
 function fmtDate(iso: string | null) {
   if (!iso) return "—";
   return new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", year: "2-digit" }).format(new Date(iso));
 }
 
 export default function CertificatesManager({ rows, stats }: { rows: Row[]; stats: Stats }) {
+  const { formatPrice, currency } = useShop(); // 👈 Добавляем валюту
+  
+  // 👈 Функция форматирования
+  const fmtRub = (n: number) => {
+    if (n == null) return "—";
+    return formatPrice(n);
+  };
+
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [expires, setExpires] = useState("");
@@ -99,7 +105,9 @@ export default function CertificatesManager({ rows, stats }: { rows: Row[]; stat
         <div className="text-sm font-medium text-neutral-800">Выпустить сертификат</div>
         <div className="mt-3 flex flex-wrap items-end gap-3">
           <div>
-            <label className="block text-xs text-neutral-500">Номинал, ₽</label>
+            <label className="block text-xs text-neutral-500">
+              Номинал, {currency?.symbol || '₽'} {/* 👈 Динамический символ */}
+            </label>
             <input
               type="number"
               inputMode="numeric"
