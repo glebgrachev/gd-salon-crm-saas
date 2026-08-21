@@ -77,8 +77,9 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
   }, [supabase]);
 
   const formatPrice = (amount: number) => {
-    if (!currency) return `${amount} ₽`;
-    return `${currency.symbol} ${amount.toLocaleString('ru-RU')}`;
+    if (!currency) return `${Math.round(amount).toLocaleString('ru-RU')} ₽`;
+    // 👈 Сначала сумма, потом символ
+    return `${Math.round(amount).toLocaleString('ru-RU')} ${currency.symbol}`;
   };
 
   return (

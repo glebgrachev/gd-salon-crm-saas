@@ -40,7 +40,6 @@ export function useShopCurrency() {
           .single();
 
         if (!shop?.currency_id) {
-          // По умолчанию RUB
           const { data: defaultCurrency } = await supabase
             .from('currencies')
             .select('*')
@@ -72,8 +71,9 @@ export function useShopCurrency() {
   }, [supabase]);
 
   const formatPrice = (amount: number) => {
-    if (!currency) return `${amount} ₽`;
-    return `${currency.symbol} ${amount.toLocaleString('ru-RU')}`;
+    if (!currency) return `${Math.round(amount).toLocaleString('ru-RU')} ₽`;
+    // 👈 Сначала сумма, потом символ
+    return `${Math.round(amount).toLocaleString('ru-RU')} ${currency.symbol}`;
   };
 
   return { currency, loading, formatPrice };
