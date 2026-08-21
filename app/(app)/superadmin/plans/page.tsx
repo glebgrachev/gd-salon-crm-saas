@@ -13,6 +13,7 @@ type Plan = {
   name: string;
   description: string | null;
   price_monthly: number;
+  price_byn: number; // 👈 Добавляем поле для BYN
   features: Record<string, number>;
   is_active: boolean;
   sort_order: number;
@@ -118,9 +119,18 @@ export default function SuperAdminPlans() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-neutral-900">{plan.name}</h3>
-                    <p className="text-xs text-neutral-400">
-                      {plan.price_monthly === 0 ? "Бесплатно" : `${plan.price_monthly} ₽/мес`}
-                    </p>
+                    <div className="flex items-center gap-2 text-xs">
+                      {plan.price_monthly === 0 ? (
+                        <span className="text-neutral-400">Бесплатно</span>
+                      ) : (
+                        <>
+                          <span className="text-neutral-600">₽ {plan.price_monthly}</span>
+                          <span className="text-neutral-300">/</span>
+                          <span className="text-neutral-600">Br {plan.price_byn}</span>
+                        </>
+                      )}
+                      <span className="text-neutral-400">/мес</span>
+                    </div>
                   </div>
                 </div>
                 <span className={`text-xs px-2 py-0.5 rounded-full ${

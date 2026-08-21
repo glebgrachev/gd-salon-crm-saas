@@ -22,6 +22,7 @@ type Plan = {
   name: string;
   description: string | null;
   price_monthly: number;
+  price_byn: number; // 👈 Добавляем поле для BYN
   features: Record<string, number>;
   is_active: boolean;
   sort_order: number;
@@ -40,6 +41,7 @@ export default function PlanEditPage() {
     name: "",
     description: "",
     price_monthly: 0,
+    price_byn: 0, // 👈 Добавляем
     features: {},
     is_active: true,
     sort_order: 1,
@@ -112,6 +114,7 @@ export default function PlanEditPage() {
       name: plan.name.trim(),
       description: plan.description?.trim() || null,
       price_monthly: plan.price_monthly,
+      price_byn: plan.price_byn, // 👈 Добавляем
       features: plan.features,
       is_active: plan.is_active,
       sort_order: plan.sort_order,
@@ -199,6 +202,18 @@ export default function PlanEditPage() {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-neutral-700">Цена, Br/мес</label> {/* 👈 Добавляем */}
+                <Input
+                  type="number"
+                  min={0}
+                  value={plan.price_byn}
+                  onChange={(e) => setPlan({ ...plan, price_byn: Number(e.target.value) })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
                 <label className="block text-sm font-medium text-neutral-700">Порядок сортировки</label>
                 <Input
                   type="number"
@@ -207,17 +222,18 @@ export default function PlanEditPage() {
                   onChange={(e) => setPlan({ ...plan, sort_order: Number(e.target.value) })}
                 />
               </div>
+              <div className="flex items-end pb-2">
+                <label className="flex items-center gap-2 text-sm text-neutral-700">
+                  <input
+                    type="checkbox"
+                    checked={plan.is_active}
+                    onChange={(e) => setPlan({ ...plan, is_active: e.target.checked })}
+                    className="size-4 rounded border-neutral-300"
+                  />
+                  Тариф активен
+                </label>
+              </div>
             </div>
-
-            <label className="flex items-center gap-2 text-sm text-neutral-700">
-              <input
-                type="checkbox"
-                checked={plan.is_active}
-                onChange={(e) => setPlan({ ...plan, is_active: e.target.checked })}
-                className="size-4 rounded border-neutral-300"
-              />
-              Тариф активен
-            </label>
           </div>
         </div>
 
