@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useShop } from "@/contexts/ShopContext";
 import {
   savePayoutRules,
   setServicePayout,
@@ -35,6 +36,7 @@ export default function SpecialistPayouts({
   overrides: ServicePayout[];
   offered: OfferedSvc[];
 }) {
+  const { currency } = useShop(); // 👈 Добавляем валюту
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -97,7 +99,9 @@ export default function SpecialistPayouts({
           </div>
           <div>
             <label className="block text-xs text-neutral-500">
-              {type === "percent" ? "Процент от стоимости, %" : "Фикс за услугу, ₽"}
+              {type === "percent" 
+                ? "Процент от стоимости, %" 
+                : `Фикс за услугу, ${currency?.symbol || '₽'}`} {/* 👈 Динамический символ */}
             </label>
             <input
               type="number"
@@ -117,7 +121,9 @@ export default function SpecialistPayouts({
       {/* смены и оклад */}
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
         <div>
-          <label className="block text-xs text-neutral-500">Ставка за смену, ₽</label>
+          <label className="block text-xs text-neutral-500">
+            Ставка за смену, {currency?.symbol || '₽'} {/* 👈 Динамический символ */}
+          </label>
           <input
             type="number"
             min={0}
@@ -128,7 +134,9 @@ export default function SpecialistPayouts({
           <p className="mt-1 text-xs text-neutral-400">Смена = рабочий день по графику.</p>
         </div>
         <div>
-          <label className="block text-xs text-neutral-500">Оклад, ₽/мес</label>
+          <label className="block text-xs text-neutral-500">
+            Оклад, {currency?.symbol || '₽'}/мес {/* 👈 Динамический символ */}
+          </label>
           <input
             type="number"
             min={0}
@@ -215,6 +223,7 @@ function OverrideRow({
   name: string;
   current: ServicePayout | null;
 }) {
+  const { currency } = useShop(); // 👈 Добавляем валюту
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
@@ -257,7 +266,7 @@ function OverrideRow({
             <span className="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
               {current.payout_type === "percent"
                 ? `${current.payout_value}%`
-                : `${new Intl.NumberFormat("ru-RU").format(current.payout_value)} ₽`}
+                : `${currency?.symbol || '₽'} ${new Intl.NumberFormat("ru-RU").format(current.payout_value)}`} {/* 👈 Динамический символ */}
             </span>
           ) : (
             <span className="text-xs text-neutral-400">по базовому правилу</span>
@@ -295,7 +304,7 @@ function OverrideRow({
                 type === "fixed" ? "bg-neutral-900 text-white" : "text-neutral-600"
               }`}
             >
-              ₽
+              {currency?.symbol || '₽'} {/* 👈 Динамический символ */}
             </button>
           </div>
           <input
