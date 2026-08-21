@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useShop } from "@/contexts/ShopContext";
 import {
   setSpecialistService,
   removeSpecialistService,
@@ -22,6 +23,7 @@ export default function SpecialistServices({
   catalog: CatalogService[];
   offered: OfferedService[];
 }) {
+  const { currency } = useShop(); // 👈 Добавляем валюту
   const [pending, startTransition] = useTransition();
   const [addId, setAddId] = useState("");
   const [addPrice, setAddPrice] = useState("");
@@ -99,7 +101,7 @@ export default function SpecialistServices({
             type="number"
             min={0}
             step={50}
-            placeholder="Цена ₽"
+            placeholder={`Цена ${currency?.symbol || '₽'}`} // 👈 Динамический placeholder
             value={addPrice}
             onChange={(e) => setAddPrice(e.target.value)}
             className="w-28"
@@ -147,7 +149,9 @@ export default function SpecialistServices({
                       }}
                       className="w-24 text-right"
                     />
-                    <span className="text-neutral-400">₽</span>
+                    <span className="text-neutral-400">
+                      {currency?.symbol || '₽'} {/* 👈 Динамический символ */}
+                    </span>
                   </div>
                   <Button
                     variant="ghost"
