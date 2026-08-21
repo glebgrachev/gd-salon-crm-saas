@@ -16,7 +16,8 @@ type ShopContextType = {
   currency: Currency | null;
   loading: boolean;
   formatPrice: (amount: number) => string;
-  refreshCurrency: () => Promise<void>; // 👈 Добавляем
+  refreshCurrency: () => Promise<void>;
+  version: number; // 👈 Добавляем версию
 };
 
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
@@ -24,9 +25,9 @@ const ShopContext = createContext<ShopContextType | undefined>(undefined);
 export function ShopProvider({ children }: { children: React.ReactNode }) {
   const [currency, setCurrency] = useState<Currency | null>(null);
   const [loading, setLoading] = useState(true);
+  const [version, setVersion] = useState(0); // 👈 Добавляем версию
   const supabase = createClient();
 
-  // 👈 Выносим загрузку в отдельную функцию
   const loadCurrency = async () => {
     try {
       setLoading(true);
@@ -53,23 +54,25 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         .eq('id', admin.shop_id)
         .single();
 
+      let newCurrency = null;
       if (shop?.currency_id) {
         const { data: currencyData } = await supabase
           .from('currencies')
           .select('*')
           .eq('id', shop.currency_id)
           .single();
-        
-        setCurrency(currencyData);
+        newCurrency = currencyData;
       } else {
-        // Дефолтная валюта (RUB)
         const { data: defaultCurrency } = await supabase
           .from('currencies')
           .select('*')
           .eq('code', 'RUB')
           .single();
-        setCurrency(defaultCurrency);
+        newCurrency = defaultCurrency;
       }
+
+      setCurrency(newCurrency);
+      setVersion(prev => prev + 1); // 👈 Увеличиваем версию при обновлении
     } catch (error) {
       console.error('Error loading currency:', error);
     } finally {
@@ -80,7 +83,6 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     loadCurrency();
 
-    // 👈 Слушаем событие обновления валюты из настроек
     const handleCurrencyChange = () => {
       loadCurrency();
     };
@@ -96,13 +98,12 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     return `${Math.round(amount).toLocaleString('ru-RU')} ${currency.symbol}`;
   };
 
-  // 👈 Метод для принудительного обновления валюты
   const refreshCurrency = async () => {
     await loadCurrency();
   };
 
   return (
-    <ShopContext.Provider value={{ currency, loading, formatPrice, refreshCurrency }}>
+    <ShopContext.Provider value={{ currency, loading, formatPrice, refreshCurrency, version }}>
       {children}
     </ShopContext.Provider>
   );

@@ -6,7 +6,6 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { CreditCard } from "lucide-react";
-import { useShop } from "@/contexts/ShopContext"; // 👈 Добавляем
 
 type Currency = {
   id: number;
@@ -52,7 +51,6 @@ const formatPhone = (value: string) => {
 export default function SettingsPage() {
   const router = useRouter();
   const supabase = createClient();
-  const { refreshCurrency } = useShop(); // 👈 Добавляем метод обновления валюты
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
@@ -106,7 +104,6 @@ export default function SettingsPage() {
         .single();
 
       if (error) {
-        console.error('❌ Ошибка загрузки салона:', error);
         toast.error("Не удалось загрузить данные салона");
         setLoading(false);
         return;
@@ -196,7 +193,6 @@ export default function SettingsPage() {
       .eq("id", shop.id);
 
     if (error) {
-      console.error('❌ Ошибка сохранения:', error);
       toast.error("Не удалось сохранить изменения");
       setSaving(false);
       return;
@@ -204,16 +200,10 @@ export default function SettingsPage() {
 
     toast.success("Данные сохранены");
 
-    // 👇 Если валюта изменилась - обновляем контекст и страницу
+    // 👇 ЕСЛИ ВАЛЮТА ИЗМЕНИЛАСЬ - ПЕРЕЗАГРУЖАЕМ СТРАНИЦУ
     if (oldCurrencyId !== newCurrencyId) {
-      console.log('🔄 Валюта изменена, обновляем контекст...');
-      await refreshCurrency(); // Обновляем валюту в контексте
-      
-      // Отправляем событие для обновления всех компонентов
-      window.dispatchEvent(new Event('currency-changed'));
-      
-      // Обновляем страницу
-      router.refresh();
+      window.location.reload();
+      return;
     }
 
     setSaving(false);
