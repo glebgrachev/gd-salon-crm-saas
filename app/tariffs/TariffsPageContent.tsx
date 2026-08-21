@@ -5,12 +5,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Check, ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useShop } from "@/contexts/ShopContext"; // 👈 Добавляем
+import { getPlanPriceByCurrency } from "@/lib/plan-price"; // 👈 Добавляем
 
 type Plan = {
   id: number;
   name: string;
   description: string | null;
   price_monthly: number;
+  price_byn: number; // 👈 Добавляем поле
   price_yearly: number | null;
   features: Record<string, number>;
   is_active: boolean;
@@ -44,6 +47,7 @@ export default function TariffsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
+  const { currency } = useShop(); // 👈 Получаем валюту салона
   const [plans, setPlans] = useState<Plan[]>([]);
   const [currentPlanId, setCurrentPlanId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,7 +70,7 @@ export default function TariffsPageContent() {
       if (admin?.shop_id) {
         const { data: shop } = await supabase
           .from("shops")
-          .select("plan_id")
+          .select("plan_id, currency_id")
           .eq("id", admin.shop_id)
           .single();
         
@@ -193,6 +197,15 @@ export default function TariffsPageContent() {
     );
   }
 
+  // 👈 Функция для отображения цены в зависимости от валюты салона
+  const getPlanPriceDisplay = (plan: Plan) => {
+    const currencyCode = currency?.code || 'RUB';
+    const { price, symbol } = getPlanPriceByCurrency(plan, currencyCode);
+    
+    if (price === 0) return "0 ₽";
+    return `${price} ${symbol}`;
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="mb-6">
@@ -228,7 +241,7 @@ export default function TariffsPageContent() {
         {plans.map((plan) => {
           const isCurrent = plan.id === currentPlanId;
           const isPopular = plan.sort_order === 2;
-          const priceDisplay = plan.price_monthly === 0 ? "0 ₽" : `${plan.price_monthly} ₽`;
+          const priceDisplay = getPlanPriceDisplay(plan); // 👈 Динамическая цена
           
           // Получаем все ключи модулей из features
           const moduleKeys = Object.keys(plan.features || {});
