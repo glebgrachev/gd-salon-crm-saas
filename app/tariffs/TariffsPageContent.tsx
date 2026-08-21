@@ -46,8 +46,6 @@ export default function TariffsPageContent() {
   const searchParams = useSearchParams();
   const supabase = createClient();
   const { currency } = useShop();
-  console.log('💰 TariffsPage - currency:', currency); // 👈 ЛОГ 1
-
   const [plans, setPlans] = useState<Plan[]>([]);
   const [currentPlanId, setCurrentPlanId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -190,7 +188,6 @@ export default function TariffsPageContent() {
 
   const getPlanPriceDisplay = (plan: Plan) => {
     const currencyCode = currency?.code || 'RUB';
-    console.log('💰 Plan price:', plan.name, 'currencyCode:', currencyCode); // 👈 ЛОГ 2
     const { price, symbol } = getPlanPriceByCurrency(plan, currencyCode);
     
     if (price === 0) return "Бесплатно";
@@ -207,11 +204,6 @@ export default function TariffsPageContent() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
-      {/* 👈 Отладка в UI */}
-      <div className="mb-4 text-xs text-neutral-400 text-center">
-        Валюта салона: {currency?.code || 'RUB (не определена)'} {currency?.symbol || '₽'}
-      </div>
-
       <div className="mb-6">
         <button
           onClick={() => router.back()}
