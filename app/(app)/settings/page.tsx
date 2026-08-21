@@ -7,6 +7,13 @@ import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { CreditCard } from "lucide-react";
 
+type Currency = {
+  id: number;
+  code: string;
+  symbol: string;
+  name: string;
+};
+
 // Форматирование телефона
 const formatPhone = (value: string) => {
   const digits = value.replace(/\D/g, "");
@@ -46,6 +53,7 @@ export default function SettingsPage() {
   const supabase = createClient();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [shop, setShop] = useState({
     id: 0,
     name: "",
@@ -58,6 +66,7 @@ export default function SettingsPage() {
     logo: "",
     plan_id: 1,
     subscription_expires_at: null as string | null,
+    currency_id: 1,
   });
 
   useEffect(() => {
@@ -79,6 +88,15 @@ export default function SettingsPage() {
         return;
       }
 
+      // Загружаем валюты
+      const { data: currenciesData } = await supabase
+        .from("currencies")
+        .select("*")
+        .order("id");
+
+      setCurrencies(currenciesData || []);
+
+      // Загружаем салон
       const { data: shopData, error } = await supabase
         .from("shops")
         .select("*")
@@ -103,6 +121,7 @@ export default function SettingsPage() {
         logo: shopData.logo || "",
         plan_id: shopData.plan_id || 1,
         subscription_expires_at: shopData.subscription_expires_at || null,
+        currency_id: shopData.currency_id || 1,
       });
       setLoading(false);
     }
@@ -163,6 +182,7 @@ export default function SettingsPage() {
         address: shop.address.trim() || null,
         inn: shop.inn ? Number(shop.inn) : null,
         ogrn: shop.ogrn ? Number(shop.ogrn) : null,
+        currency_id: shop.currency_id,
         updated_at: new Date().toISOString(),
       })
       .eq("id", shop.id);
@@ -357,6 +377,29 @@ export default function SettingsPage() {
             placeholder="1234567890123"
           />
           <p className="mt-1 text-xs text-neutral-400">13 или 15 цифр</p>
+        </div>
+
+        {/* ============================================================ */}
+        {/* 🔥 ВАЛЮТА */}
+        {/* ============================================================ */}
+        <div>
+          <label className="block text-sm font-medium text-neutral-700">
+            Валюта
+          </label>
+          <select
+            value={shop.currency_id}
+            onChange={(e) => setShop({ ...shop, currency_id: Number(e.target.value) })}
+            className="mt-1 w-full rounded-lg border border-neutral-300 px-4 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+          >
+            {currencies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.symbol} — {c.name} ({c.code})
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-neutral-400">
+            Все цены в салоне и мини-приложении будут отображаться в выбранной валюте
+          </p>
         </div>
 
         <button
