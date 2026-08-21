@@ -57,7 +57,7 @@ function PaymentSuccessContent() {
             .single();
 
           if (payment?.provider_payment_id) {
-            setPaymentId(payment.provider_payment_id); // 👈 ПРАВИЛЬНЫЙ ID
+            setPaymentId(payment.provider_payment_id);
             console.log(`🔍 Найден provider_payment_id: ${payment.provider_payment_id}`);
           } else {
             const { data: shop } = await supabase
@@ -119,7 +119,7 @@ function PaymentSuccessContent() {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${PUBLISHABLE_KEY}`,
           },
-          body: JSON.stringify({ payment_id: paymentId }), // 👈 ПРАВИЛЬНЫЙ ID
+          body: JSON.stringify({ payment_id: paymentId }),
         }
       );
 
@@ -134,7 +134,8 @@ function PaymentSuccessContent() {
       const result = await response.json();
       console.log(`📊 Результат:`, result);
 
-      if (result.status === "succeeded") {
+      // ===== ОБРАБОТКА ВСЕХ СТАТУСОВ =====
+      if (result.status === "succeeded" || result.status === "paid") {
         await updateTariff(shopId);
         setStatus("success");
         setMessage("🎉 Оплата прошла успешно! Тариф активирован.");
@@ -142,7 +143,14 @@ function PaymentSuccessContent() {
         toast.success("Тариф активирован!");
         setTimeout(() => router.push("/"), 3000);
         return true;
-      } else if (result.status === "canceled") {
+      } 
+      else if (result.status === "error" || result.status === "pending") {
+        // 👈 ОБРАБОТКА STATUS "error" (BePaid)
+        console.log(`⏳ Статус "${result.status}" — платеж в обработке, ждем...`);
+        setMessage("Ожидаем подтверждения оплаты...");
+        return false;
+      } 
+      else if (result.status === "canceled" || result.status === "failed") {
         setStatus("error");
         setMessage("❌ Платёж был отменён. Попробуйте снова.");
         if (intervalRef.current) clearInterval(intervalRef.current);
@@ -152,10 +160,8 @@ function PaymentSuccessContent() {
           .eq("provider_payment_id", paymentId);
         toast.error("Платёж отменён");
         return true;
-      } else if (result.status === "pending") {
-        setMessage("Ожидаем подтверждения оплаты...");
-        return false;
-      } else {
+      } 
+      else {
         console.log(`❌ Неизвестный статус: ${result.status}`);
         return false;
       }
