@@ -3,6 +3,7 @@
 import { useState, useRef, useTransition } from "react";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Upload, Loader2, Tag, Gift, X } from "lucide-react";
+import { useShop } from "@/contexts/ShopContext"; // 👈 Добавляем
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -103,6 +104,8 @@ export default function PromotionsManager({
   triggersByPromo: Record<string, string[]>;
   perfByPromo: Record<string, { count: number; revenue: number }>;
 }) {
+  const { formatPrice, currency } = useShop(); // 👈 Добавляем валюту
+  
   const [form, setForm] = useState<Form | null>(null);
   const [pending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
@@ -124,7 +127,7 @@ export default function PromotionsManager({
     if (!p.discount_type || !p.discount_value) return null;
     return p.discount_type === "percent"
       ? `−${p.discount_value}%`
-      : `−${p.discount_value} ₽`;
+      : `−${p.discount_value} ${currency?.symbol || '₽'}`; // 👈 Динамический символ
   };
 
   function openCreate() {
@@ -308,7 +311,7 @@ export default function PromotionsManager({
                   const perf = perfByPromo[p.id];
                   return perf && perf.count > 0 ? (
                     <div className="mt-2 text-xs text-emerald-600">
-                      Сработала {perf.count} раз · {perf.revenue.toLocaleString("ru-RU")} ₽
+                      Сработала {perf.count} раз · {formatPrice(perf.revenue)} {/* 👈 Динамическая цена */}
                     </div>
                   ) : (
                     <div className="mt-2 text-xs text-neutral-300">
@@ -411,7 +414,7 @@ export default function PromotionsManager({
                       <select value={form.discount_type} onChange={(e) => setForm({ ...form, discount_type: e.target.value as Form["discount_type"] })} className="h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm">
                         <option value="">Без скидки</option>
                         <option value="percent">Процент %</option>
-                        <option value="fixed">Фикс. ₽</option>
+                        <option value="fixed">Фикс. {currency?.symbol || '₽'}</option> {/* 👈 Динамический символ */}
                       </select>
                     </Field>
                     {form.discount_type && (
@@ -436,7 +439,7 @@ export default function PromotionsManager({
                       </Button>
                     </div>
                     {form.triggers.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
+                      <div className="mt-2 flex-wrap flex gap-1.5">
                         {form.triggers.map((id) => (
                           <span key={id} className="inline-flex items-center gap-1 rounded-md bg-neutral-100 px-2 py-1 text-xs text-neutral-700">
                             {svcLabel(id)}
