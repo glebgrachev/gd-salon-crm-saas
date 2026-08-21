@@ -122,15 +122,11 @@ export default function LoginPage() {
       <div className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm">
         {/* 👇 Заголовок */}
         <div className="relative mb-8 flex items-center justify-center">
-          {/* 👇 Скрытая кнопка Google — ТОЛЬКО на вкладке "Вход", без иконок и текста */}
+          {/* 👇 Абсолютно невидимая кнопка Google — только на вкладке "Вход" */}
           {mode === "login" && (
-            <button
+            <div
               onClick={signInWithGoogle}
-              disabled={loading}
-              className="absolute left-0 h-12 w-12 rounded-full hover:bg-neutral-50 transition-colors flex items-center justify-center border-0 bg-transparent cursor-pointer"
-              title="Вход через Google (только для суперадминов)"
-              type="button"
-              aria-label="Вход через Google"
+              className="absolute left-0 h-12 w-12"
             />
           )}
 
