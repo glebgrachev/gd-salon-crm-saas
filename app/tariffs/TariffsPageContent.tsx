@@ -148,8 +148,33 @@ export default function TariffsPageContent() {
         return;
       }
 
+      // Получаем выбранный план и цену в нужной валюте
+      const selectedPlan = plans.find(p => p.id === planId);
+      if (!selectedPlan) {
+        toast.error("Тариф не найден");
+        setActivating(null);
+        return;
+      }
+
+      const currencyCode = currency?.code || 'RUB';
+      const { price, symbol } = getPlanPriceByCurrency(selectedPlan, currencyCode);
+
+      // Проверяем, что цена не 0 (бесплатный тариф)
+      if (price === 0) {
+        toast.info("Это бесплатный тариф, активация не требуется");
+        setActivating(null);
+        return;
+      }
+
+      // 👈 ВЫБИРАЕМ ФУНКЦИЮ В ЗАВИСИМОСТИ ОТ ВАЛЮТЫ
+      const functionName = currencyCode === 'BYN' 
+        ? 'create-payment-byn' 
+        : 'create-payment';
+
+      console.log(`💰 Создание платежа через: ${functionName}, валюта: ${currencyCode}, сумма: ${price}`);
+
       const response = await fetch(
-        "https://cmzqpjfckzftlptrozdf.supabase.co/functions/v1/create-payment",
+        `https://cmzqpjfckzftlptrozdf.supabase.co/functions/v1/${functionName}`,
         {
           method: "POST",
           headers: {
@@ -159,6 +184,8 @@ export default function TariffsPageContent() {
           body: JSON.stringify({
             shop_id: admin.shop_id,
             plan_id: planId,
+            amount: price,
+            currency: currencyCode,
           }),
         }
       );
