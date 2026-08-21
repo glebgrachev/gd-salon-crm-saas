@@ -89,21 +89,31 @@ export default function SettingsPage() {
       }
 
       // Загружаем валюты
-      const { data: currenciesData } = await supabase
+      console.log('🔄 Загрузка валют...');
+      const { data: currenciesData, error: currenciesError } = await supabase
         .from("currencies")
         .select("*")
         .order("id");
 
+      console.log('📊 Данные валют:', currenciesData);
+      if (currenciesError) {
+        console.error('❌ Ошибка загрузки валют:', currenciesError);
+      }
+
       setCurrencies(currenciesData || []);
+      console.log('💰 Установлено валют:', currenciesData?.length || 0);
 
       // Загружаем салон
+      console.log('🔄 Загрузка салона...');
       const { data: shopData, error } = await supabase
         .from("shops")
         .select("*")
         .eq("id", admin.shop_id)
         .single();
 
+      console.log('📊 Данные салона:', shopData);
       if (error) {
+        console.error('❌ Ошибка загрузки салона:', error);
         toast.error("Не удалось загрузить данные салона");
         setLoading(false);
         return;
@@ -123,6 +133,8 @@ export default function SettingsPage() {
         subscription_expires_at: shopData.subscription_expires_at || null,
         currency_id: shopData.currency_id || 1,
       });
+      
+      console.log('🏪 Установлен shop с currency_id:', shopData.currency_id || 1);
       setLoading(false);
     }
 
@@ -188,6 +200,7 @@ export default function SettingsPage() {
       .eq("id", shop.id);
 
     if (error) {
+      console.error('❌ Ошибка сохранения:', error);
       toast.error("Не удалось сохранить изменения");
       setSaving(false);
       return;
@@ -391,6 +404,7 @@ export default function SettingsPage() {
             onChange={(e) => setShop({ ...shop, currency_id: Number(e.target.value) })}
             className="mt-1 w-full rounded-lg border border-neutral-300 px-4 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
           >
+            <option value="">-- Выберите валюту --</option>
             {currencies.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.symbol} — {c.name} ({c.code})
@@ -399,6 +413,13 @@ export default function SettingsPage() {
           </select>
           <p className="mt-1 text-xs text-neutral-400">
             Все цены в салоне и мини-приложении будут отображаться в выбранной валюте
+          </p>
+          {/* Отладка */}
+          <p className="mt-1 text-xs text-amber-600">
+            Загружено валют: {currencies.length}
+          </p>
+          <p className="mt-1 text-xs text-blue-600">
+            Текущая валюта ID: {shop.currency_id}
           </p>
         </div>
 
