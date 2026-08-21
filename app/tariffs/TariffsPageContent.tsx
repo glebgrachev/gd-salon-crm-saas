@@ -202,7 +202,7 @@ export default function TariffsPageContent() {
     const currencyCode = currency?.code || 'RUB';
     const { price, symbol } = getPlanPriceByCurrency(plan, currencyCode);
     
-    if (price === 0) return "0 ₽";
+    if (price === 0) return "Бесплатно";
     return `${price} ${symbol}`;
   };
 
