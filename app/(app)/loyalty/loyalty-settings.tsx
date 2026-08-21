@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+import { useShop } from "@/contexts/ShopContext"; // 👈 Добавляем
 import { updateLoyaltySettings } from "./actions";
 
 type Settings = {
@@ -19,6 +20,8 @@ export default function LoyaltySettings({
   initial: Settings;
   stats: Stats;
 }) {
+  const { currency } = useShop(); // 👈 Добавляем валюту
+  
   const [cashback, setCashback] = useState(String(initial.cashback_percent));
   const [redeemMax, setRedeemMax] = useState(String(initial.redeem_max_percent));
   const [pointValue, setPointValue] = useState(String(initial.point_value));
@@ -68,11 +71,11 @@ export default function LoyaltySettings({
           suffix="%"
         />
         <Field
-          label="Стоимость балла, ₽"
+          label={`Стоимость балла, ${currency?.symbol || '₽'}`} // 👈 Динамический символ
           hint="Сколько рублей стоит 1 балл при списании."
           value={pointValue}
           onChange={setPointValue}
-          suffix="₽"
+          suffix={currency?.symbol || '₽'} // 👈 Динамический символ
         />
 
         <div className="pt-2">
