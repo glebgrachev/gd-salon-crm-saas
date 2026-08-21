@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { ArrowLeft, Phone, Clock, Scissors, User } from "lucide-react";
 import { toast } from "sonner";
+import { useShop } from "@/contexts/ShopContext"; // 👈 Добавляем импорт
 import {
   OrderRow,
   BookingStatus,
@@ -13,7 +14,6 @@ import {
   fmtDay,
   fmtTime,
   fmtDateTime,
-  fmtPrice,
 } from "@/lib/bookings";
 import { updateBookingStatus } from "./actions";
 import {
@@ -26,6 +26,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 
 export default function OrderDetail({ order }: { order: OrderRow }) {
+  const { formatPrice, currency } = useShop(); // 👈 Добавляем валюту
   const [status, setStatus] = useState<BookingStatus>(order.status);
   const [pending, startTransition] = useTransition();
 
@@ -118,7 +119,7 @@ export default function OrderDetail({ order }: { order: OrderRow }) {
         <div className="flex items-center justify-between border-t border-neutral-200 pt-4">
           <span className="text-sm text-neutral-500">Стоимость</span>
           <span className="text-base font-semibold text-neutral-900">
-            {fmtPrice(order.price_snapshot)}
+            {formatPrice(order.price_snapshot)} {/* 👈 Динамическая цена */}
           </span>
         </div>
 
