@@ -6,6 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { CreditCard } from "lucide-react";
+import { useShop } from "@/contexts/ShopContext"; // 👈 Добавляем
 
 type Currency = {
   id: number;
@@ -51,6 +52,7 @@ const formatPhone = (value: string) => {
 export default function SettingsPage() {
   const router = useRouter();
   const supabase = createClient();
+  const { refreshCurrency } = useShop(); // 👈 Добавляем метод обновления валюты
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
@@ -89,29 +91,20 @@ export default function SettingsPage() {
       }
 
       // Загружаем валюты
-      console.log('🔄 Загрузка валют...');
-      const { data: currenciesData, error: currenciesError } = await supabase
+      const { data: currenciesData } = await supabase
         .from("currencies")
         .select("*")
         .order("id");
 
-      console.log('📊 Данные валют:', currenciesData);
-      if (currenciesError) {
-        console.error('❌ Ошибка загрузки валют:', currenciesError);
-      }
-
       setCurrencies(currenciesData || []);
-      console.log('💰 Установлено валют:', currenciesData?.length || 0);
 
       // Загружаем салон
-      console.log('🔄 Загрузка салона...');
       const { data: shopData, error } = await supabase
         .from("shops")
         .select("*")
         .eq("id", admin.shop_id)
         .single();
 
-      console.log('📊 Данные салона:', shopData);
       if (error) {
         console.error('❌ Ошибка загрузки салона:', error);
         toast.error("Не удалось загрузить данные салона");
@@ -134,7 +127,6 @@ export default function SettingsPage() {
         currency_id: shopData.currency_id || 1,
       });
       
-      console.log('🏪 Установлен shop с currency_id:', shopData.currency_id || 1);
       setLoading(false);
     }
 
@@ -184,6 +176,10 @@ export default function SettingsPage() {
       return;
     }
 
+    // Сохраняем текущую валюту для проверки изменений
+    const oldCurrencyId = shop.currency_id;
+    const newCurrencyId = Number(shop.currency_id);
+
     const { error } = await supabase
       .from("shops")
       .update({
@@ -194,7 +190,7 @@ export default function SettingsPage() {
         address: shop.address.trim() || null,
         inn: shop.inn ? Number(shop.inn) : null,
         ogrn: shop.ogrn ? Number(shop.ogrn) : null,
-        currency_id: shop.currency_id,
+        currency_id: newCurrencyId,
         updated_at: new Date().toISOString(),
       })
       .eq("id", shop.id);
@@ -207,8 +203,20 @@ export default function SettingsPage() {
     }
 
     toast.success("Данные сохранены");
+
+    // 👇 Если валюта изменилась - обновляем контекст и страницу
+    if (oldCurrencyId !== newCurrencyId) {
+      console.log('🔄 Валюта изменена, обновляем контекст...');
+      await refreshCurrency(); // Обновляем валюту в контексте
+      
+      // Отправляем событие для обновления всех компонентов
+      window.dispatchEvent(new Event('currency-changed'));
+      
+      // Обновляем страницу
+      router.refresh();
+    }
+
     setSaving(false);
-    router.refresh();
   };
 
   const getPlanName = (planId: number) => {
@@ -394,35 +402,35 @@ export default function SettingsPage() {
 
         {/* ============================================================ */}
         {/* 🔥 ВАЛЮТА */}
-{/* ============================================================ */}
-<div>
-  <label className="block text-sm font-medium text-neutral-700">
-    Валюта
-  </label>
-  <select
-    value={shop.currency_id}
-    onChange={(e) => setShop({ ...shop, currency_id: Number(e.target.value) })}
-    className="mt-1 w-full rounded-lg border border-neutral-300 px-4 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
-  >
-    <option value="">-- Выберите валюту --</option>
-    {currencies.map((c) => (
-      <option key={c.id} value={c.id}>
-        {c.symbol} — {c.name} ({c.code})
-      </option>
-    ))}
-  </select>
-  <p className="mt-1 text-xs text-neutral-400">
-    Все цены в салоне и мини-приложении будут отображаться в выбранной валюте
-  </p>
-</div>
+        {/* ============================================================ */}
+        <div>
+          <label className="block text-sm font-medium text-neutral-700">
+            Валюта
+          </label>
+          <select
+            value={shop.currency_id}
+            onChange={(e) => setShop({ ...shop, currency_id: Number(e.target.value) })}
+            className="mt-1 w-full rounded-lg border border-neutral-300 px-4 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+          >
+            <option value="">-- Выберите валюту --</option>
+            {currencies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.symbol} — {c.name} ({c.code})
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-neutral-400">
+            Все цены в салоне и мини-приложении будут отображаться в выбранной валюте
+          </p>
+        </div>
 
-<button
-  type="submit"
-  disabled={saving}
-  className="w-full rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-60"
->
-  {saving ? "Сохраняем..." : "Сохранить изменения"}
-</button>
+        <button
+          type="submit"
+          disabled={saving}
+          className="w-full rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-60"
+        >
+          {saving ? "Сохраняем..." : "Сохранить изменения"}
+        </button>
       </form>
     </div>
   );
