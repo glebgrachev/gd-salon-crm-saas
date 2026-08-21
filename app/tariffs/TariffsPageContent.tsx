@@ -5,22 +5,21 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Check, ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { useShop } from "@/contexts/ShopContext"; // 👈 Добавляем
-import { getPlanPriceByCurrency } from "@/lib/plan-price"; // 👈 Добавляем
+import { useShop } from "@/contexts/ShopContext";
+import { getPlanPriceByCurrency } from "@/lib/plan-price";
 
 type Plan = {
   id: number;
   name: string;
   description: string | null;
   price_monthly: number;
-  price_byn: number; // 👈 Добавляем поле
+  price_byn: number;
   price_yearly: number | null;
   features: Record<string, number>;
   is_active: boolean;
   sort_order: number;
 };
 
-// Маппинг ключей модулей на человеческие названия
 const MODULE_LABELS: Record<string, string> = {
   'clients': 'Клиентов в месяц',
   'bookings': 'Записей',
@@ -35,7 +34,6 @@ const MODULE_LABELS: Record<string, string> = {
   'waitlist': 'Лист ожидания'
 };
 
-// Форматирование значения для отображения
 const formatModuleValue = (value: number): string => {
   if (value === -1) return '∞';
   return String(value);
@@ -47,7 +45,9 @@ export default function TariffsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
-  const { currency } = useShop(); // 👈 Получаем валюту салона
+  const { currency } = useShop();
+  console.log('💰 TariffsPage - currency:', currency); // 👈 ЛОГ 1
+
   const [plans, setPlans] = useState<Plan[]>([]);
   const [currentPlanId, setCurrentPlanId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,7 +79,6 @@ export default function TariffsPageContent() {
         }
       }
 
-      // Загружаем планы с features
       const { data, error } = await supabase
         .from("plans")
         .select("*")
@@ -189,6 +188,15 @@ export default function TariffsPageContent() {
     }
   };
 
+  const getPlanPriceDisplay = (plan: Plan) => {
+    const currencyCode = currency?.code || 'RUB';
+    console.log('💰 Plan price:', plan.name, 'currencyCode:', currencyCode); // 👈 ЛОГ 2
+    const { price, symbol } = getPlanPriceByCurrency(plan, currencyCode);
+    
+    if (price === 0) return "Бесплатно";
+    return `${price} ${symbol}`;
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -197,17 +205,13 @@ export default function TariffsPageContent() {
     );
   }
 
-  // 👈 Функция для отображения цены в зависимости от валюты салона
-  const getPlanPriceDisplay = (plan: Plan) => {
-    const currencyCode = currency?.code || 'RUB';
-    const { price, symbol } = getPlanPriceByCurrency(plan, currencyCode);
-    
-    if (price === 0) return "Бесплатно";
-    return `${price} ${symbol}`;
-  };
-
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
+      {/* 👈 Отладка в UI */}
+      <div className="mb-4 text-xs text-neutral-400 text-center">
+        Валюта салона: {currency?.code || 'RUB (не определена)'} {currency?.symbol || '₽'}
+      </div>
+
       <div className="mb-6">
         <button
           onClick={() => router.back()}
@@ -241,12 +245,9 @@ export default function TariffsPageContent() {
         {plans.map((plan) => {
           const isCurrent = plan.id === currentPlanId;
           const isPopular = plan.sort_order === 2;
-          const priceDisplay = getPlanPriceDisplay(plan); // 👈 Динамическая цена
+          const priceDisplay = getPlanPriceDisplay(plan);
           
-          // Получаем все ключи модулей из features
           const moduleKeys = Object.keys(plan.features || {});
-          
-          // Разделяем на базовые (clients, bookings, specialists) и дополнительные
           const baseKeys = ['clients', 'bookings', 'specialists'];
           const baseModules = moduleKeys.filter(key => baseKeys.includes(key));
           const extraModules = moduleKeys.filter(key => !baseKeys.includes(key));
@@ -285,7 +286,6 @@ export default function TariffsPageContent() {
                   <p className="mt-1 text-sm text-neutral-500">{plan.description}</p>
                 </div>
 
-                {/* Базовые модули с лимитами */}
                 <ul className="space-y-2 text-sm">
                   {baseModules.map((key) => {
                     const value = plan.features[key];
@@ -305,7 +305,6 @@ export default function TariffsPageContent() {
                   })}
                 </ul>
 
-                {/* Дополнительные модули */}
                 {extraModules.length > 0 && (
                   <div className="mt-3 border-t border-neutral-100 pt-3">
                     <p className="text-xs font-medium text-neutral-400">Дополнительные модули:</p>
