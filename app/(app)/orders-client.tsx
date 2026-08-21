@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useShop } from "@/contexts/ShopContext"; // 👈 Добавляем импорт
 import {
   OrderRow,
   BookingStatus,
@@ -10,7 +11,6 @@ import {
   FILTER_ORDER,
   clientName,
   fmtDateTime,
-  fmtPrice,
 } from "@/lib/bookings";
 import {
   Table,
@@ -29,6 +29,7 @@ export default function OrdersClient({
 }: {
   initialOrders: OrderRow[];
 }) {
+  const { formatPrice, currency } = useShop(); // 👈 Добавляем валюту
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [filter, setFilter] = useState<Filter>("all");
@@ -151,7 +152,7 @@ export default function OrdersClient({
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right text-neutral-600">
-                    {fmtPrice(o.price_snapshot)}
+                    {formatPrice(o.price_snapshot)} {/* 👈 Динамическая цена */}
                   </TableCell>
                 </TableRow>
               ))}
