@@ -394,42 +394,35 @@ export default function SettingsPage() {
 
         {/* ============================================================ */}
         {/* 🔥 ВАЛЮТА */}
-        {/* ============================================================ */}
-        <div>
-          <label className="block text-sm font-medium text-neutral-700">
-            Валюта
-          </label>
-          <select
-            value={shop.currency_id}
-            onChange={(e) => setShop({ ...shop, currency_id: Number(e.target.value) })}
-            className="mt-1 w-full rounded-lg border border-neutral-300 px-4 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
-          >
-            <option value="">-- Выберите валюту --</option>
-            {currencies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.symbol} — {c.name} ({c.code})
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs text-neutral-400">
-            Все цены в салоне и мини-приложении будут отображаться в выбранной валюте
-          </p>
-          {/* Отладка */}
-          <p className="mt-1 text-xs text-amber-600">
-            Загружено валют: {currencies.length}
-          </p>
-          <p className="mt-1 text-xs text-blue-600">
-            Текущая валюта ID: {shop.currency_id}
-          </p>
-        </div>
+{/* ============================================================ */}
+<div>
+  <label className="block text-sm font-medium text-neutral-700">
+    Валюта
+  </label>
+  <select
+    value={shop.currency_id}
+    onChange={(e) => setShop({ ...shop, currency_id: Number(e.target.value) })}
+    className="mt-1 w-full rounded-lg border border-neutral-300 px-4 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900"
+  >
+    <option value="">-- Выберите валюту --</option>
+    {currencies.map((c) => (
+      <option key={c.id} value={c.id}>
+        {c.symbol} — {c.name} ({c.code})
+      </option>
+    ))}
+  </select>
+  <p className="mt-1 text-xs text-neutral-400">
+    Все цены в салоне и мини-приложении будут отображаться в выбранной валюте
+  </p>
+</div>
 
-        <button
-          type="submit"
-          disabled={saving}
-          className="w-full rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-60"
-        >
-          {saving ? "Сохраняем..." : "Сохранить изменения"}
-        </button>
+<button
+  type="submit"
+  disabled={saving}
+  className="w-full rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-60"
+>
+  {saving ? "Сохраняем..." : "Сохранить изменения"}
+</button>
       </form>
     </div>
   );
