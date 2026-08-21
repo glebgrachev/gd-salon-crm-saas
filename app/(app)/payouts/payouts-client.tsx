@@ -3,6 +3,7 @@
 import { useState, useTransition, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useShop } from "@/contexts/ShopContext"; // 👈 Добавляем
 import { useRealtime } from "@/lib/use-realtime";
 import { fetchPayoutDetail, type DetailRow } from "./actions";
 
@@ -21,9 +22,6 @@ export type PayoutRow = {
   total_payout: number;
   salon_share: number;
 };
-
-const rub = (v: number | null | undefined) =>
-  new Intl.NumberFormat("ru-RU").format(Math.round(Number(v ?? 0))) + " ₽";
 
 const dt = (iso: string) =>
   new Intl.DateTimeFormat("ru-RU", {
@@ -68,9 +66,17 @@ export default function PayoutsClient({
   rows: PayoutRow[];
   error: string | null;
 }) {
+  const { formatPrice, currency } = useShop(); // 👈 Добавляем валюту
+  const router = useRouter();
+  
+  // 👈 Функция форматирования с динамической валютой
+  const rub = (v: number | null | undefined) => {
+    if (v === null || v === undefined) return "—";
+    return formatPrice(v);
+  };
+
   // продажа товара или оплата записи меняют начисления — обновляем сразу
   useRealtime(["bookings", "product_sales"]);
-  const router = useRouter();
   const [f, setF] = useState(from);
   const [t, setT] = useState(to);
   const [, startTransition] = useTransition();
