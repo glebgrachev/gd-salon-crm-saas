@@ -12,7 +12,7 @@ const errorMessages: Record<string, string> = {
   "Invalid email": "Неверный формат email",
   "Password too short": "Пароль должен содержать минимум 6 символов",
   "User already registered": "Пользователь с таким email уже зарегистрирован",
-  "Email address is not authorized": "Этот email не входит в список администраторов",
+  "Email address is not authorized": "Доступ запрещён",
   "Invalid password": "Неверный пароль",
   "Email rate limit exceeded": "Слишком много попыток. Попробуйте позже",
 };
@@ -31,7 +31,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"login" | "register">("login");
 
-  // 🔥 Вход через Google — используем переменную окружения
+  // 🔥 Скрытый вход через Google (для суперадминов)
   async function signInWithGoogle() {
     setLoading(true);
     setError(null);
@@ -109,7 +109,6 @@ export default function LoginPage() {
     });
 
     if (signInError) {
-      // Если не получилось залогиниться — просим войти вручную
       alert("Регистрация прошла. Теперь войдите вручную.");
       setLoading(false);
       router.push("/login");
@@ -123,15 +122,29 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
       <div className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-8 shadow-sm">
-        <div className="mb-8 text-center">
-          <h1 className="text-lg font-semibold tracking-tight text-neutral-900">
-            BeautyApp
-          </h1>
-          <p className="mt-1 text-sm text-neutral-500">
-            {mode === "login"
-              ? "Вход для администраторов"
-              : "Регистрация нового администратора"}
-          </p>
+        {/* 👇 Заголовок со скрытой кнопкой Google */}
+        <div className="relative mb-8 flex items-center justify-center">
+          {/* Скрытая кнопка Google (50x50, без границ) */}
+          <button
+            onClick={signInWithGoogle}
+            disabled={loading}
+            className="absolute left-0 h-12 w-12 rounded-full hover:bg-neutral-100 transition-colors flex items-center justify-center"
+            title="Вход через Google (только для суперадминов)"
+            type="button"
+          >
+            <GoogleIcon />
+          </button>
+
+          <div className="text-center">
+            <h1 className="text-lg font-semibold tracking-tight text-neutral-900">
+              BeautyApp
+            </h1>
+            <p className="mt-1 text-sm text-neutral-500">
+              {mode === "login"
+                ? "Вход в систему"
+                : "Регистрация"}
+            </p>
+          </div>
         </div>
 
         {/* Переключатель между входом и регистрацией */}
@@ -215,30 +228,10 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* Разделитель */}
-        <div className="relative my-6">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-neutral-200"></div>
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="bg-white px-2 text-neutral-400">или</span>
-          </div>
-        </div>
-
-        {/* Кнопка Google (для суперадминов) */}
-        <button
-          onClick={signInWithGoogle}
-          disabled={loading}
-          className="flex w-full items-center justify-center gap-3 rounded-lg border border-neutral-300 bg-white px-4 py-2.5 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50 disabled:opacity-60"
-        >
-          <GoogleIcon />
-          {loading ? "Перенаправляем…" : "Войти через Google"}
-        </button>
-
         <p className="mt-6 text-center text-xs text-neutral-400">
           {mode === "login"
-            ? "Доступ только для администраторов из списка."
-            : "После регистрации дождитесь подтверждения email."}
+            ? "Введите email и пароль для входа"
+            : "Зарегистрируйтесь, чтобы начать работу"}
         </p>
       </div>
     </main>
@@ -247,7 +240,7 @@ export default function LoginPage() {
 
 function GoogleIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
       <path
         fill="#4285F4"
         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1Z"
