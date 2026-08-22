@@ -310,7 +310,16 @@ export async function POST(req: Request) {
 
   // ===== 🔥 УВЕДОМЛЕНИЕ АДМИНАМ О НОВОЙ ЗАПИСИ =====
   try {
-    console.log('📝 [book] Отправка уведомления админам...');
+    console.log('🔥🔥🔥 ПЕРЕД notifyNewBooking');
+    console.log('🔥🔥🔥 shop.bot_token:', shop.bot_token ? 'ЕСТЬ (длина ' + shop.bot_token.length + ')' : 'НЕТ');
+    console.log('🔥🔥🔥 shopId:', shopId);
+    console.log('🔥🔥🔥 s2?.name:', s2?.name);
+    console.log('🔥🔥🔥 sp2?.full_name:', sp2?.full_name);
+    console.log('🔥🔥🔥 booking.starts_at:', booking.starts_at);
+    console.log('🔥🔥🔥 clientName:', clientName);
+    console.log('🔥🔥🔥 moneyDue:', moneyDue);
+    console.log('🔥🔥🔥 currencySymbol:', currencySymbol);
+    
     await notifyNewBooking(
       Number(shopId),
       {
@@ -321,11 +330,14 @@ export async function POST(req: Request) {
         price: moneyDue,
         currency_symbol: currencySymbol,
       },
-      shop.bot_token  // 👈 Передаём токен из базы
+      shop.bot_token
     );
+    
+    console.log('🔥🔥🔥 ПОСЛЕ notifyNewBooking');
     console.log('📝 [book] Уведомление админам отправлено');
   } catch (error) {
     console.error('❌ [book] Ошибка отправки уведомления админам:', error);
+    console.error('❌ [book] Stack:', error instanceof Error ? error.stack : 'No stack');
   }
 
   console.log('📝 [book] ✅ Запись успешно создана');

@@ -53,6 +53,7 @@ export async function notifyAdmins(event: NotificationData, botToken: string) {
       return;
     }
 
+    // 2. Если получателей нет — берём всех админов
     if (recipients.length === 0) {
       console.log(`📨 [notifyAdmins] Получателей нет, загружаем всех админов`);
       const { data: admins, error: adminsError } = await supabase
@@ -80,23 +81,27 @@ export async function notifyAdmins(event: NotificationData, botToken: string) {
       return;
     }
 
-    // 👇 Используем tgSend с переданным токеном
     if (!botToken) {
       console.error('❌ [notifyAdmins] Токен не передан');
       return;
     }
 
     const formattedMessage = formatNotificationMessage(event);
-    console.log(`📨 [notifyAdmins] Сообщение:\n${formattedMessage}`);
+
+    // ===== 🔥 ЛОГИ ПЕРЕД ОТПРАВКОЙ =====
+    console.log('🔥🔥🔥 ОТПРАВКА АДМИНАМ!');
+    console.log('🔥🔥🔥 recipients:', JSON.stringify(recipients));
+    console.log('🔥🔥🔥 botToken:', botToken ? 'ЕСТЬ (длина ' + botToken.length + ')' : 'НЕТ');
+    console.log('🔥🔥🔥 event_type:', event.event_type);
+    console.log('🔥🔥🔥 message:', formattedMessage);
 
     let successCount = 0;
     for (const chatId of recipients) {
+      console.log(`🔥🔥🔥 Отправка для ${chatId}...`);
       const ok = await tgSend(chatId, formattedMessage, botToken);
+      console.log(`🔥🔥🔥 Результат для ${chatId}:`, ok ? '✅ УСПЕШНО' : '❌ ОШИБКА');
       if (ok) {
         successCount++;
-        console.log(`✅ [notifyAdmins] Уведомление отправлено для ${chatId}`);
-      } else {
-        console.error(`❌ [notifyAdmins] Ошибка отправки для ${chatId}`);
       }
     }
 
@@ -144,6 +149,12 @@ export async function notifyNewBooking(
   },
   botToken: string
 ) {
+  // ===== 🔥 ЛОГ В НАЧАЛЕ ФУНКЦИИ =====
+  console.log('🔥🔥🔥 notifyNewBooking ВЫЗВАНА!');
+  console.log('🔥🔥🔥 shop_id:', shop_id);
+  console.log('🔥🔥🔥 botToken:', botToken ? 'ЕСТЬ (длина ' + botToken.length + ')' : 'НЕТ');
+  console.log('🔥🔥🔥 data:', JSON.stringify(data));
+
   const date = new Date(data.starts_at);
   const dateStr = date.toLocaleString('ru-RU', {
     day: '2-digit',
@@ -179,6 +190,10 @@ export async function notifyNewOrder(
   },
   botToken: string
 ) {
+  console.log('🔥🔥🔥 notifyNewOrder ВЫЗВАНА!');
+  console.log('🔥🔥🔥 shop_id:', shop_id);
+  console.log('🔥🔥🔥 botToken:', botToken ? 'ЕСТЬ' : 'НЕТ');
+
   const itemsList = data.items.map((item, i) => `  ${i + 1}. ${item}`).join('\n');
   const productsList = data.products?.length 
     ? `\n🛍️ <b>Товары:</b>\n${data.products.map((p, i) => `  ${i + 1}. ${p}`).join('\n')}`
@@ -208,6 +223,9 @@ export async function notifyBookingCancelled(
   },
   botToken: string
 ) {
+  console.log('🔥🔥🔥 notifyBookingCancelled ВЫЗВАНА!');
+  console.log('🔥🔥🔥 shop_id:', shop_id);
+
   const date = new Date(data.starts_at);
   const dateStr = date.toLocaleString('ru-RU', {
     day: '2-digit',
@@ -240,6 +258,9 @@ export async function notifyReservationCancelled(
   },
   botToken: string
 ) {
+  console.log('🔥🔥🔥 notifyReservationCancelled ВЫЗВАНА!');
+  console.log('🔥🔥🔥 shop_id:', shop_id);
+
   const message = `
 👤 <b>Клиент:</b> ${data.client_name}
 📦 <b>Товар:</b> ${data.product_name}
@@ -264,6 +285,9 @@ export async function notifyBookingRescheduled(
   },
   botToken: string
 ) {
+  console.log('🔥🔥🔥 notifyBookingRescheduled ВЫЗВАНА!');
+  console.log('🔥🔥🔥 shop_id:', shop_id);
+
   const oldDate = new Date(data.old_starts_at);
   const newDate = new Date(data.new_starts_at);
   
