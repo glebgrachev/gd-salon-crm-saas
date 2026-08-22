@@ -17,14 +17,24 @@ export default async function ClientsPage() {
 
   const shopId = admin?.shop_id ?? 0;
 
-  // 2. Получаем лимит клиентов из модулей магазина
-  const { data: shop } = await supabase
+  // 👇 ЗАГРУЖАЕМ ВАЛЮТУ САЛОНА
+  const { data: shopData } = await supabase
     .from("shops")
-    .select("modules")
+    .select("currency_id, modules")
     .eq("id", shopId)
     .single();
 
-  const clientLimit = shop?.modules?.clients ?? -1;
+  let currency = null;
+  if (shopData?.currency_id) {
+    const { data: currencyData } = await supabase
+      .from("currencies")
+      .select("*")
+      .eq("id", shopData.currency_id)
+      .single();
+    currency = currencyData;
+  }
+
+  const clientLimit = shopData?.modules?.clients ?? -1;
 
   // 3. Считаем текущих клиентов
   const { count: clientsCount } = await supabase
@@ -84,6 +94,7 @@ export default async function ClientsPage() {
       shopId={shopId}
       clientLimit={clientLimit}
       clientsCount={clientsCount ?? 0}
+      currency={currency} // 👈 ПЕРЕДАЕМ ВАЛЮТУ
     />
   );
 }
