@@ -3,7 +3,7 @@ import { validateInitData } from "@/lib/telegram";
 import { priceService, priceCart, type CartItemIn } from "@/lib/pricing";
 import { tgSend } from "@/lib/notify";
 import { json, options } from "@/lib/cors";
-import { notifyNewOrder } from "@/lib/notify-admins"; // 👈 ДОБАВЛЯЕМ
+import { notifyNewOrder } from "@/lib/notify-admins";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,10 +45,10 @@ export async function POST(req: Request) {
 
   const admin = createAdmin();
 
-  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА И ВАЛЮТУ =====
+  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА И ВАЛЮТУ ИЗ shops_details =====
   const { data: shop, error: shopError } = await admin
-    .from("shops")
-    .select("bot_token, currency_id, currencies:symbol")
+    .from("shops_details")
+    .select("bot_token, currency_symbol")
     .eq("id", Number(shopId))
     .maybeSingle();
 
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     return json({ error: "bot_token_not_found" }, 500);
   }
 
-  const currencySymbol = shop.currencies?.symbol || '₽';
+  const currencySymbol = shop.currency_symbol || '₽';
 
   // ===== 3. ПРОВЕРЯЕМ initData =====
   const user = validateInitData(body.initData ?? "", shop.bot_token);
@@ -372,15 +372,19 @@ export async function POST(req: Request) {
         })()
       : [];
 
-    await notifyNewOrder(Number(shopId), {
-      items: serviceLines,
-      products: productLines.length > 0 ? productLines : undefined,
-      client_name: clientName,
-      total: moneyDue + Math.round(productsTotal),
-      currency_symbol: currencySymbol,
-    });
+    await notifyNewOrder(
+      Number(shopId),
+      {
+        items: serviceLines,
+        products: productLines.length > 0 ? productLines : undefined,
+        client_name: clientName,
+        total: moneyDue + Math.round(productsTotal),
+        currency_symbol: currencySymbol,
+      },
+      shop.bot_token
+    );
   } catch (error) {
-    console.error('❌ Ошибка отправки уведомления админам:', error);
+    console.error('❌ Ошибка отправки уведомления админам о новом заказе:', error);
   }
 
   return json({

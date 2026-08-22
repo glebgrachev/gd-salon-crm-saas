@@ -1,8 +1,8 @@
 import { createAdmin } from "@/lib/supabase/admin";
 import { validateInitData } from "@/lib/telegram";
 import { json, options } from "@/lib/cors";
-import { tgSend } from "@/lib/notify"; // 👈 ДОБАВЛЯЕМ
-import { notifyReservationCancelled } from "@/lib/notify-admins"; // 👈 ДОБАВЛЯЕМ
+import { tgSend } from "@/lib/notify";
+import { notifyReservationCancelled } from "@/lib/notify-admins";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,9 +33,9 @@ export async function POST(req: Request) {
 
   const admin = createAdmin();
 
-  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА И ДАННЫЕ САЛОНА =====
+  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА ИЗ shops_details =====
   const { data: shop, error: shopError } = await admin
-    .from("shops")
+    .from("shops_details")
     .select("bot_token")
     .eq("id", Number(shopId))
     .maybeSingle();
@@ -99,13 +99,17 @@ export async function POST(req: Request) {
 
   // ===== 🔥 УВЕДОМЛЕНИЕ АДМИНАМ ОБ ОТМЕНЕ РЕЗЕРВА =====
   try {
-    await notifyReservationCancelled(Number(shopId), {
-      product_name: productName,
-      quantity: quantity,
-      client_name: clientName,
-    });
+    await notifyReservationCancelled(
+      Number(shopId),
+      {
+        product_name: productName,
+        quantity: quantity,
+        client_name: clientName,
+      },
+      shop.bot_token
+    );
   } catch (error) {
-    console.error('❌ Ошибка отправки уведомления админам:', error);
+    console.error('❌ Ошибка отправки уведомления админам об отмене резерва:', error);
   }
 
   return json({ ok: res?.ok === true });
