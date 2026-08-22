@@ -1,3 +1,5 @@
+// app/(app)/clients/[id]/page.tsx
+
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -40,6 +42,23 @@ export default async function ClientPage({
 
   const shopId = admin?.shop_id ?? 0;
 
+  // 👇 Загружаем валюту салона
+  const { data: shop } = await supabase
+    .from("shops")
+    .select("currency_id")
+    .eq("id", shopId)
+    .single();
+
+  let currency = null;
+  if (shop?.currency_id) {
+    const { data: currencyData } = await supabase
+      .from("currencies")
+      .select("*")
+      .eq("id", shop.currency_id)
+      .single();
+    currency = currencyData;
+  }
+
   // 2. Проверяем, что клиент принадлежит этому салону
   const { data: client } = await supabase
     .from("users")
@@ -53,14 +72,14 @@ export default async function ClientPage({
     notFound();
   }
 
-  // 🔥 3. Загружаем модули салона
-  const { data: shop } = await supabase
+  // 3. Загружаем модули салона
+  const { data: shopData } = await supabase
     .from("shops")
     .select("modules")
     .eq("id", shopId)
     .single();
 
-  const shopModules = shop?.modules ?? null;
+  const shopModules = shopData?.modules ?? null;
 
   // 4. Загружаем данные только для этого салона
   const { data: bookingsData } = await supabase
@@ -94,6 +113,12 @@ export default async function ClientPage({
   );
   const spent = done.reduce((s, b) => s + (b.price_snapshot ?? 0), 0);
 
+  // 👇 Функция форматирования с валютой
+  const formatPrice = (amount: number) => {
+    if (!currency) return `${Math.round(amount).toLocaleString('ru-RU')} ₽`;
+    return `${Math.round(amount).toLocaleString('ru-RU')} ${currency.symbol}`;
+  };
+
   const fullName =
     [client.first_name, client.last_name].filter(Boolean).join(" ").trim() ||
     (client.username ? "@" + client.username : "Без имени");
@@ -122,7 +147,7 @@ export default async function ClientPage({
       <div className="mt-6 grid grid-cols-3 gap-3">
         <Stat label="Всего записей" value={String(total)} />
         <Stat label="Завершено/оплачено" value={String(done.length)} />
-        <Stat label="Потрачено" value={fmtPrice(spent)} />
+        <Stat label="Потрачено" value={formatPrice(spent)} />
       </div>
 
       {/* баллы лояльности */}
@@ -172,7 +197,7 @@ export default async function ClientPage({
               <RetentionResetButton
                 clientId={parseInt(id)}
                 alreadySent={!!seg.retention_notified_at}
-                shopModules={shopModules} // 🔥 Передаём модули
+                shopModules={shopModules}
               />
             )}
           </div>
@@ -204,7 +229,7 @@ export default async function ClientPage({
               </div>
               <StatusSelect bookingId={b.id} status={b.status} />
               <span className="w-20 shrink-0 text-right text-neutral-600">
-                {fmtPrice(b.price_snapshot)}
+                {formatPrice(b.price_snapshot)}
               </span>
             </li>
           ))}
