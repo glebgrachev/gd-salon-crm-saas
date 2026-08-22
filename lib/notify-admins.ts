@@ -22,41 +22,50 @@ export async function notifyAdmins(event: NotificationData) {
   try {
     const supabase = await createClient();
 
-    // 1. Получаем настройки уведомлений для этого события
-    const { data: settings, error: settingsError } = await supabase
-      .from('notification_settings')
-      .select('enabled, recipients')
-      .eq('shop_id', event.shop_id)
-      .eq('event_type', event.event_type)
-      .maybeSingle();
+    console.log(`📨 [notifyAdmins] Событие: ${event.event_type}, shop_id: ${event.shop_id}`);
 
-    if (settingsError) {
-      console.error('❌ Ошибка получения настроек уведомлений:', settingsError);
+    // 1. Пытаемся получить настройки (если таблица есть)
+    let recipients: number[] = [];
+    let settingsEnabled = true;
+
+    try {
+      const { data: settings, error: settingsError } = await supabase
+        .from('notification_settings')
+        .select('enabled, recipients')
+        .eq('shop_id', event.shop_id)
+        .eq('event_type', event.event_type)
+        .maybeSingle();
+
+      if (!settingsError && settings) {
+        settingsEnabled = settings.enabled;
+        recipients = settings.recipients || [];
+        console.log(`📨 [notifyAdmins] Настройки найдены: enabled=${settingsEnabled}, recipients=${recipients.length}`);
+      } else {
+        console.log(`📨 [notifyAdmins] Настроек нет, отправляем всем админам`);
+      }
+    } catch {
+      console.log(`📨 [notifyAdmins] Таблица notification_settings не найдена, отправляем всем админам`);
+    }
+
+    // 2. Если настройки отключены — не отправляем
+    if (!settingsEnabled) {
+      console.log(`ℹ️ [notifyAdmins] Уведомления для ${event.event_type} отключены`);
       return;
     }
 
-    // 2. Проверяем, включены ли уведомления
-    if (!settings || !settings.enabled) {
-      console.log(`ℹ️ Уведомления для события ${event.event_type} отключены`);
-      return;
-    }
-
-    // 3. Получаем список получателей (если не указаны, берём всех из admins)
-    let recipients = settings.recipients || [];
-
+    // 3. Если получателей нет в настройках — берём всех админов
     if (recipients.length === 0) {
-      // Если в настройках нет получателей — берём всех из admins
+      console.log(`📨 [notifyAdmins] Получателей нет, загружаем всех админов`);
       const { data: admins, error: adminsError } = await supabase
         .from('admins')
         .select('telegram_id')
         .eq('shop_id', event.shop_id);
 
       if (adminsError) {
-        console.error('❌ Ошибка получения админов:', adminsError);
+        console.error('❌ [notifyAdmins] Ошибка получения админов:', adminsError);
         return;
       }
 
-      // Собираем все уникальные Telegram ID
       const allIds = new Set<number>();
       admins?.forEach(admin => {
         if (admin.telegram_id && Array.isArray(admin.telegram_id)) {
@@ -64,26 +73,25 @@ export async function notifyAdmins(event: NotificationData) {
         }
       });
       recipients = Array.from(allIds);
+      console.log(`📨 [notifyAdmins] Найдено админов: ${recipients.length}`);
     }
 
     if (recipients.length === 0) {
-      console.log('ℹ️ Нет получателей для уведомлений');
+      console.log('ℹ️ [notifyAdmins] Нет получателей для уведомлений');
       return;
     }
 
-    console.log(`📨 Отправка уведомления ${event.event_type} для ${recipients.length} получателей`);
-
-    // 4. Отправляем уведомления через Telegram Bot API
+    // 4. Отправляем уведомления
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     if (!botToken) {
-      console.error('❌ TELEGRAM_BOT_TOKEN не настроен');
+      console.error('❌ [notifyAdmins] TELEGRAM_BOT_TOKEN не настроен');
       return;
     }
 
-    // Форматируем сообщение
     const formattedMessage = formatNotificationMessage(event);
+    console.log(`📨 [notifyAdmins] Сообщение:\n${formattedMessage}`);
 
-    // Отправляем каждому получателю
+    let successCount = 0;
     for (const chatId of recipients) {
       try {
         const response = await fetch(
@@ -101,16 +109,20 @@ export async function notifyAdmins(event: NotificationData) {
 
         const result = await response.json();
         if (!result.ok) {
-          console.error(`❌ Ошибка отправки для ${chatId}:`, result.description);
+          console.error(`❌ [notifyAdmins] Ошибка для ${chatId}:`, result.description);
         } else {
-          console.log(`✅ Уведомление отправлено для ${chatId}`);
+          successCount++;
+          console.log(`✅ [notifyAdmins] Уведомление отправлено для ${chatId}`);
         }
       } catch (error) {
-        console.error(`❌ Ошибка отправки для ${chatId}:`, error);
+        console.error(`❌ [notifyAdmins] Ошибка для ${chatId}:`, error);
       }
     }
+
+    console.log(`📨 [notifyAdmins] Отправлено ${successCount}/${recipients.length} уведомлений`);
+
   } catch (error) {
-    console.error('❌ Ошибка в notifyAdmins:', error);
+    console.error('❌ [notifyAdmins] Ошибка:', error);
   }
 }
 
@@ -118,12 +130,9 @@ export async function notifyAdmins(event: NotificationData) {
  * Форматирование сообщения в зависимости от события
  */
 function formatNotificationMessage(event: NotificationData): string {
-  const { event_type, message, data } = event;
+  const { event_type, message } = event;
   
-  // Базовый заголовок
   let header = '🔔';
-  let body = message;
-  
   switch (event_type) {
     case 'new_booking':
       header = '📅 <b>Новая запись!</b>';
@@ -142,7 +151,7 @@ function formatNotificationMessage(event: NotificationData): string {
       break;
   }
 
-  return `${header}\n\n${body}`;
+  return `${header}\n\n${message}`;
 }
 
 /**
