@@ -37,7 +37,6 @@ export async function updateRetentionSettings(input: {
     return { ok: false, error: "Пороги должны идти по возрастанию: Новый < Постоянный < Потерянный" };
   }
 
-  // ✅ Используем ADMIN (обходит RLS)
   const admin = createAdmin();
 
   // Ищем настройки для этого салона
@@ -62,7 +61,7 @@ export async function updateRetentionSettings(input: {
       .eq("id", existing.id)
       .select();
   } else {
-    // Создаем новые
+    // ✅ Вставляем НОВУЮ запись БЕЗ id (авто-генерация)
     result = await admin
       .from("retention_settings")
       .insert({
@@ -70,6 +69,7 @@ export async function updateRetentionSettings(input: {
         new_days: n,
         regular_days: r,
         lost_days: l,
+        // id не указываем!
       })
       .select();
   }
@@ -79,13 +79,11 @@ export async function updateRetentionSettings(input: {
     return { ok: false, error: result.error.message };
   }
 
-  // ✅ Обновляем сегменты всех клиентов салона (через RPC)
-  const { error: updateError } = await admin
-    .rpc('update_client_segments', { p_shop_id: shopId });
-
-  if (updateError) {
-    console.error('❌ Ошибка обновления сегментов:', updateError);
-    // Не возвращаем ошибку, так как настройки сохранены
+  // Обновляем сегменты клиентов
+  try {
+    await admin.rpc('update_client_segments', { p_shop_id: shopId });
+  } catch (error) {
+    console.error('❌ Ошибка обновления сегментов:', error);
   }
 
   revalidatePath("/retention", "layout");
