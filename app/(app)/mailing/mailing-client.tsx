@@ -1,10 +1,11 @@
+// app/mailing/MailingClient.tsx
+
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { previewRecipients } from "./actions";
-import { useShop } from "@/contexts/ShopContext";
+import { previewRecipients, sendBroadcast } from "./actions";
 
 type Row = {
   id: string;
@@ -46,11 +47,12 @@ function fmtDateTime(iso: string | null) {
 export default function MailingClient({
   history,
   segmentCounts,
+  shopId,
 }: {
   history: Row[];
   segmentCounts: Record<string, number>;
+  shopId: number;
 }) {
-  const { shopId, loading } = useShop();
   const [selected, setSelected] = useState<Set<SegKey>>(new Set());
   const [text, setText] = useState("");
   const [ctaUrl, setCtaUrl] = useState("");
@@ -58,33 +60,20 @@ export default function MailingClient({
   const [sending, startTransition] = useTransition();
   const router = useRouter();
 
-  // Логируем shopId при каждом рендере
-  console.log('📊 MailingClient: shopId =', shopId, 'loading =', loading);
+  console.log('📊 MailingClient: shopId =', shopId);
 
   // preview числа получателей при изменении выбора сегментов
   useEffect(() => {
-    console.log('📊 useEffect: selected =', [...selected]);
-    
     if (selected.size === 0) {
-      console.log('📊 useEffect: selected empty, setCount(null)');
       setCount(null);
       return;
     }
-    
     let cancelled = false;
     (async () => {
-      console.log('📊 useEffect: calling previewRecipients with', [...selected]);
       const r = await previewRecipients([...selected]);
-      console.log('📊 useEffect: previewRecipients result =', r);
-      if (!cancelled) {
-        const newCount = r.ok ? r.count ?? 0 : null;
-        console.log('📊 useEffect: setCount =', newCount);
-        setCount(newCount);
-      }
+      if (!cancelled) setCount(r.ok ? r.count ?? 0 : null);
     })();
-    
     return () => {
-      console.log('📊 useEffect: cancelled');
       cancelled = true;
     };
   }, [selected]);
@@ -103,13 +92,6 @@ export default function MailingClient({
   }
 
   function send() {
-    console.log('📊 send: START');
-    console.log('📊 send: shopId =', shopId, 'type =', typeof shopId);
-    console.log('📊 send: loading =', loading);
-    console.log('📊 send: selected =', [...selected]);
-    console.log('📊 send: text =', text);
-    console.log('📊 send: count =', count);
-    
     if (selected.size === 0) {
       toast.error("Выберите хотя бы один сегмент");
       return;
@@ -127,69 +109,37 @@ export default function MailingClient({
       return;
     }
     if (!shopId) {
-      console.error('❌ send: shopId is null or undefined!');
       toast.error("Ошибка: салон не найден");
       return;
     }
 
     startTransition(async () => {
-      console.log('📊 send: Отправка запроса к API...');
-      const payload = {
+      const result = await sendBroadcast({
         segments: [...selected],
         text: text.trim(),
         cta_url: ctaUrl.trim() || undefined,
-        shop_id: shopId,
-        initData: window.Telegram?.WebApp?.initData || '',
-      };
-      console.log('📊 send: payload =', payload);
-      
-      const res = await fetch("/api/broadcast", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
+        shopId,
       });
-      
-      const data = await res.json().catch(() => null);
-      console.log('📊 send: response =', { ok: res.ok, status: res.status, data });
-      
-      if (res.ok && data?.ok) {
+
+      if (result.ok) {
         toast.success(
-          data.mode === "sync"
-            ? `Отправлено ${data.total} получателям`
-            : `Отправка запущена (${data.total} получателей). Прогресс — в истории.`,
+          result.mode === "sync"
+            ? `Отправлено ${result.total} получателям`
+            : `Отправка запущена (${result.total} получателей). Прогресс — в истории.`,
         );
         setText("");
         setCtaUrl("");
         setSelected(new Set());
         router.refresh();
       } else {
-        toast.error(data?.error ?? "Не удалось отправить");
-        console.error('❌ Ошибка отправки:', data);
+        toast.error(result.error ?? "Не удалось отправить");
+        console.error('❌ Ошибка отправки:', result.error);
       }
     });
   }
 
   const totalPreview = count;
-  console.log('📊 render: count =', count, 'totalPreview =', totalPreview, 'selected size =', selected.size);
-
   const isDisabled = sending || selected.size === 0 || !text.trim() || count === 0 || count === null;
-
-  console.log('📊 Кнопка состояние:', {
-    isDisabled,
-    sending,
-    selectedSize: selected.size,
-    hasText: !!text.trim(),
-    textLength: text.length,
-    count,
-    countIsZero: count === 0,
-    countIsNull: count === null
-  });
-
-  if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">
-      <div className="text-neutral-500">Загрузка...</div>
-    </div>;
-  }
 
   return (
     <div className="mx-auto max-w-5xl px-8 py-8">
