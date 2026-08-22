@@ -29,13 +29,47 @@ export async function previewRecipients(segments: string[]) {
   const segs = segments.filter((s) => validSegs.has(s));
   if (segs.length === 0) return { ok: true, count: 0 };
 
-  // Получаем клиентов этого салона
-  const { data, error } = await supabase
-    .from("v_client_segments")
-    .select("client_id")
-    .eq("shop_id", shopId)
-    .in("segment", segs);
+  // ✅ Проверяем, есть ли "all" в выбранных сегментах
+  const hasAll = segs.includes("all");
+  const otherSegs = segs.filter(s => s !== "all");
 
-  if (error) return { ok: false, error: error.message };
-  return { ok: true, count: (data ?? []).length };
+  let data = [];
+
+  if (hasAll) {
+    // ✅ Если выбран "all" - берем ВСЕХ клиентов салона
+    const { data: allClients, error: allError } = await supabase
+      .from("users")
+      .select("telegram_id")
+      .eq("shop_id", shopId)
+      .eq("promo_opt_out", false);
+
+    if (allError) return { ok: false, error: allError.message };
+    data = allClients.map(c => ({ client_id: c.telegram_id }));
+  }
+
+  // ✅ Если выбраны другие сегменты - добавляем их
+  if (otherSegs.length > 0) {
+    const { data: segData, error: segError } = await supabase
+      .from("v_client_segments")
+      .select("client_id")
+      .eq("shop_id", shopId)
+      .in("segment", otherSegs);
+
+    if (segError) return { ok: false, error: segError.message };
+    
+    if (hasAll) {
+      // Если есть "all" - объединяем и убираем дубликаты
+      const allIds = new Set(data.map(c => c.client_id));
+      for (const item of (segData ?? [])) {
+        if (!allIds.has(item.client_id)) {
+          data.push(item);
+          allIds.add(item.client_id);
+        }
+      }
+    } else {
+      data = segData ?? [];
+    }
+  }
+
+  return { ok: true, count: data.length };
 }
