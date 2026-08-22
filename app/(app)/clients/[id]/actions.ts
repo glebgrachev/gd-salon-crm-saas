@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { sendReactivation } from "@/lib/retention";
 
@@ -42,6 +43,19 @@ export async function sendReactivationNow(clientId: number) {
     return { ok: false, error: "Клиент не найден или не принадлежит вашему салону" };
   }
 
+  // 👇 ПОЛУЧАЕМ ТОКЕН БОТА
+  const admin = createAdmin();
+  const { data: shop, error: shopError } = await admin
+    .from("shops")
+    .select("bot_token")
+    .eq("id", shopId)
+    .single();
+
+  if (shopError || !shop?.bot_token) {
+    console.error('❌ sendReactivationNow: токен не найден для салона', shopId);
+    return { ok: false, error: "Токен бота не найден" };
+  }
+
   // берём имя и на сколько дней пропал — прямо из сегментов
   const { data: seg, error: segErr } = await supabase
     .from("v_client_segments")
@@ -61,10 +75,12 @@ export async function sendReactivationNow(clientId: number) {
     return { ok: false, error: "Клиент отписался от рассылок" };
   }
 
+  // ✅ ПЕРЕДАЁМ ТОКЕН
   const ok = await sendReactivation(
     clientId,
     usr?.first_name ?? null,
     seg?.days_since_last ?? null,
+    shop.bot_token, // 👈 Передаем токен
   );
 
   if (!ok) {
