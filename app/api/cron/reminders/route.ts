@@ -44,20 +44,27 @@ export async function POST(req: Request) {
   }
 
   const admin = createAdmin();
-  const now = new Date();
+  
+  // ✅ ИСПРАВЛЕНО: используем МСК (UTC+3)
+  const nowUTC = new Date();
+  // Текущее время в МСК (для сравнения с БД)
+  const nowMSK = new Date(nowUTC.getTime() + 3 * 60 * 60 * 1000);
+  
+  console.log(`🕐 Текущее время: UTC=${nowUTC.toISOString()}, MSK=${nowMSK.toISOString()}`);
 
   const REMIND_H = 4;
   const CANCEL_H = 3;
 
-  const remindAt = new Date(now.getTime() + REMIND_H * 3600_000);
-  const in24h = new Date(now.getTime() + 24 * 3600_000);
-  const ago24h = new Date(now.getTime() - 24 * 3600_000);
+  // ✅ Время для сравнения в МСК (переводим в UTC для сравнения с БД)
+  // Напоминание за 24 часа: starts_at в интервале [сейчас+4ч, сейчас+24ч+4ч]
+  const remindAtUTC = new Date(nowUTC.getTime() + REMIND_H * 3600_000);
+  const in24hUTC = new Date(nowUTC.getTime() + (24 + REMIND_H) * 3600_000);
+  const ago24hUTC = new Date(nowUTC.getTime() - 24 * 3600_000);
 
   let day = 0;
   let three = 0;
   let review = 0;
 
-  // ✅ ИСПРАВЛЕНО: добавлены кавычки
   const miniApp = process.env.MINIAPP_URL ?? "https://beauty-miniapp-saas.vercel.app";
 
   // ===== КЭШ ТОКЕНОВ ДЛЯ САЛОНОВ =====
@@ -82,15 +89,18 @@ export async function POST(req: Request) {
   }
 
   // ===== НАПОМИНАНИЕ ЗА СУТКИ =====
+  // Записи, у которых starts_at в МСК = завтра (в интервале [сегодня+4ч, завтра+4ч])
   const { data: dayRows } = await admin
     .from("bookings")
     .select(SELECT)
     .in("status", ["new", "confirmed", "paid"])
     .eq("is_synthetic", false)
     .is("reminded_day_at", null)
-    .gt("starts_at", remindAt.toISOString())
-    .lte("starts_at", in24h.toISOString())
+    .gt("starts_at", remindAtUTC.toISOString())
+    .lte("starts_at", in24hUTC.toISOString())
     .limit(50);
+  
+  console.log(`📅 Напоминания за сутки: найдено ${dayRows?.length ?? 0} записей`);
   
   for (const b of (dayRows as unknown as Row[]) ?? []) {
     if (!(await claim(admin, b.id, "reminded_day_at"))) continue;
@@ -116,15 +126,18 @@ export async function POST(req: Request) {
   }
 
   // ===== НАПОМИНАНИЕ ЗА 4 ЧАСА =====
+  // Записи, у которых starts_at в МСК в ближайшие 4 часа
   const { data: threeRows } = await admin
     .from("bookings")
     .select(SELECT)
     .in("status", ["new", "confirmed", "paid"])
     .eq("is_synthetic", false)
     .is("reminded_3h_at", null)
-    .gt("starts_at", now.toISOString())
-    .lte("starts_at", remindAt.toISOString())
+    .gt("starts_at", nowUTC.toISOString())
+    .lte("starts_at", remindAtUTC.toISOString())
     .limit(50);
+  
+  console.log(`⏰ Напоминания за 4 часа: найдено ${threeRows?.length ?? 0} записей`);
   
   for (const b of (threeRows as unknown as Row[]) ?? []) {
     if (!(await claim(admin, b.id, "reminded_3h_at"))) continue;
@@ -133,7 +146,7 @@ export async function POST(req: Request) {
     if (!botToken) continue;
 
     const cancelUntil = new Date(new Date(b.starts_at).getTime() - CANCEL_H * 3600_000);
-    const canStillCancel = cancelUntil.getTime() > now.getTime();
+    const canStillCancel = cancelUntil.getTime() > nowUTC.getTime();
 
     await tgSend(
       b.client_id,
@@ -163,9 +176,11 @@ export async function POST(req: Request) {
     .in("status", ["paid", "completed"])
     .eq("is_synthetic", false)
     .is("review_requested_at", null)
-    .lte("ends_at", now.toISOString())
-    .gt("ends_at", ago24h.toISOString())
+    .lte("ends_at", nowUTC.toISOString())
+    .gt("ends_at", ago24hUTC.toISOString())
     .limit(50);
+  
+  console.log(`⭐ Запросы отзывов: найдено ${reviewRows?.length ?? 0} записей`);
   
   for (const b of (reviewRows as unknown as Row[]) ?? []) {
     if (!(await claim(admin, b.id, "review_requested_at"))) continue;
@@ -189,6 +204,8 @@ export async function POST(req: Request) {
     );
     review++;
   }
+
+  console.log(`📊 Итог: день=${day}, 3ч=${three}, отзывы=${review}`);
 
   return new Response(JSON.stringify({ ok: true, day, three, review }), {
     status: 200,
