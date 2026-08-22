@@ -58,6 +58,9 @@ export default function MailingClient({
   const [sending, startTransition] = useTransition();
   const router = useRouter();
 
+  // Логируем shopId при каждом рендере
+  console.log('📊 MailingClient: shopId =', shopId, 'loading =', loading);
+
   // preview числа получателей при изменении выбора сегментов
   useEffect(() => {
     console.log('📊 useEffect: selected =', [...selected]);
@@ -89,7 +92,6 @@ export default function MailingClient({
   function toggle(k: SegKey) {
     setSelected((prev) => {
       const next = new Set(prev);
-      // «Все клиенты» эксклюзивно
       if (k === "all") {
         return next.has("all") ? new Set() : new Set<SegKey>(["all"]);
       }
@@ -101,6 +103,13 @@ export default function MailingClient({
   }
 
   function send() {
+    console.log('📊 send: START');
+    console.log('📊 send: shopId =', shopId, 'type =', typeof shopId);
+    console.log('📊 send: loading =', loading);
+    console.log('📊 send: selected =', [...selected]);
+    console.log('📊 send: text =', text);
+    console.log('📊 send: count =', count);
+    
     if (selected.size === 0) {
       toast.error("Выберите хотя бы один сегмент");
       return;
@@ -118,24 +127,31 @@ export default function MailingClient({
       return;
     }
     if (!shopId) {
+      console.error('❌ send: shopId is null or undefined!');
       toast.error("Ошибка: салон не найден");
       return;
     }
 
     startTransition(async () => {
+      console.log('📊 send: Отправка запроса к API...');
+      const payload = {
+        segments: [...selected],
+        text: text.trim(),
+        cta_url: ctaUrl.trim() || undefined,
+        shop_id: shopId,
+        initData: window.Telegram?.WebApp?.initData || '',
+      };
+      console.log('📊 send: payload =', payload);
+      
       const res = await fetch("/api/broadcast", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          segments: [...selected],
-          text: text.trim(),
-          cta_url: ctaUrl.trim() || undefined,
-          shop_id: shopId,
-          initData: window.Telegram?.WebApp?.initData || '',
-        }),
+        body: JSON.stringify(payload),
       });
       
       const data = await res.json().catch(() => null);
+      console.log('📊 send: response =', { ok: res.ok, status: res.status, data });
+      
       if (res.ok && data?.ok) {
         toast.success(
           data.mode === "sync"
@@ -156,13 +172,24 @@ export default function MailingClient({
   const totalPreview = count;
   console.log('📊 render: count =', count, 'totalPreview =', totalPreview, 'selected size =', selected.size);
 
+  const isDisabled = sending || selected.size === 0 || !text.trim() || count === 0 || count === null;
+
+  console.log('📊 Кнопка состояние:', {
+    isDisabled,
+    sending,
+    selectedSize: selected.size,
+    hasText: !!text.trim(),
+    textLength: text.length,
+    count,
+    countIsZero: count === 0,
+    countIsNull: count === null
+  });
+
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen">
       <div className="text-neutral-500">Загрузка...</div>
     </div>;
   }
-
-  const isDisabled = sending || selected.size === 0 || !text.trim() || count === 0 || count === null;
 
   return (
     <div className="mx-auto max-w-5xl px-8 py-8">
@@ -171,7 +198,6 @@ export default function MailingClient({
         Отправьте сообщение клиентам выбранных сегментов. Отписанные автоматически исключаются.
       </p>
 
-      {/* форма */}
       <div className="mt-6 rounded-xl border border-neutral-200 bg-white p-6">
         <div className="text-sm font-medium text-neutral-800">Кому отправить</div>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -237,7 +263,6 @@ export default function MailingClient({
         </div>
       </div>
 
-      {/* история */}
       <div className="mt-8">
         <div className="mb-3 text-sm font-medium text-neutral-800">История рассылок</div>
         <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
