@@ -12,7 +12,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { fmtPrice } from "@/lib/bookings";
 import { AlertTriangle, ArrowRight } from "lucide-react";
 
 export type ClientRow = {
@@ -38,6 +37,13 @@ export const SEGMENTS: Record<string, { label: string; cls: string }> = {
   lost: { label: "Потерянный", cls: "bg-red-100 text-red-600" },
 };
 
+type Currency = {
+  id: number;
+  code: string;
+  symbol: string;
+  name: string;
+};
+
 function name(c: ClientRow) {
   const full = [c.first_name, c.last_name].filter(Boolean).join(" ").trim();
   return full || (c.username ? "@" + c.username : "Без имени");
@@ -51,7 +57,6 @@ function fmtDate(iso: string) {
   }).format(new Date(iso));
 }
 
-// ===== ФУНКЦИЯ ДЛЯ СКЛОНЕНИЯ =====
 function pluralizeMe(count: number): string {
   if (count === 0) return "мест";
   if (count === 1) return "место";
@@ -64,15 +69,24 @@ export default function ClientsClient({
   shopId,
   clientLimit,
   clientsCount,
+  currency, // 👈 Принимаем валюту
 }: { 
   initial: ClientRow[];
   shopId: number;
   clientLimit: number;
   clientsCount: number;
+  currency: Currency | null; // 👈 Добавляем тип
 }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [seg, setSeg] = useState<string>("all");
+
+  // 👇 Функция форматирования с валютой
+  const formatPrice = (amount: number) => {
+    if (amount == null) return "—";
+    if (!currency) return `${Math.round(amount).toLocaleString('ru-RU')} ₽`;
+    return `${Math.round(amount).toLocaleString('ru-RU')} ${currency.symbol}`;
+  };
 
   const query = q.trim().toLowerCase();
   const visible = initial.filter((c) => {
@@ -227,7 +241,7 @@ export default function ClientsClient({
                       {c.bookings}
                     </TableCell>
                     <TableCell className="text-right font-medium text-neutral-900">
-                      {fmtPrice(c.spent)}
+                      {formatPrice(c.spent)}
                     </TableCell>
                     <TableCell className="text-right text-xs text-neutral-500">
                       {c.last_visit ? (
