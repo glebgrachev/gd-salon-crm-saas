@@ -311,14 +311,18 @@ export async function POST(req: Request) {
   // ===== 🔥 УВЕДОМЛЕНИЕ АДМИНАМ О НОВОЙ ЗАПИСИ =====
   try {
     console.log('📝 [book] Отправка уведомления админам...');
-    await notifyNewBooking(Number(shopId), {
-      service_name: s2?.name ?? "Услуга",
-      specialist_name: sp2?.full_name ?? "Мастер",
-      starts_at: booking.starts_at,
-      client_name: clientName,
-      price: moneyDue,
-      currency_symbol: currencySymbol,
-    });
+    await notifyNewBooking(
+      Number(shopId),
+      {
+        service_name: s2?.name ?? "Услуга",
+        specialist_name: sp2?.full_name ?? "Мастер",
+        starts_at: booking.starts_at,
+        client_name: clientName,
+        price: moneyDue,
+        currency_symbol: currencySymbol,
+      },
+      shop.bot_token  // 👈 Передаём токен из базы
+    );
     console.log('📝 [book] Уведомление админам отправлено');
   } catch (error) {
     console.error('❌ [book] Ошибка отправки уведомления админам:', error);

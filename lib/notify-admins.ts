@@ -1,5 +1,6 @@
 // lib/notify-admins.ts
 import { createClient } from "./supabase/server";
+import { tgSend } from "./notify";
 
 type NotificationEvent = 
   | 'new_booking'
@@ -18,13 +19,13 @@ type NotificationData = {
 /**
  * Отправить уведомление админам салона
  */
-export async function notifyAdmins(event: NotificationData) {
+export async function notifyAdmins(event: NotificationData, botToken: string) {
   try {
     const supabase = await createClient();
 
     console.log(`📨 [notifyAdmins] Событие: ${event.event_type}, shop_id: ${event.shop_id}`);
 
-    // 1. Пытаемся получить настройки (если таблица есть)
+    // 1. Пытаемся получить настройки
     let recipients: number[] = [];
     let settingsEnabled = true;
 
@@ -47,13 +48,11 @@ export async function notifyAdmins(event: NotificationData) {
       console.log(`📨 [notifyAdmins] Таблица notification_settings не найдена, отправляем всем админам`);
     }
 
-    // 2. Если настройки отключены — не отправляем
     if (!settingsEnabled) {
       console.log(`ℹ️ [notifyAdmins] Уведомления для ${event.event_type} отключены`);
       return;
     }
 
-    // 3. Если получателей нет в настройках — берём всех админов
     if (recipients.length === 0) {
       console.log(`📨 [notifyAdmins] Получателей нет, загружаем всех админов`);
       const { data: admins, error: adminsError } = await supabase
@@ -81,10 +80,9 @@ export async function notifyAdmins(event: NotificationData) {
       return;
     }
 
-    // 4. Отправляем уведомления
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    // 👇 Используем tgSend с переданным токеном
     if (!botToken) {
-      console.error('❌ [notifyAdmins] TELEGRAM_BOT_TOKEN не настроен');
+      console.error('❌ [notifyAdmins] Токен не передан');
       return;
     }
 
@@ -93,29 +91,12 @@ export async function notifyAdmins(event: NotificationData) {
 
     let successCount = 0;
     for (const chatId of recipients) {
-      try {
-        const response = await fetch(
-          `https://api.telegram.org/bot${botToken}/sendMessage`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: chatId,
-              text: formattedMessage,
-              parse_mode: 'HTML',
-            }),
-          }
-        );
-
-        const result = await response.json();
-        if (!result.ok) {
-          console.error(`❌ [notifyAdmins] Ошибка для ${chatId}:`, result.description);
-        } else {
-          successCount++;
-          console.log(`✅ [notifyAdmins] Уведомление отправлено для ${chatId}`);
-        }
-      } catch (error) {
-        console.error(`❌ [notifyAdmins] Ошибка для ${chatId}:`, error);
+      const ok = await tgSend(chatId, formattedMessage, botToken);
+      if (ok) {
+        successCount++;
+        console.log(`✅ [notifyAdmins] Уведомление отправлено для ${chatId}`);
+      } else {
+        console.error(`❌ [notifyAdmins] Ошибка отправки для ${chatId}`);
       }
     }
 
@@ -126,9 +107,6 @@ export async function notifyAdmins(event: NotificationData) {
   }
 }
 
-/**
- * Форматирование сообщения в зависимости от события
- */
 function formatNotificationMessage(event: NotificationData): string {
   const { event_type, message } = event;
   
@@ -154,9 +132,6 @@ function formatNotificationMessage(event: NotificationData): string {
   return `${header}\n\n${message}`;
 }
 
-/**
- * Отправить уведомление о новой записи
- */
 export async function notifyNewBooking(
   shop_id: number,
   data: {
@@ -166,7 +141,8 @@ export async function notifyNewBooking(
     client_name: string;
     price: number;
     currency_symbol?: string;
-  }
+  },
+  botToken: string
 ) {
   const date = new Date(data.starts_at);
   const dateStr = date.toLocaleString('ru-RU', {
@@ -189,12 +165,9 @@ export async function notifyNewBooking(
     shop_id,
     event_type: 'new_booking',
     message,
-  });
+  }, botToken);
 }
 
-/**
- * Отправить уведомление о новом заказе (корзина)
- */
 export async function notifyNewOrder(
   shop_id: number,
   data: {
@@ -203,7 +176,8 @@ export async function notifyNewOrder(
     client_name: string;
     total: number;
     currency_symbol?: string;
-  }
+  },
+  botToken: string
 ) {
   const itemsList = data.items.map((item, i) => `  ${i + 1}. ${item}`).join('\n');
   const productsList = data.products?.length 
@@ -221,12 +195,9 @@ ${itemsList}${productsList}
     shop_id,
     event_type: 'new_order',
     message,
-  });
+  }, botToken);
 }
 
-/**
- * Отправить уведомление об отмене записи
- */
 export async function notifyBookingCancelled(
   shop_id: number,
   data: {
@@ -234,7 +205,8 @@ export async function notifyBookingCancelled(
     specialist_name: string;
     starts_at: string;
     client_name: string;
-  }
+  },
+  botToken: string
 ) {
   const date = new Date(data.starts_at);
   const dateStr = date.toLocaleString('ru-RU', {
@@ -256,19 +228,17 @@ export async function notifyBookingCancelled(
     shop_id,
     event_type: 'booking_cancelled',
     message,
-  });
+  }, botToken);
 }
 
-/**
- * Отправить уведомление об отмене резерва товара
- */
 export async function notifyReservationCancelled(
   shop_id: number,
   data: {
     product_name: string;
     quantity: number;
     client_name: string;
-  }
+  },
+  botToken: string
 ) {
   const message = `
 👤 <b>Клиент:</b> ${data.client_name}
@@ -280,12 +250,9 @@ export async function notifyReservationCancelled(
     shop_id,
     event_type: 'reservation_cancelled',
     message,
-  });
+  }, botToken);
 }
 
-/**
- * Отправить уведомление о переносе записи
- */
 export async function notifyBookingRescheduled(
   shop_id: number,
   data: {
@@ -294,7 +261,8 @@ export async function notifyBookingRescheduled(
     old_starts_at: string;
     new_starts_at: string;
     client_name: string;
-  }
+  },
+  botToken: string
 ) {
   const oldDate = new Date(data.old_starts_at);
   const newDate = new Date(data.new_starts_at);
@@ -327,5 +295,5 @@ export async function notifyBookingRescheduled(
     shop_id,
     event_type: 'booking_rescheduled',
     message,
-  });
+  }, botToken);
 }
