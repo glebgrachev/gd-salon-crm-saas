@@ -128,6 +128,21 @@ export default function OnboardingPage() {
       return;
     }
 
+    // 👇 СОЗДАЁМ НАСТРОЙКИ ВОЗВРАЩАЕМОСТИ
+    const { error: retentionError } = await supabase
+      .from("retention_settings")
+      .insert({
+        shop_id: shop.id,
+        new_days: 7,
+        regular_days: 14,
+        lost_days: 30,
+      });
+
+    if (retentionError) {
+      console.error("Ошибка создания настроек возвращаемости:", retentionError);
+      // Не прерываем процесс, просто логируем
+    }
+
     // Обновляем admins
     const { error: adminError } = await supabase
       .from("admins")
