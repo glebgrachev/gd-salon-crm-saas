@@ -1,9 +1,9 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdmin } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 
-// 🔥 Расширенный guard — возвращает supabase + shopId
 async function guard() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -27,7 +27,7 @@ export async function updateRetentionSettings(input: {
 }) {
   const g = await guard();
   if (!g) return { ok: false, error: "Нет доступа" };
-  const { supabase, shopId } = g;
+  const { shopId } = g;
 
   const n = Math.round(Number(input.new_days));
   const r = Math.round(Number(input.regular_days));
@@ -37,30 +37,56 @@ export async function updateRetentionSettings(input: {
     return { ok: false, error: "Пороги должны идти по возрастанию: Новый < Постоянный < Потерянный" };
   }
 
-  // Проверяем, что настройка принадлежит этому салону
-  const { data: existing } = await supabase
-    .from("retention_settings")
-    .select("shop_id")
-    .eq("id", 1)
-    .single();
+  // ✅ Используем ADMIN (обходит RLS)
+  const admin = createAdmin();
 
-  if (!existing || existing.shop_id !== shopId) {
-    return { ok: false, error: "Настройки не найдены или не принадлежат вашему салону" };
+  // Ищем настройки для этого салона
+  const { data: existing } = await admin
+    .from("retention_settings")
+    .select("id")
+    .eq("shop_id", shopId)
+    .maybeSingle();
+
+  let result;
+
+  if (existing) {
+    // Обновляем существующие
+    result = await admin
+      .from("retention_settings")
+      .update({
+        new_days: n,
+        regular_days: r,
+        lost_days: l,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existing.id)
+      .select();
+  } else {
+    // Создаем новые
+    result = await admin
+      .from("retention_settings")
+      .insert({
+        shop_id: shopId,
+        new_days: n,
+        regular_days: r,
+        lost_days: l,
+      })
+      .select();
   }
 
-  const { data, error } = await supabase
-    .from("retention_settings")
-    .update({
-      new_days: n,
-      regular_days: r,
-      lost_days: l,
-      updated_at: new Date().toISOString(),
-      shop_id: shopId,
-    })
-    .eq("id", 1)
-    .select();
-  if (error) return { ok: false, error: error.message };
-  if (!data || data.length === 0) return { ok: false, error: "Строка настроек не найдена" };
+  if (result.error) {
+    console.error('❌ Ошибка сохранения настроек:', result.error);
+    return { ok: false, error: result.error.message };
+  }
+
+  // ✅ Обновляем сегменты всех клиентов салона (через RPC)
+  const { error: updateError } = await admin
+    .rpc('update_client_segments', { p_shop_id: shopId });
+
+  if (updateError) {
+    console.error('❌ Ошибка обновления сегментов:', updateError);
+    // Не возвращаем ошибку, так как настройки сохранены
+  }
 
   revalidatePath("/retention", "layout");
   revalidatePath("/clients", "layout");
