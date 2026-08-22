@@ -21,55 +21,86 @@ async function guard() {
 }
 
 export async function previewRecipients(segments: string[]) {
+  console.log('🔍 previewRecipients START:', { segments });
+  
   const g = await guard();
-  if (!g) return { ok: false, error: "Нет доступа" };
+  if (!g) {
+    console.log('❌ previewRecipients: guard failed');
+    return { ok: false, error: "Нет доступа" };
+  }
+  
   const { supabase, shopId } = g;
+  console.log('✅ previewRecipients: shopId =', shopId);
 
   const validSegs = new Set(["new", "regular", "sleeping", "lost", "no_visits", "all"]);
   const segs = segments.filter((s) => validSegs.has(s));
-  if (segs.length === 0) return { ok: true, count: 0 };
+  console.log('📊 previewRecipients: filtered segs =', segs);
+  
+  if (segs.length === 0) {
+    console.log('⚠️ previewRecipients: no valid segments');
+    return { ok: true, count: 0 };
+  }
 
-  // ✅ Проверяем, есть ли "all" в выбранных сегментах
   const hasAll = segs.includes("all");
   const otherSegs = segs.filter(s => s !== "all");
+  console.log('📊 previewRecipients: hasAll =', hasAll, 'otherSegs =', otherSegs);
 
   let data = [];
 
+  // Если выбран "all" - берем ВСЕХ пользователей салона
   if (hasAll) {
-    // ✅ Если выбран "all" - берем ВСЕХ клиентов салона
+    console.log('🔍 previewRecipients: fetching all users for shop', shopId);
+    
     const { data: allClients, error: allError } = await supabase
       .from("users")
       .select("telegram_id")
       .eq("shop_id", shopId)
       .eq("promo_opt_out", false);
 
-    if (allError) return { ok: false, error: allError.message };
+    if (allError) {
+      console.error('❌ previewRecipients: allError =', allError);
+      return { ok: false, error: allError.message };
+    }
+    
     data = allClients.map(c => ({ client_id: c.telegram_id }));
+    console.log('✅ previewRecipients: allClients count =', data.length);
   }
 
-  // ✅ Если выбраны другие сегменты - добавляем их
+  // Если выбраны другие сегменты - добавляем их
   if (otherSegs.length > 0) {
+    console.log('🔍 previewRecipients: fetching other segments:', otherSegs);
+    
     const { data: segData, error: segError } = await supabase
       .from("v_client_segments")
       .select("client_id")
       .eq("shop_id", shopId)
       .in("segment", otherSegs);
 
-    if (segError) return { ok: false, error: segError.message };
+    if (segError) {
+      console.error('❌ previewRecipients: segError =', segError);
+      return { ok: false, error: segError.message };
+    }
+    
+    console.log('✅ previewRecipients: segData count =', segData?.length);
     
     if (hasAll) {
       // Если есть "all" - объединяем и убираем дубликаты
       const allIds = new Set(data.map(c => c.client_id));
+      console.log('📊 previewRecipients: allIds count =', allIds.size);
+      
       for (const item of (segData ?? [])) {
         if (!allIds.has(item.client_id)) {
           data.push(item);
           allIds.add(item.client_id);
         }
       }
+      console.log('✅ previewRecipients: merged count =', data.length);
     } else {
       data = segData ?? [];
+      console.log('✅ previewRecipients: data from segments =', data.length);
     }
   }
 
+  console.log('🎯 previewRecipients FINAL count =', data.length);
   return { ok: true, count: data.length };
 }
