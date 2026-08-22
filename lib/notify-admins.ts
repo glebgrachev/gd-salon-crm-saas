@@ -25,27 +25,31 @@ export async function notifyAdmins(event: NotificationData, botToken: string) {
 
     console.log(`📨 [notifyAdmins] Событие: ${event.event_type}, shop_id: ${event.shop_id}`);
 
-    // 1. Получаем получателей из shops.telegram_id
-    const { data: shop, error: shopError } = await supabase
-      .from('shops')
+    // 1. Получаем получателей из admins.telegram_id
+    const { data: admins, error: adminsError } = await supabase
+      .from('admins')
       .select('telegram_id')
-      .eq('id', event.shop_id)
-      .maybeSingle();
+      .eq('shop_id', event.shop_id);
 
-    if (shopError) {
-      console.error('❌ [notifyAdmins] Ошибка получения shops:', shopError);
+    if (adminsError) {
+      console.error('❌ [notifyAdmins] Ошибка получения admins:', adminsError);
       return;
     }
 
     let recipients: number[] = [];
 
-    // 2. Берём telegram_id из shops
-    if (shop?.telegram_id && Array.isArray(shop.telegram_id)) {
-      recipients = shop.telegram_id.filter((id: number) => id > 0);
-      console.log(`📨 [notifyAdmins] Найдено получателей из shops: ${recipients.length}`);
-    } else {
-      console.log(`📨 [notifyAdmins] В shops.telegram_id нет получателей`);
-    }
+    // 2. Собираем все telegram_id из admins
+    admins?.forEach(admin => {
+      if (admin.telegram_id && Array.isArray(admin.telegram_id)) {
+        admin.telegram_id.forEach((id: number) => {
+          if (id > 0 && !recipients.includes(id)) {
+            recipients.push(id);
+          }
+        });
+      }
+    });
+
+    console.log(`📨 [notifyAdmins] Найдено получателей: ${recipients.length}`);
 
     if (recipients.length === 0) {
       console.log('ℹ️ [notifyAdmins] Нет получателей для уведомлений');
@@ -120,7 +124,6 @@ export async function notifyNewBooking(
 ) {
   console.log('🔥🔥🔥 notifyNewBooking ВЫЗВАНА!');
   console.log('🔥🔥🔥 shop_id:', shop_id);
-  console.log('🔥🔥🔥 botToken:', botToken ? 'ЕСТЬ (длина ' + botToken.length + ')' : 'НЕТ');
 
   const date = new Date(data.starts_at);
   const dateStr = date.toLocaleString('ru-RU', {
