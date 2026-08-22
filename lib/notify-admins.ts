@@ -25,55 +25,26 @@ export async function notifyAdmins(event: NotificationData, botToken: string) {
 
     console.log(`📨 [notifyAdmins] Событие: ${event.event_type}, shop_id: ${event.shop_id}`);
 
-    // 1. Пытаемся получить настройки
-    let recipients: number[] = [];
-    let settingsEnabled = true;
+    // 1. Получаем получателей из shops.telegram_id
+    const { data: shop, error: shopError } = await supabase
+      .from('shops')
+      .select('telegram_id')
+      .eq('id', event.shop_id)
+      .maybeSingle();
 
-    try {
-      const { data: settings, error: settingsError } = await supabase
-        .from('notification_settings')
-        .select('enabled, recipients')
-        .eq('shop_id', event.shop_id)
-        .eq('event_type', event.event_type)
-        .maybeSingle();
-
-      if (!settingsError && settings) {
-        settingsEnabled = settings.enabled;
-        recipients = settings.recipients || [];
-        console.log(`📨 [notifyAdmins] Настройки найдены: enabled=${settingsEnabled}, recipients=${recipients.length}`);
-      } else {
-        console.log(`📨 [notifyAdmins] Настроек нет, отправляем всем админам`);
-      }
-    } catch {
-      console.log(`📨 [notifyAdmins] Таблица notification_settings не найдена, отправляем всем админам`);
-    }
-
-    if (!settingsEnabled) {
-      console.log(`ℹ️ [notifyAdmins] Уведомления для ${event.event_type} отключены`);
+    if (shopError) {
+      console.error('❌ [notifyAdmins] Ошибка получения shops:', shopError);
       return;
     }
 
-    // 2. Если получателей нет — берём всех админов
-    if (recipients.length === 0) {
-      console.log(`📨 [notifyAdmins] Получателей нет, загружаем всех админов`);
-      const { data: admins, error: adminsError } = await supabase
-        .from('admins')
-        .select('telegram_id')
-        .eq('shop_id', event.shop_id);
+    let recipients: number[] = [];
 
-      if (adminsError) {
-        console.error('❌ [notifyAdmins] Ошибка получения админов:', adminsError);
-        return;
-      }
-
-      const allIds = new Set<number>();
-      admins?.forEach(admin => {
-        if (admin.telegram_id && Array.isArray(admin.telegram_id)) {
-          admin.telegram_id.forEach((id: number) => allIds.add(id));
-        }
-      });
-      recipients = Array.from(allIds);
-      console.log(`📨 [notifyAdmins] Найдено админов: ${recipients.length}`);
+    // 2. Берём telegram_id из shops
+    if (shop?.telegram_id && Array.isArray(shop.telegram_id)) {
+      recipients = shop.telegram_id.filter((id: number) => id > 0);
+      console.log(`📨 [notifyAdmins] Найдено получателей из shops: ${recipients.length}`);
+    } else {
+      console.log(`📨 [notifyAdmins] В shops.telegram_id нет получателей`);
     }
 
     if (recipients.length === 0) {
@@ -88,11 +59,9 @@ export async function notifyAdmins(event: NotificationData, botToken: string) {
 
     const formattedMessage = formatNotificationMessage(event);
 
-    // ===== 🔥 ЛОГИ ПЕРЕД ОТПРАВКОЙ =====
     console.log('🔥🔥🔥 ОТПРАВКА АДМИНАМ!');
     console.log('🔥🔥🔥 recipients:', JSON.stringify(recipients));
     console.log('🔥🔥🔥 botToken:', botToken ? 'ЕСТЬ (длина ' + botToken.length + ')' : 'НЕТ');
-    console.log('🔥🔥🔥 event_type:', event.event_type);
     console.log('🔥🔥🔥 message:', formattedMessage);
 
     let successCount = 0;
@@ -149,11 +118,9 @@ export async function notifyNewBooking(
   },
   botToken: string
 ) {
-  // ===== 🔥 ЛОГ В НАЧАЛЕ ФУНКЦИИ =====
   console.log('🔥🔥🔥 notifyNewBooking ВЫЗВАНА!');
   console.log('🔥🔥🔥 shop_id:', shop_id);
   console.log('🔥🔥🔥 botToken:', botToken ? 'ЕСТЬ (длина ' + botToken.length + ')' : 'НЕТ');
-  console.log('🔥🔥🔥 data:', JSON.stringify(data));
 
   const date = new Date(data.starts_at);
   const dateStr = date.toLocaleString('ru-RU', {
@@ -191,8 +158,6 @@ export async function notifyNewOrder(
   botToken: string
 ) {
   console.log('🔥🔥🔥 notifyNewOrder ВЫЗВАНА!');
-  console.log('🔥🔥🔥 shop_id:', shop_id);
-  console.log('🔥🔥🔥 botToken:', botToken ? 'ЕСТЬ' : 'НЕТ');
 
   const itemsList = data.items.map((item, i) => `  ${i + 1}. ${item}`).join('\n');
   const productsList = data.products?.length 
@@ -224,7 +189,6 @@ export async function notifyBookingCancelled(
   botToken: string
 ) {
   console.log('🔥🔥🔥 notifyBookingCancelled ВЫЗВАНА!');
-  console.log('🔥🔥🔥 shop_id:', shop_id);
 
   const date = new Date(data.starts_at);
   const dateStr = date.toLocaleString('ru-RU', {
@@ -259,7 +223,6 @@ export async function notifyReservationCancelled(
   botToken: string
 ) {
   console.log('🔥🔥🔥 notifyReservationCancelled ВЫЗВАНА!');
-  console.log('🔥🔥🔥 shop_id:', shop_id);
 
   const message = `
 👤 <b>Клиент:</b> ${data.client_name}
@@ -286,7 +249,6 @@ export async function notifyBookingRescheduled(
   botToken: string
 ) {
   console.log('🔥🔥🔥 notifyBookingRescheduled ВЫЗВАНА!');
-  console.log('🔥🔥🔥 shop_id:', shop_id);
 
   const oldDate = new Date(data.old_starts_at);
   const newDate = new Date(data.new_starts_at);
