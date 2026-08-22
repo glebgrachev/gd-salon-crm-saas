@@ -60,16 +60,28 @@ export default function MailingClient({
 
   // preview числа получателей при изменении выбора сегментов
   useEffect(() => {
+    console.log('📊 useEffect: selected =', [...selected]);
+    
     if (selected.size === 0) {
+      console.log('📊 useEffect: selected empty, setCount(null)');
       setCount(null);
       return;
     }
+    
     let cancelled = false;
     (async () => {
+      console.log('📊 useEffect: calling previewRecipients with', [...selected]);
       const r = await previewRecipients([...selected]);
-      if (!cancelled) setCount(r.ok ? r.count ?? 0 : null);
+      console.log('📊 useEffect: previewRecipients result =', r);
+      if (!cancelled) {
+        const newCount = r.ok ? r.count ?? 0 : null;
+        console.log('📊 useEffect: setCount =', newCount);
+        setCount(newCount);
+      }
     })();
+    
     return () => {
+      console.log('📊 useEffect: cancelled');
       cancelled = true;
     };
   }, [selected]);
@@ -142,12 +154,15 @@ export default function MailingClient({
   }
 
   const totalPreview = count;
+  console.log('📊 render: count =', count, 'totalPreview =', totalPreview, 'selected size =', selected.size);
 
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen">
       <div className="text-neutral-500">Загрузка...</div>
     </div>;
   }
+
+  const isDisabled = sending || selected.size === 0 || !text.trim() || count === 0 || count === null;
 
   return (
     <div className="mx-auto max-w-5xl px-8 py-8">
@@ -214,7 +229,7 @@ export default function MailingClient({
           </div>
           <button
             onClick={send}
-            disabled={sending || selected.size === 0 || !text.trim() || !shopId}
+            disabled={isDisabled}
             className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:opacity-50"
           >
             {sending ? "Отправляем…" : "Отправить сейчас"}
