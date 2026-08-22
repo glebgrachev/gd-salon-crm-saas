@@ -1,7 +1,7 @@
-// app/mailing/page.tsx
+// app/(app)/mailing/page.tsx
 
 import { createClient } from "@/lib/supabase/server";
-import MailingClient from "./MailingClient";
+import MailingClient from "./mailing-client"; // 👈 импорт с маленькой буквы
 
 export const dynamic = "force-dynamic";
 
