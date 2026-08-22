@@ -1,0 +1,322 @@
+// lib/notify-admins.ts
+import { createClient } from "./supabase/server";
+
+type NotificationEvent = 
+  | 'new_booking'
+  | 'new_order'
+  | 'booking_cancelled'
+  | 'reservation_cancelled'
+  | 'booking_rescheduled';
+
+type NotificationData = {
+  shop_id: number;
+  event_type: NotificationEvent;
+  message: string;
+  data?: Record<string, any>;
+};
+
+/**
+ * Отправить уведомление админам салона
+ */
+export async function notifyAdmins(event: NotificationData) {
+  try {
+    const supabase = await createClient();
+
+    // 1. Получаем настройки уведомлений для этого события
+    const { data: settings, error: settingsError } = await supabase
+      .from('notification_settings')
+      .select('enabled, recipients')
+      .eq('shop_id', event.shop_id)
+      .eq('event_type', event.event_type)
+      .maybeSingle();
+
+    if (settingsError) {
+      console.error('❌ Ошибка получения настроек уведомлений:', settingsError);
+      return;
+    }
+
+    // 2. Проверяем, включены ли уведомления
+    if (!settings || !settings.enabled) {
+      console.log(`ℹ️ Уведомления для события ${event.event_type} отключены`);
+      return;
+    }
+
+    // 3. Получаем список получателей (если не указаны, берём всех из admins)
+    let recipients = settings.recipients || [];
+
+    if (recipients.length === 0) {
+      // Если в настройках нет получателей — берём всех из admins
+      const { data: admins, error: adminsError } = await supabase
+        .from('admins')
+        .select('telegram_id')
+        .eq('shop_id', event.shop_id);
+
+      if (adminsError) {
+        console.error('❌ Ошибка получения админов:', adminsError);
+        return;
+      }
+
+      // Собираем все уникальные Telegram ID
+      const allIds = new Set<number>();
+      admins?.forEach(admin => {
+        if (admin.telegram_id && Array.isArray(admin.telegram_id)) {
+          admin.telegram_id.forEach((id: number) => allIds.add(id));
+        }
+      });
+      recipients = Array.from(allIds);
+    }
+
+    if (recipients.length === 0) {
+      console.log('ℹ️ Нет получателей для уведомлений');
+      return;
+    }
+
+    console.log(`📨 Отправка уведомления ${event.event_type} для ${recipients.length} получателей`);
+
+    // 4. Отправляем уведомления через Telegram Bot API
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (!botToken) {
+      console.error('❌ TELEGRAM_BOT_TOKEN не настроен');
+      return;
+    }
+
+    // Форматируем сообщение
+    const formattedMessage = formatNotificationMessage(event);
+
+    // Отправляем каждому получателю
+    for (const chatId of recipients) {
+      try {
+        const response = await fetch(
+          `https://api.telegram.org/bot${botToken}/sendMessage`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: formattedMessage,
+              parse_mode: 'HTML',
+            }),
+          }
+        );
+
+        const result = await response.json();
+        if (!result.ok) {
+          console.error(`❌ Ошибка отправки для ${chatId}:`, result.description);
+        } else {
+          console.log(`✅ Уведомление отправлено для ${chatId}`);
+        }
+      } catch (error) {
+        console.error(`❌ Ошибка отправки для ${chatId}:`, error);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Ошибка в notifyAdmins:', error);
+  }
+}
+
+/**
+ * Форматирование сообщения в зависимости от события
+ */
+function formatNotificationMessage(event: NotificationData): string {
+  const { event_type, message, data } = event;
+  
+  // Базовый заголовок
+  let header = '🔔';
+  let body = message;
+  
+  switch (event_type) {
+    case 'new_booking':
+      header = '📅 <b>Новая запись!</b>';
+      break;
+    case 'new_order':
+      header = '🛍️ <b>Новый заказ!</b>';
+      break;
+    case 'booking_cancelled':
+      header = '❌ <b>Отмена записи</b>';
+      break;
+    case 'reservation_cancelled':
+      header = '❌ <b>Отмена резерва товара</b>';
+      break;
+    case 'booking_rescheduled':
+      header = '🔄 <b>Перенос записи</b>';
+      break;
+  }
+
+  return `${header}\n\n${body}`;
+}
+
+/**
+ * Отправить уведомление о новой записи
+ */
+export async function notifyNewBooking(
+  shop_id: number,
+  data: {
+    service_name: string;
+    specialist_name: string;
+    starts_at: string;
+    client_name: string;
+    price: number;
+    currency_symbol?: string;
+  }
+) {
+  const date = new Date(data.starts_at);
+  const dateStr = date.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const message = `
+👤 <b>Клиент:</b> ${data.client_name}
+💇 <b>Услуга:</b> ${data.service_name}
+👨‍💼 <b>Мастер:</b> ${data.specialist_name}
+📅 <b>Дата и время:</b> ${dateStr}
+💰 <b>Сумма:</b> ${data.currency_symbol || '₽'} ${data.price}
+  `.trim();
+
+  await notifyAdmins({
+    shop_id,
+    event_type: 'new_booking',
+    message,
+  });
+}
+
+/**
+ * Отправить уведомление о новом заказе (корзина)
+ */
+export async function notifyNewOrder(
+  shop_id: number,
+  data: {
+    items: string[];
+    products?: string[];
+    client_name: string;
+    total: number;
+    currency_symbol?: string;
+  }
+) {
+  const itemsList = data.items.map((item, i) => `  ${i + 1}. ${item}`).join('\n');
+  const productsList = data.products?.length 
+    ? `\n🛍️ <b>Товары:</b>\n${data.products.map((p, i) => `  ${i + 1}. ${p}`).join('\n')}`
+    : '';
+
+  const message = `
+👤 <b>Клиент:</b> ${data.client_name}
+📋 <b>Услуги:</b>
+${itemsList}${productsList}
+💰 <b>Итого:</b> ${data.currency_symbol || '₽'} ${data.total}
+  `.trim();
+
+  await notifyAdmins({
+    shop_id,
+    event_type: 'new_order',
+    message,
+  });
+}
+
+/**
+ * Отправить уведомление об отмене записи
+ */
+export async function notifyBookingCancelled(
+  shop_id: number,
+  data: {
+    service_name: string;
+    specialist_name: string;
+    starts_at: string;
+    client_name: string;
+  }
+) {
+  const date = new Date(data.starts_at);
+  const dateStr = date.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const message = `
+👤 <b>Клиент:</b> ${data.client_name}
+💇 <b>Услуга:</b> ${data.service_name}
+👨‍💼 <b>Мастер:</b> ${data.specialist_name}
+📅 <b>Было запланировано:</b> ${dateStr}
+  `.trim();
+
+  await notifyAdmins({
+    shop_id,
+    event_type: 'booking_cancelled',
+    message,
+  });
+}
+
+/**
+ * Отправить уведомление об отмене резерва товара
+ */
+export async function notifyReservationCancelled(
+  shop_id: number,
+  data: {
+    product_name: string;
+    quantity: number;
+    client_name: string;
+  }
+) {
+  const message = `
+👤 <b>Клиент:</b> ${data.client_name}
+📦 <b>Товар:</b> ${data.product_name}
+🔢 <b>Количество:</b> ${data.quantity} шт
+  `.trim();
+
+  await notifyAdmins({
+    shop_id,
+    event_type: 'reservation_cancelled',
+    message,
+  });
+}
+
+/**
+ * Отправить уведомление о переносе записи
+ */
+export async function notifyBookingRescheduled(
+  shop_id: number,
+  data: {
+    service_name: string;
+    specialist_name: string;
+    old_starts_at: string;
+    new_starts_at: string;
+    client_name: string;
+  }
+) {
+  const oldDate = new Date(data.old_starts_at);
+  const newDate = new Date(data.new_starts_at);
+  
+  const oldDateStr = oldDate.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  
+  const newDateStr = newDate.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const message = `
+👤 <b>Клиент:</b> ${data.client_name}
+💇 <b>Услуга:</b> ${data.service_name}
+👨‍💼 <b>Мастер:</b> ${data.specialist_name}
+📅 <b>Было:</b> ${oldDateStr}
+📅 <b>Стало:</b> ${newDateStr}
+  `.trim();
+
+  await notifyAdmins({
+    shop_id,
+    event_type: 'booking_rescheduled',
+    message,
+  });
+}

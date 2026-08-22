@@ -1,6 +1,8 @@
 import { createAdmin } from "@/lib/supabase/admin";
 import { validateInitData } from "@/lib/telegram";
 import { json, options } from "@/lib/cors";
+import { tgSend } from "@/lib/notify"; // 👈 ДОБАВЛЯЕМ
+import { notifyReservationCancelled } from "@/lib/notify-admins"; // 👈 ДОБАВЛЯЕМ
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,7 +33,7 @@ export async function POST(req: Request) {
 
   const admin = createAdmin();
 
-  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА ИЗ ТАБЛИЦЫ shops =====
+  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА И ДАННЫЕ САЛОНА =====
   const { data: shop, error: shopError } = await admin
     .from("shops")
     .select("bot_token")
@@ -49,10 +51,17 @@ export async function POST(req: Request) {
 
   if (!body.sale_id) return json({ error: "bad_request" }, 400);
 
-  // резерв должен принадлежать этому клиенту и быть неоплаченным
+  // ===== ПОЛУЧАЕМ ДАННЫЕ РЕЗЕРВА =====
   const { data: sale } = await admin
     .from("product_sales")
-    .select("id, client_id, status")
+    .select(`
+      id, 
+      client_id, 
+      status,
+      qty,
+      product:products (name),
+      client:users (first_name, last_name, username, telegram_id)
+    `)
     .eq("id", body.sale_id)
     .maybeSingle();
 
@@ -64,9 +73,40 @@ export async function POST(req: Request) {
     return json({ ok: false, error: "not_reserved" }, 409);
   }
 
+  const clientName = sale.client 
+    ? [sale.client.first_name, sale.client.last_name].filter(Boolean).join(" ").trim() || sale.client.username || "Клиент"
+    : "Клиент";
+
+  const productName = sale.product?.name ?? "Товар";
+  const quantity = sale.qty ?? 0;
+
+  // ===== ОТМЕНЯЕМ РЕЗЕРВ =====
   const { data, error } = await admin.rpc("cancel_product_sale", { p_sale: body.sale_id });
   if (error) return json({ ok: false, error: error.message }, 500);
 
   const res = data as { ok?: boolean };
+
+  // ===== 🔥 УВЕДОМЛЕНИЕ КЛИЕНТУ =====
+  try {
+    await tgSend(
+      user.id,
+      `❌ <b>Резерв товара отменён</b>\n\n` +
+        `📦 ${productName} × ${quantity} шт\n\n` +
+        `Товар возвращён на склад.`,
+      shop.bot_token
+    );
+  } catch { /* noop */ }
+
+  // ===== 🔥 УВЕДОМЛЕНИЕ АДМИНАМ ОБ ОТМЕНЕ РЕЗЕРВА =====
+  try {
+    await notifyReservationCancelled(Number(shopId), {
+      product_name: productName,
+      quantity: quantity,
+      client_name: clientName,
+    });
+  } catch (error) {
+    console.error('❌ Ошибка отправки уведомления админам:', error);
+  }
+
   return json({ ok: res?.ok === true });
 }

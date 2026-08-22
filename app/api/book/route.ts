@@ -2,7 +2,8 @@ import { createAdmin } from "@/lib/supabase/admin";
 import { validateInitData } from "@/lib/telegram";
 import { priceService } from "@/lib/pricing";
 import { json, options } from "@/lib/cors";
-import { tgSend } from "@/lib/notify"; // 👈 УБИРАЕМ fmtMsk, он больше не нужен
+import { tgSend } from "@/lib/notify";
+import { notifyNewBooking } from "@/lib/notify-admins"; // 👈 ДОБАВЛЯЕМ
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,10 +39,10 @@ export async function POST(req: Request) {
   // 2. Создаём админ-клиент
   const admin = createAdmin();
 
-  // 3. Получаем токен бота из таблицы shops по shop_id
+  // 3. Получаем токен бота и валюту из таблицы shops по shop_id
   const { data: shop, error: shopError } = await admin
     .from("shops")
-    .select("bot_token")
+    .select("bot_token, currency_id, currencies:symbol")
     .eq("id", Number(shopId))
     .maybeSingle();
 
@@ -49,6 +50,8 @@ export async function POST(req: Request) {
     console.error('❌ Токен для салона не найден:', shopId);
     return json({ error: "bot_token_not_found" }, 500);
   }
+
+  const currencySymbol = shop.currencies?.symbol || '₽';
 
   // 4. Проверяем initData с токеном салона
   const user = validateInitData(body.initData ?? "", shop.bot_token);
@@ -83,7 +86,7 @@ export async function POST(req: Request) {
   // длительность услуги
   const { data: svc } = await admin
     .from("services")
-    .select("duration_min")
+    .select("duration_min, name")
     .eq("id", service_id)
     .eq("shop_id", Number(shopId))
     .maybeSingle();
@@ -192,35 +195,52 @@ export async function POST(req: Request) {
     return json({ error: bErr?.message ?? "booking_failed" }, 500);
   }
 
-  // ===== 🔥 УВЕДОМЛЕНИЕ — ФОРМАТИРУЕМ ВРЕМЯ КАК В СПИСКЕ ЗАПИСЕЙ =====
+  // ===== 🔥 ПОЛУЧАЕМ ДАННЫЕ ДЛЯ УВЕДОМЛЕНИЙ =====
+  const [{ data: s2 }, { data: sp2 }, { data: client }] = await Promise.all([
+    admin.from("services").select("name").eq("id", service_id).maybeSingle(),
+    admin.from("specialists").select("full_name").eq("id", specialist_id).maybeSingle(),
+    admin.from("users").select("first_name, last_name, username").eq("telegram_id", user.id).maybeSingle(),
+  ]);
+
+  const clientName = client 
+    ? [client.first_name, client.last_name].filter(Boolean).join(" ").trim() || client.username || "Клиент"
+    : "Клиент";
+
+  // ===== 🔥 УВЕДОМЛЕНИЕ КЛИЕНТУ =====
+  const when = new Date(booking.starts_at).toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC"
+  });
+
   try {
-    const [{ data: s2 }, { data: sp2 }] = await Promise.all([
-      admin.from("services").select("name").eq("id", service_id).maybeSingle(),
-      admin.from("specialists").select("full_name").eq("id", specialist_id).maybeSingle(),
-    ]);
-    
-    // 🔥 Форматируем время так же, как в списке записей (без перевода часовых поясов)
-    const when = new Date(booking.starts_at).toLocaleString("ru-RU", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZone: "UTC"
-    });
-    
     await tgSend(
       user.id,
       `✅ <b>Вы записаны!</b>\n\n` +
         `${s2?.name ?? "Услуга"} · ${sp2?.full_name ?? ""}\n` +
         `🗓 ${when}\n` +
         (redeem > 0 ? `⭐ Списываем баллов: ${redeem}\n` : "") +
-        (cert > 0 ? `🎟 Сертификат: −${cert} ₽\n` : "") +
-        `💰 К оплате: ${moneyDue} ₽`,
+        (cert > 0 ? `🎟 Сертификат: −${cert} ${currencySymbol}\n` : "") +
+        `💰 К оплате: ${moneyDue} ${currencySymbol}`,
       shop.bot_token
     );
-  } catch {
-    /* noop */
+  } catch { /* noop */ }
+
+  // ===== 🔥 УВЕДОМЛЕНИЕ АДМИНАМ О НОВОЙ ЗАПИСИ =====
+  try {
+    await notifyNewBooking(Number(shopId), {
+      service_name: s2?.name ?? "Услуга",
+      specialist_name: sp2?.full_name ?? "Мастер",
+      starts_at: booking.starts_at,
+      client_name: clientName,
+      price: moneyDue,
+      currency_symbol: currencySymbol,
+    });
+  } catch (error) {
+    console.error('❌ Ошибка отправки уведомления админам:', error);
   }
 
   return json({

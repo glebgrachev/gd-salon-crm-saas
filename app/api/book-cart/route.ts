@@ -1,8 +1,9 @@
 import { createAdmin } from "@/lib/supabase/admin";
 import { validateInitData } from "@/lib/telegram";
 import { priceService, priceCart, type CartItemIn } from "@/lib/pricing";
-import { tgSend } from "@/lib/notify"; // 👈 УБИРАЕМ fmtMsk
+import { tgSend } from "@/lib/notify";
 import { json, options } from "@/lib/cors";
+import { notifyNewOrder } from "@/lib/notify-admins"; // 👈 ДОБАВЛЯЕМ
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,10 +45,10 @@ export async function POST(req: Request) {
 
   const admin = createAdmin();
 
-  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА =====
+  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА И ВАЛЮТУ =====
   const { data: shop, error: shopError } = await admin
     .from("shops")
-    .select("bot_token")
+    .select("bot_token, currency_id, currencies:symbol")
     .eq("id", Number(shopId))
     .maybeSingle();
 
@@ -55,6 +56,8 @@ export async function POST(req: Request) {
     console.error('❌ Токен для салона не найден:', shopId);
     return json({ error: "bot_token_not_found" }, 500);
   }
+
+  const currencySymbol = shop.currencies?.symbol || '₽';
 
   // ===== 3. ПРОВЕРЯЕМ initData =====
   const user = validateInitData(body.initData ?? "", shop.bot_token);
@@ -85,6 +88,17 @@ export async function POST(req: Request) {
 
   const items = body.items ?? [];
   if (items.length === 0) return json({ error: "empty" }, 400);
+
+  // ===== ПОЛУЧАЕМ ИМЯ КЛИЕНТА =====
+  const { data: client } = await admin
+    .from("users")
+    .select("first_name, last_name, username")
+    .eq("telegram_id", user.id)
+    .maybeSingle();
+
+  const clientName = client 
+    ? [client.first_name, client.last_name].filter(Boolean).join(" ").trim() || client.username || "Клиент"
+    : "Клиент";
 
   // длительности услуг (для ends_at)
   const serviceIds = [...new Set(items.map((i) => i.service_id))];
@@ -252,6 +266,7 @@ export async function POST(req: Request) {
   const wanted = (body.products ?? []).filter((p) => p.product_id && p.qty > 0);
   const reservedIds: string[] = [];
   const soldOut: string[] = [];
+  let productsTotal = 0;
 
   for (const it of wanted) {
     const { data: sale, error: saleErr } = await admin.rpc("sell_product", {
@@ -272,72 +287,100 @@ export async function POST(req: Request) {
     else soldOut.push(it.product_id);
   }
 
-  // ===== 🔥 СВОДНОЕ УВЕДОМЛЕНИЕ — ФОРМАТИРУЕМ ВРЕМЯ КАК В СПИСКЕ ЗАПИСЕЙ =====
-  try {
-    const [{ data: svcNames }, { data: spNames }] = await Promise.all([
-      admin.from("services").select("id, name").in("id", serviceIds).eq("shop_id", Number(shopId)),
-      admin.from("specialists").select("id, full_name").in("id", [...new Set(items.map((i) => i.specialist_id))]).eq("shop_id", Number(shopId)),
-    ]);
-    const svcName = new Map(((svcNames as { id: string; name: string }[]) ?? []).map((s) => [s.id, s.name]));
-    const spName = new Map(((spNames as { id: string; full_name: string }[]) ?? []).map((s) => [s.id, s.full_name]));
-    const total = rpcItems.reduce((s, r) => s + Number(r.final_price), 0);
-    const moneyDue = Math.max(0, total - redeemTotal * pointValue - certTotal);
-    
-    // 🔥 Форматируем каждое время так же, как в списке записей
-    const lines = items
-      .map((it, idx) => {
-        const gift = rpcItems[idx].is_gift ? " 🎁" : "";
-        const time = new Date(it.starts_at).toLocaleString("ru-RU", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          timeZone: "UTC"
-        });
-        return `• ${svcName.get(it.service_id) ?? "Услуга"}${gift} — ${spName.get(it.specialist_id) ?? ""}\n   ${time}`;
-      })
+  // ===== ПОЛУЧАЕМ ДАННЫЕ ДЛЯ УВЕДОМЛЕНИЙ =====
+  const [{ data: svcNames }, { data: spNames }] = await Promise.all([
+    admin.from("services").select("id, name").in("id", serviceIds).eq("shop_id", Number(shopId)),
+    admin.from("specialists").select("id, full_name").in("id", [...new Set(items.map((i) => i.specialist_id))]).eq("shop_id", Number(shopId)),
+  ]);
+  const svcName = new Map(((svcNames as { id: string; name: string }[]) ?? []).map((s) => [s.id, s.name]));
+  const spName = new Map(((spNames as { id: string; full_name: string }[]) ?? []).map((s) => [s.id, s.full_name]));
+
+  const total = rpcItems.reduce((s, r) => s + Number(r.final_price), 0);
+  const moneyDue = Math.max(0, total - redeemTotal * pointValue - certTotal);
+
+  // ===== 🔥 УВЕДОМЛЕНИЕ КЛИЕНТУ =====
+  const lines = items
+    .map((it, idx) => {
+      const gift = rpcItems[idx].is_gift ? " 🎁" : "";
+      const time = new Date(it.starts_at).toLocaleString("ru-RU", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "UTC"
+      });
+      return `• ${svcName.get(it.service_id) ?? "Услуга"}${gift} — ${spName.get(it.specialist_id) ?? ""}\n   ${time}`;
+    })
+    .join("\n");
+
+  let productBlock = "";
+  if (reservedIds.length > 0) {
+    const { data: sales } = await admin
+      .from("product_sales")
+      .select("qty, total, product:products ( name )")
+      .in("id", reservedIds);
+
+    type SaleRow = { qty: number; total: number; product: { name: string } | null };
+    const rows = (sales as unknown as SaleRow[]) ?? [];
+    productsTotal = rows.reduce((sum, r) => sum + Number(r.total), 0);
+
+    const pLines = rows
+      .map((r) => `• ${r.product?.name ?? "Товар"} × ${r.qty} — ${Math.round(Number(r.total))} ${currencySymbol}`)
       .join("\n");
 
-    let productBlock = "";
-    let productsTotal = 0;
+    productBlock = `\n\n🛍 <b>Товары к выдаче</b>\n${pLines}`;
+  }
 
-    if (reservedIds.length > 0) {
-      const { data: sales } = await admin
-        .from("product_sales")
-        .select("qty, total, product:products ( name )")
-        .in("id", reservedIds);
+  const soldOutBlock =
+    soldOut.length > 0
+      ? `\n\n⚠️ Часть товаров закончилась — их отложить не удалось.`
+      : "";
 
-      type SaleRow = { qty: number; total: number; product: { name: string } | null };
-      const rows = (sales as unknown as SaleRow[]) ?? [];
-      productsTotal = rows.reduce((sum, r) => sum + Number(r.total), 0);
-
-      const pLines = rows
-        .map((r) => `• ${r.product?.name ?? "Товар"} × ${r.qty} — ${Math.round(Number(r.total))} ₽`)
-        .join("\n");
-
-      productBlock = `\n\n🛍 <b>Товары к выдаче</b>\n${pLines}`;
-    }
-
-    const soldOutBlock =
-      soldOut.length > 0
-        ? `\n\n⚠️ Часть товаров закончилась — их отложить не удалось.`
-        : "";
-
+  try {
     await tgSend(
       user.id,
       `✅ <b>Заказ оформлен!</b>\n\n${lines}` +
         productBlock +
         `\n\n` +
         (redeemTotal > 0 ? `⭐ Списываем баллов: ${redeemTotal}\n` : "") +
-        (certTotal > 0 ? `🎟 Сертификат: −${certTotal} ₽\n` : "") +
-        `💰 К оплате: ${moneyDue + Math.round(productsTotal)} ₽` +
-        (productsTotal > 0 ? `\n   (услуги ${moneyDue} ₽ + товары ${Math.round(productsTotal)} ₽)` : "") +
+        (certTotal > 0 ? `🎟 Сертификат: −${certTotal} ${currencySymbol}\n` : "") +
+        `💰 К оплате: ${moneyDue + Math.round(productsTotal)} ${currencySymbol}` +
+        (productsTotal > 0 ? `\n   (услуги ${moneyDue} ${currencySymbol} + товары ${Math.round(productsTotal)} ${currencySymbol})` : "") +
         soldOutBlock,
       shop.bot_token
     );
-  } catch {
-    /* noop */
+  } catch { /* noop */ }
+
+  // ===== 🔥 УВЕДОМЛЕНИЕ АДМИНАМ О НОВОМ ЗАКАЗЕ =====
+  try {
+    const serviceLines = items.map((it, idx) => {
+      const gift = rpcItems[idx].is_gift ? " 🎁" : "";
+      return `${svcName.get(it.service_id) ?? "Услуга"}${gift} (${spName.get(it.specialist_id) ?? ""})`;
+    });
+
+    const productLines = reservedIds.length > 0
+      ? await (async () => {
+          const { data: sales } = await admin
+            .from("product_sales")
+            .select("qty, product:products ( name )")
+            .in("id", reservedIds);
+          type SaleRow2 = { qty: number; product: { name: string } | null };
+          return ((sales as unknown as SaleRow2[]) ?? []).map(
+            (r) => `${r.product?.name ?? "Товар"} × ${r.qty}`
+          );
+        })()
+      : [];
+
+    await notifyNewOrder(Number(shopId), {
+      items: serviceLines,
+      products: productLines.length > 0 ? productLines : undefined,
+      client_name: clientName,
+      total: moneyDue + Math.round(productsTotal),
+      currency_symbol: currencySymbol,
+    });
+  } catch (error) {
+    console.error('❌ Ошибка отправки уведомления админам:', error);
   }
 
   return json({

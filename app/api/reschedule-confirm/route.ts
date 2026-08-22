@@ -1,8 +1,9 @@
 import { createAdmin } from "@/lib/supabase/admin";
 import { validateInitData } from "@/lib/telegram";
 import { json, options } from "@/lib/cors";
-import { tgSend } from "@/lib/notify"; // 👈 УБИРАЕМ fmtMsk
+import { tgSend } from "@/lib/notify";
 import { priceService } from "@/lib/pricing";
+import { notifyBookingRescheduled } from "@/lib/notify-admins"; // 👈 ДОБАВЛЯЕМ
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,10 +35,10 @@ export async function POST(req: Request) {
 
   const admin = createAdmin();
 
-  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА ИЗ ТАБЛИЦЫ shops =====
+  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА И ДАННЫЕ САЛОНА =====
   const { data: shop, error: shopError } = await admin
     .from("shops")
-    .select("bot_token")
+    .select("bot_token, currency_id, currencies:symbol")
     .eq("id", Number(shopId))
     .maybeSingle();
 
@@ -45,6 +46,8 @@ export async function POST(req: Request) {
     console.error('❌ Токен для салона не найден:', shopId);
     return json({ error: "bot_token_not_found" }, 500);
   }
+
+  const currencySymbol = shop.currencies?.symbol || '₽';
 
   // ===== 3. ПРОВЕРЯЕМ initData С ТОКЕНОМ САЛОНА =====
   const user = validateInitData(body.initData ?? "", shop.bot_token);
@@ -59,7 +62,6 @@ export async function POST(req: Request) {
 
   if (!userError && userData?.frozen === true) {
     console.warn('⚠️ Попытка переноса записи замороженным пользователем:', user.id);
-    // Отправляем сообщение в Telegram
     try {
       await tgSend(
         user.id,
@@ -92,9 +94,20 @@ export async function POST(req: Request) {
   // услуга не меняется
   const service_id = oldB.service_id as string;
 
+  // ===== ПОЛУЧАЕМ ИМЯ КЛИЕНТА =====
+  const { data: client } = await admin
+    .from("users")
+    .select("first_name, last_name, username")
+    .eq("telegram_id", user.id)
+    .maybeSingle();
+
+  const clientName = client 
+    ? [client.first_name, client.last_name].filter(Boolean).join(" ").trim() || client.username || "Клиент"
+    : "Клиент";
+
   const { data: svc } = await admin
     .from("services")
-    .select("duration_min")
+    .select("duration_min, name")
     .eq("id", service_id)
     .eq("shop_id", Number(shopId))
     .maybeSingle();
@@ -158,7 +171,6 @@ export async function POST(req: Request) {
       final_price: priced.final_price,
       price_snapshot: priced.final_price,
       promo_id: priced.promo_id,
-      // намерения по баллам/сертификату переносим как есть (реального списания ещё не было)
       points_to_redeem: oldB.points_to_redeem ?? 0,
       cert_to_redeem: oldB.cert_to_redeem ?? 0,
       cert_id: oldB.cert_id ?? null,
@@ -181,39 +193,62 @@ export async function POST(req: Request) {
   });
   const ok = (fin as { ok?: boolean } | null)?.ok === true;
   if (!ok) {
-    // откат: удаляем созданную бронь и заказ
     await admin.from("bookings").delete().eq("id", booking.id);
     await admin.from("orders").delete().eq("id", order.id);
     return json({ error: "reschedule_failed" }, 409);
   }
 
-  // ===== 🔥 УВЕДОМЛЕНИЕ — ФОРМАТИРУЕМ ВРЕМЯ КАК В СПИСКЕ ЗАПИСЕЙ =====
+  // ===== ПОЛУЧАЕМ ДАННЫЕ ДЛЯ УВЕДОМЛЕНИЙ =====
+  const [{ data: s2 }, { data: sp2 }] = await Promise.all([
+    admin.from("services").select("name").eq("id", service_id).maybeSingle(),
+    admin.from("specialists").select("full_name").eq("id", specialist_id).maybeSingle(),
+  ]);
+
+  const serviceName = s2?.name ?? "Услуга";
+  const specialistName = sp2?.full_name ?? "Мастер";
+
+  // ===== 🔥 УВЕДОМЛЕНИЕ КЛИЕНТУ =====
+  const newWhen = new Date(booking.starts_at).toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC"
+  });
+
+  const oldWhen = new Date(orig).toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC"
+  });
+
   try {
-    const [{ data: s2 }, { data: sp2 }] = await Promise.all([
-      admin.from("services").select("name").eq("id", service_id).maybeSingle(),
-      admin.from("specialists").select("full_name").eq("id", specialist_id).maybeSingle(),
-    ]);
-    
-    // 🔥 Форматируем время так же, как в списке записей
-    const when = new Date(booking.starts_at).toLocaleString("ru-RU", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZone: "UTC"
-    });
-    
     await tgSend(
       user.id,
       `🔄 <b>Запись перенесена!</b>\n\n` +
-        `${s2?.name ?? "Услуга"} · ${sp2?.full_name ?? ""}\n` +
-        `🗓 ${when}\n` +
-        `💰 ${priced.final_price} ₽`,
+        `${serviceName} · ${specialistName}\n` +
+        `📅 <b>Было:</b> ${oldWhen}\n` +
+        `📅 <b>Стало:</b> ${newWhen}\n` +
+        `💰 ${priced.final_price} ${currencySymbol}`,
       shop.bot_token
     );
-  } catch {
-    /* noop */
+  } catch { /* noop */ }
+
+  // ===== 🔥 УВЕДОМЛЕНИЕ АДМИНАМ О ПЕРЕНОСЕ =====
+  try {
+    await notifyBookingRescheduled(Number(shopId), {
+      service_name: serviceName,
+      specialist_name: specialistName,
+      old_starts_at: orig.toISOString(),
+      new_starts_at: booking.starts_at,
+      client_name: clientName,
+    });
+  } catch (error) {
+    console.error('❌ Ошибка отправки уведомления админам:', error);
   }
 
   return json({

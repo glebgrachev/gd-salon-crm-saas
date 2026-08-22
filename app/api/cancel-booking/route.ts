@@ -1,7 +1,8 @@
 import { createAdmin } from "@/lib/supabase/admin";
 import { validateInitData } from "@/lib/telegram";
 import { json, options } from "@/lib/cors";
-import { tgSend } from "@/lib/notify"; // 👈 Добавляем импорт
+import { tgSend } from "@/lib/notify";
+import { notifyBookingCancelled } from "@/lib/notify-admins"; // 👈 ДОБАВЛЯЕМ
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,10 +35,10 @@ export async function POST(req: Request) {
 
   const admin = createAdmin();
 
-  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА ИЗ ТАБЛИЦЫ shops =====
+  // ===== 2. ПОЛУЧАЕМ ТОКЕН БОТА И ДАННЫЕ САЛОНА =====
   const { data: shop, error: shopError } = await admin
     .from("shops")
-    .select("bot_token")
+    .select("bot_token, currency_id, currencies:symbol")
     .eq("id", Number(shopId))
     .maybeSingle();
 
@@ -65,39 +66,61 @@ export async function POST(req: Request) {
     return json({ error: "too_late" }, 400);
   }
 
+  // ===== ПОЛУЧАЕМ ИМЯ КЛИЕНТА =====
+  const { data: client } = await admin
+    .from("users")
+    .select("first_name, last_name, username")
+    .eq("telegram_id", user.id)
+    .maybeSingle();
+
+  const clientName = client 
+    ? [client.first_name, client.last_name].filter(Boolean).join(" ").trim() || client.username || "Клиент"
+    : "Клиент";
+
+  const serviceName = booking.service?.name ?? "Услуга";
+  const specialistName = booking.specialist?.full_name ?? "Мастер";
+
+  // ===== ОТМЕНЯЕМ ЗАПИСЬ =====
   const { error } = await admin
     .from("bookings")
     .update({ status: "cancelled" })
     .eq("id", booking.id);
   if (error) return json({ error: error.message }, 500);
 
-  // ===== 🔥 ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ ОБ ОТМЕНЕ =====
-  try {
-    const serviceName = booking.service?.name ?? "Услуга";
-    const specialistName = booking.specialist?.full_name ?? "";
-    const when = new Date(booking.starts_at).toLocaleString("ru-RU", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZone: "Europe/Moscow",
-    });
+  // ===== 🔥 УВЕДОМЛЕНИЕ КЛИЕНТУ =====
+  const when = new Date(booking.starts_at).toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Moscow",
+  });
 
+  try {
     await tgSend(
       user.id,
       `❌ <b>Запись отменена</b>\n\n` +
         `${serviceName} · ${specialistName}\n` +
         `🗓 ${when}\n\n` +
         `Слот освобождён. Будем рады видеть вас снова! 💅`,
-      shop.bot_token // 👈 ПЕРЕДАЁМ ТОКЕН
+      shop.bot_token
     );
-  } catch {
-    /* noop */
+  } catch { /* noop */ }
+
+  // ===== 🔥 УВЕДОМЛЕНИЕ АДМИНАМ ОБ ОТМЕНЕ =====
+  try {
+    await notifyBookingCancelled(Number(shopId), {
+      service_name: serviceName,
+      specialist_name: specialistName,
+      starts_at: booking.starts_at,
+      client_name: clientName,
+    });
+  } catch (error) {
+    console.error('❌ Ошибка отправки уведомления админам:', error);
   }
 
-  // слот освободился — сразу предлагаем его тем, кто ждёт в очереди,
-  // не дожидаясь планового сканирования (раз в 5 минут)
+  // слот освободился — сразу предлагаем его тем, кто ждёт в очереди
   notifyWaitlist();
 
   return json({ ok: true });
