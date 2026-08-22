@@ -13,45 +13,59 @@ type Currency = {
 };
 
 type ShopContextType = {
+  shopId: number | null;
   currency: Currency | null;
   loading: boolean;
   formatPrice: (amount: number) => string;
   refreshCurrency: () => Promise<void>;
-  version: number; // 👈 Добавляем версию
+  version: number;
 };
 
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
 
 export function ShopProvider({ children }: { children: React.ReactNode }) {
+  const [shopId, setShopId] = useState<number | null>(null);
   const [currency, setCurrency] = useState<Currency | null>(null);
   const [loading, setLoading] = useState(true);
-  const [version, setVersion] = useState(0); // 👈 Добавляем версию
+  const [version, setVersion] = useState(0);
   const supabase = createClient();
 
   const loadCurrency = async () => {
     try {
       setLoading(true);
+      console.log('🔍 ShopContext: загрузка...');
+      
       const { data: { user } } = await supabase.auth.getUser();
+      console.log('🔍 ShopContext: user =', user?.id);
+      
       if (!user) {
+        console.log('❌ ShopContext: пользователь не найден');
         setLoading(false);
         return;
       }
 
-      const { data: admin } = await supabase
+      const { data: admin, error } = await supabase
         .from('admins')
         .select('shop_id')
         .eq('user_uid', user.id)
         .single();
+      
+      console.log('🔍 ShopContext: admin =', admin, 'error =', error);
 
       if (!admin?.shop_id) {
+        console.log('❌ ShopContext: admin не найден или нет shop_id');
         setLoading(false);
         return;
       }
 
+      const currentShopId = admin.shop_id;
+      setShopId(currentShopId);
+      console.log('✅ ShopContext: shopId =', currentShopId);
+
       const { data: shop } = await supabase
         .from('shops')
         .select('currency_id')
-        .eq('id', admin.shop_id)
+        .eq('id', currentShopId)
         .single();
 
       let newCurrency = null;
@@ -72,9 +86,11 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       }
 
       setCurrency(newCurrency);
-      setVersion(prev => prev + 1); // 👈 Увеличиваем версию при обновлении
+      setVersion(prev => prev + 1);
+      
+      console.log('✅ ShopContext: currency =', newCurrency?.code);
     } catch (error) {
-      console.error('Error loading currency:', error);
+      console.error('❌ ShopContext: ошибка', error);
     } finally {
       setLoading(false);
     }
@@ -91,7 +107,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     return () => {
       window.removeEventListener('currency-changed', handleCurrencyChange);
     };
-  }, [supabase]);
+  }, []);
 
   const formatPrice = (amount: number) => {
     if (!currency) return `${Math.round(amount).toLocaleString('ru-RU')} ₽`;
@@ -103,7 +119,14 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <ShopContext.Provider value={{ currency, loading, formatPrice, refreshCurrency, version }}>
+    <ShopContext.Provider value={{ 
+      shopId,
+      currency, 
+      loading, 
+      formatPrice, 
+      refreshCurrency, 
+      version 
+    }}>
       {children}
     </ShopContext.Provider>
   );
