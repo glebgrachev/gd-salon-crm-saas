@@ -1,7 +1,7 @@
 // app/(app)/mailing/page.tsx
 
 import { createClient } from "@/lib/supabase/server";
-import MailingClient from "./mailing-client"; // 👈 импорт с маленькой буквы
+import MailingClient from "./MailingClient";
 
 export const dynamic = "force-dynamic";
 
@@ -29,14 +29,24 @@ export default async function MailingPage() {
     .eq("shop_id", shopId)
     .order("created_at", { ascending: false });
 
-  // 4. Получаем количество клиентов по сегментам
+  // 4. 👇 СЧИТАЕМ РЕАЛЬНЫХ ПОЛЬЗОВАТЕЛЕЙ
+  // Получаем всех пользователей салона
+  const { data: allUsers } = await supabase
+    .from("users")
+    .select("telegram_id, promo_opt_out")
+    .eq("shop_id", shopId);
+
+  const totalUsers = allUsers?.filter(u => u.promo_opt_out === false).length || 0;
+
+  // 5. Пытаемся получить сегменты из v_client_segments
   const { data: segments } = await supabase
     .from("v_client_segments")
     .select("segment, count")
     .eq("shop_id", shopId);
 
+  // 6. Формируем segmentCounts
   const segmentCounts: Record<string, number> = {
-    all: 0,
+    all: totalUsers, // 👈 Берем из реальных пользователей
     new: 0,
     regular: 0,
     sleeping: 0,
@@ -44,14 +54,32 @@ export default async function MailingPage() {
     no_visits: 0,
   };
 
+  // Заполняем из v_client_segments если есть
   segments?.forEach((s: any) => {
-    if (s.segment in segmentCounts) {
+    if (s.segment in segmentCounts && s.segment !== 'all') {
       segmentCounts[s.segment as keyof typeof segmentCounts] = Number(s.count) || 0;
     }
   });
 
-  // "Все" = сумма всех сегментов
-  segmentCounts.all = Object.values(segmentCounts).reduce((a, b) => a + b, 0);
+  // Если сегментов нет, но есть пользователи - распределяем их
+  if (totalUsers > 0 && segments?.length === 0) {
+    // Все пользователи попадают в "Все"
+    segmentCounts.all = totalUsers;
+    // Можно также раскидать по сегментам если есть поле segment в users
+    const { data: usersWithSegments } = await supabase
+      .from("users")
+      .select("segment")
+      .eq("shop_id", shopId)
+      .eq("promo_opt_out", false);
+    
+    usersWithSegments?.forEach((u: any) => {
+      if (u.segment && u.segment in segmentCounts && u.segment !== 'all') {
+        segmentCounts[u.segment as keyof typeof segmentCounts] = (segmentCounts[u.segment as keyof typeof segmentCounts] || 0) + 1;
+      }
+    });
+  }
+
+  console.log('📊 MailingPage: segmentCounts =', segmentCounts);
 
   return (
     <MailingClient 
