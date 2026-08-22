@@ -5,13 +5,18 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { CreditCard } from "lucide-react";
+import { CreditCard, Plus, Trash2, Send } from "lucide-react";
 
 type Currency = {
   id: number;
   code: string;
   symbol: string;
   name: string;
+};
+
+type TelegramRecipient = {
+  id: string; // временный ID для UI
+  telegram_id: string;
 };
 
 // Форматирование телефона
@@ -68,6 +73,12 @@ export default function SettingsPage() {
     subscription_expires_at: null as string | null,
     currency_id: 1,
   });
+  
+  // 👇 Состояние для Telegram ID
+  const [recipients, setRecipients] = useState<TelegramRecipient[]>([
+    { id: "1", telegram_id: "" },
+  ]);
+  const [telegramSaving, setTelegramSaving] = useState(false);
 
   useEffect(() => {
     async function loadShop() {
@@ -79,7 +90,7 @@ export default function SettingsPage() {
 
       const { data: admin } = await supabase
         .from("admins")
-        .select("shop_id")
+        .select("shop_id, telegram_id")
         .eq("user_uid", user.id)
         .single();
 
@@ -123,12 +134,88 @@ export default function SettingsPage() {
         subscription_expires_at: shopData.subscription_expires_at || null,
         currency_id: shopData.currency_id || 1,
       });
-      
+
+      // 👇 Загружаем Telegram ID из админа
+      if (admin.telegram_id && Array.isArray(admin.telegram_id) && admin.telegram_id.length > 0) {
+        setRecipients(
+          admin.telegram_id.map((id: number, index: number) => ({
+            id: String(index + 1),
+            telegram_id: String(id),
+          }))
+        );
+      } else {
+        setRecipients([{ id: "1", telegram_id: "" }]);
+      }
+
       setLoading(false);
     }
 
     loadShop();
   }, [router, supabase]);
+
+  // 👇 Обработчики для Telegram ID
+  const addRecipient = () => {
+    const newId = String(recipients.length + 1);
+    setRecipients([...recipients, { id: newId, telegram_id: "" }]);
+  };
+
+  const removeRecipient = (id: string) => {
+    if (recipients.length <= 1) {
+      toast.error("Должен быть хотя бы один получатель");
+      return;
+    }
+    setRecipients(recipients.filter((r) => r.id !== id));
+  };
+
+  const updateRecipient = (id: string, value: string) => {
+    // Только цифры
+    const digits = value.replace(/\D/g, "");
+    setRecipients(
+      recipients.map((r) =>
+        r.id === id ? { ...r, telegram_id: digits } : r
+      )
+    );
+  };
+
+  const saveTelegramIds = async () => {
+    const ids = recipients
+      .map((r) => r.telegram_id.trim())
+      .filter((id) => id.length > 0)
+      .map(Number);
+
+    if (ids.length === 0) {
+      toast.error("Добавьте хотя бы один Telegram ID");
+      return;
+    }
+
+    // Проверка на валидность (9-10 цифр)
+    const invalid = ids.some((id) => id < 100000000 || id > 9999999999);
+    if (invalid) {
+      toast.error("Telegram ID должен содержать 9-10 цифр");
+      return;
+    }
+
+    setTelegramSaving(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("Пользователь не найден");
+      setTelegramSaving(false);
+      return;
+    }
+
+    const { error } = await supabase
+      .from("admins")
+      .update({ telegram_id: ids })
+      .eq("user_uid", user.id);
+
+    if (error) {
+      console.error("Ошибка сохранения Telegram ID:", error);
+      toast.error("Не удалось сохранить Telegram ID");
+    } else {
+      toast.success("Telegram ID сохранены");
+    }
+    setTelegramSaving(false);
+  };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
@@ -173,7 +260,6 @@ export default function SettingsPage() {
       return;
     }
 
-    // Сохраняем текущую валюту для проверки изменений
     const oldCurrencyId = shop.currency_id;
     const newCurrencyId = Number(shop.currency_id);
 
@@ -200,7 +286,6 @@ export default function SettingsPage() {
 
     toast.success("Данные сохранены");
 
-    // 👇 ЕСЛИ ВАЛЮТА ИЗМЕНИЛАСЬ - ПЕРЕЗАГРУЖАЕМ СТРАНИЦУ
     if (oldCurrencyId !== newCurrencyId) {
       window.location.reload();
       return;
@@ -279,6 +364,9 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* ============================================================ */}
+      {/* НАСТРОЙКИ САЛОНА */}
+      {/* ============================================================ */}
       <h1 className="text-lg font-semibold tracking-tight text-neutral-900">
         Настройки салона
       </h1>
@@ -287,6 +375,7 @@ export default function SettingsPage() {
       </p>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+        {/* ... поля салона (без изменений) ... */}
         <div>
           <label className="block text-sm font-medium text-neutral-700">
             Название салона <span className="text-red-500">*</span>
@@ -390,9 +479,6 @@ export default function SettingsPage() {
           <p className="mt-1 text-xs text-neutral-400">13 или 15 цифр</p>
         </div>
 
-        {/* ============================================================ */}
-        {/* 🔥 ВАЛЮТА */}
-        {/* ============================================================ */}
         <div>
           <label className="block text-sm font-medium text-neutral-700">
             Валюта
@@ -422,6 +508,79 @@ export default function SettingsPage() {
           {saving ? "Сохраняем..." : "Сохранить изменения"}
         </button>
       </form>
+
+      {/* ============================================================ */}
+      {/* БЛОК TELEGRAM УВЕДОМЛЕНИЙ */}
+      {/* ============================================================ */}
+      <div className="mt-8 rounded-xl border border-neutral-200 bg-white p-6">
+        <h2 className="text-sm font-semibold text-neutral-900">
+          📱 Telegram уведомления
+        </h2>
+        <p className="mt-1 text-xs text-neutral-500">
+          Укажите Telegram ID получателей, чтобы получать уведомления о новых записях, отменах и других событиях.
+        </p>
+
+        <div className="mt-4 space-y-3">
+          {recipients.map((recipient) => (
+            <div key={recipient.id} className="flex items-center gap-3">
+              <div className="flex-1">
+                <label className="block text-xs text-neutral-500">
+                  Telegram ID {recipients.length > 1 ? `#${recipient.id}` : ""}
+                </label>
+                <input
+                  type="text"
+                  value={recipient.telegram_id}
+                  onChange={(e) => updateRecipient(recipient.id, e.target.value)}
+                  placeholder="123456789"
+                  className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900"
+                  inputMode="numeric"
+                />
+              </div>
+              <div className="flex items-center gap-2 pt-5">
+                <a
+                  href="https://t.me/userinfobot"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
+                >
+                  <Send className="h-4 w-4" />
+                  Получить ID
+                </a>
+                {recipients.length > 1 && (
+                  <button
+                    onClick={() => removeRecipient(recipient.id)}
+                    className="rounded-lg p-2 text-neutral-400 transition hover:bg-red-50 hover:text-red-600"
+                    title="Удалить получателя"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-3 flex gap-3">
+          <button
+            onClick={addRecipient}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-600 transition hover:border-neutral-400 hover:bg-neutral-50"
+          >
+            <Plus className="h-4 w-4" />
+            Добавить получателя
+          </button>
+          <button
+            onClick={saveTelegramIds}
+            disabled={telegramSaving}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-60"
+          >
+            {telegramSaving ? "Сохраняем..." : "Сохранить Telegram ID"}
+          </button>
+        </div>
+
+        <p className="mt-3 text-xs text-neutral-400">
+          ID можно узнать в боте @userinfobot. Укажите 9-10 цифр.
+        </p>
+      </div>
     </div>
   );
 }
