@@ -4,6 +4,7 @@ import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { previewRecipients } from "./actions";
+import { useShop } from "@/contexts/ShopContext";
 
 type Row = {
   id: string;
@@ -49,6 +50,7 @@ export default function MailingClient({
   history: Row[];
   segmentCounts: Record<string, number>;
 }) {
+  const { shopId, loading } = useShop();
   const [selected, setSelected] = useState<Set<SegKey>>(new Set());
   const [text, setText] = useState("");
   const [ctaUrl, setCtaUrl] = useState("");
@@ -103,6 +105,10 @@ export default function MailingClient({
       toast.error("В выбранных сегментах нет получателей");
       return;
     }
+    if (!shopId) {
+      toast.error("Ошибка: салон не найден");
+      return;
+    }
 
     startTransition(async () => {
       const res = await fetch("/api/broadcast", {
@@ -112,8 +118,11 @@ export default function MailingClient({
           segments: [...selected],
           text: text.trim(),
           cta_url: ctaUrl.trim() || undefined,
+          shop_id: shopId,
+          initData: window.Telegram?.WebApp?.initData || '',
         }),
       });
+      
       const data = await res.json().catch(() => null);
       if (res.ok && data?.ok) {
         toast.success(
@@ -127,11 +136,18 @@ export default function MailingClient({
         router.refresh();
       } else {
         toast.error(data?.error ?? "Не удалось отправить");
+        console.error('❌ Ошибка отправки:', data);
       }
     });
   }
 
   const totalPreview = count;
+
+  if (loading) {
+    return <div className="flex items-center justify-center min-h-screen">
+      <div className="text-neutral-500">Загрузка...</div>
+    </div>;
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-8 py-8">
@@ -198,7 +214,7 @@ export default function MailingClient({
           </div>
           <button
             onClick={send}
-            disabled={sending || selected.size === 0 || !text.trim()}
+            disabled={sending || selected.size === 0 || !text.trim() || !shopId}
             className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:opacity-50"
           >
             {sending ? "Отправляем…" : "Отправить сейчас"}
