@@ -45,11 +45,17 @@ export async function POST(req: Request) {
 
   const admin = createAdmin();
   const nowUTC = new Date();
-
-  console.log(`🕐 Текущее время: UTC=${nowUTC.toISOString()}`);
+  const nowMSK = new Date(nowUTC.getTime() + 3 * 60 * 60 * 1000);
+  
+  console.log(`🕐 Текущее время: UTC=${nowUTC.toISOString()}, MSK=${nowMSK.toISOString()}`);
 
   const REMIND_H = 4;
   const CANCEL_H = 3;
+
+  // Сдвиг на 4 часа для компенсации МСК (UTC+3)
+  const remindAtUTC = new Date(nowUTC.getTime() + REMIND_H * 3600_000);
+  const in24hUTC = new Date(nowUTC.getTime() + (24 + REMIND_H) * 3600_000);
+  const ago24hUTC = new Date(nowUTC.getTime() - 24 * 3600_000);
 
   let day = 0;
   let three = 0;
@@ -79,21 +85,18 @@ export async function POST(req: Request) {
   }
 
   // ===== НАПОМИНАНИЕ ЗА 24 ЧАСА =====
-  // Интервал: от 23.5 до 24.5 часов до записи
-  const remind24hStart = new Date(nowUTC.getTime() + (24 - 0.5) * 3600_000);
-  const remind24hEnd = new Date(nowUTC.getTime() + (24 + 0.5) * 3600_000);
-  
+  // Сдвиг на 4 часа для компенсации МСК (UTC+3)
   const { data: dayRows } = await admin
     .from("bookings")
     .select(SELECT)
     .in("status", ["new", "confirmed", "paid"])
     .eq("is_synthetic", false)
     .is("reminded_day_at", null)
-    .gt("starts_at", remind24hStart.toISOString())
-    .lte("starts_at", remind24hEnd.toISOString())
+    .gt("starts_at", remindAtUTC.toISOString())
+    .lte("starts_at", in24hUTC.toISOString())
     .limit(50);
   
-  console.log(`📅 Напоминания за сутки: найдено ${dayRows?.length ?? 0} записей (интервал: 23.5-24.5ч)`);
+  console.log(`📅 Напоминания за сутки: найдено ${dayRows?.length ?? 0} записей`);
   
   for (const b of (dayRows as unknown as Row[]) ?? []) {
     if (!(await claim(admin, b.id, "reminded_day_at"))) continue;
@@ -119,9 +122,10 @@ export async function POST(req: Request) {
   }
 
   // ===== НАПОМИНАНИЕ ЗА 4 ЧАСА =====
-  // Интервал: от 3.5 до 4.5 часов до записи
-  const remind4hStart = new Date(nowUTC.getTime() + (REMIND_H - 0.5) * 3600_000);
-  const remind4hEnd = new Date(nowUTC.getTime() + (REMIND_H + 0.5) * 3600_000);
+  // Тот же сдвиг на 4 часа для компенсации МСК (UTC+3), что и в 24-часовом
+  // Интервал: 3.5–4.5 часа до записи
+  const fourHoursStart = new Date(nowUTC.getTime() + (REMIND_H - 0.5) * 3600_000);
+  const fourHoursEnd = new Date(nowUTC.getTime() + (REMIND_H + 0.5) * 3600_000);
   
   const { data: threeRows } = await admin
     .from("bookings")
@@ -129,11 +133,11 @@ export async function POST(req: Request) {
     .in("status", ["new", "confirmed", "paid"])
     .eq("is_synthetic", false)
     .is("reminded_3h_at", null)
-    .gt("starts_at", remind4hStart.toISOString())
-    .lte("starts_at", remind4hEnd.toISOString())
+    .gt("starts_at", fourHoursStart.toISOString())
+    .lte("starts_at", fourHoursEnd.toISOString())
     .limit(50);
   
-  console.log(`⏰ Напоминания за 4 часа: найдено ${threeRows?.length ?? 0} записей (интервал: 3.5-4.5ч)`);
+  console.log(`⏰ Напоминания за 4 часа: найдено ${threeRows?.length ?? 0} записей`);
   
   for (const b of (threeRows as unknown as Row[]) ?? []) {
     if (!(await claim(admin, b.id, "reminded_3h_at"))) continue;
@@ -166,8 +170,6 @@ export async function POST(req: Request) {
   }
 
   // ===== ЗАПРОС ОТЗЫВА =====
-  const ago24hUTC = new Date(nowUTC.getTime() - 24 * 3600_000);
-  
   const { data: reviewRows } = await admin
     .from("bookings")
     .select(SELECT)
