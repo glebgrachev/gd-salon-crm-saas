@@ -8,12 +8,14 @@ type CreateBookingModalProps = {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  shopId: number;
 };
 
 export function CreateBookingModal({
   isOpen,
   onClose,
   onSuccess,
+  shopId,
 }: CreateBookingModalProps) {
   const [isLoading, setIsLoading] = useState(false);
 
@@ -31,6 +33,7 @@ export function CreateBookingModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...data,
+          shopId, // ✅ Передаём shopId
         }),
       });
 
