@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Search, User, UserRound, X } from "lucide-react";
+import { Search, User, UserRound, X, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useShop } from "@/contexts/ShopContext";
+import { AddClientModal } from "@/components/clients/AddClientModal";
 
 type Client = {
   telegram_id: number;
@@ -19,11 +20,12 @@ type ClientSelectProps = {
 };
 
 export function ClientSelect({ onSelect, selectedId }: ClientSelectProps) {
-  const { shopId } = useShop(); // 👈 Берём shopId из контекста
+  const { shopId } = useShop();
   const [query, setQuery] = useState("");
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // Загружаем выбранного клиента
   useEffect(() => {
@@ -86,6 +88,22 @@ export function ClientSelect({ onSelect, selectedId }: ClientSelectProps) {
     onSelect(0);
   };
 
+  const handleClientAdded = (clientId: number) => {
+    // Обновляем выбранного клиента
+    fetch(`/api/admin/clients/search?q=${clientId}&shopId=${shopId}&exact=true`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.ok && data.clients.length > 0) {
+          const client = data.clients[0];
+          setSelectedClient(client);
+          setQuery("");
+          setClients([]);
+          onSelect(client.telegram_id);
+        }
+      })
+      .catch(console.error);
+  };
+
   const getClientName = (c: Client) => {
     const parts = [];
     if (c.first_name) parts.push(c.first_name);
@@ -103,79 +121,105 @@ export function ClientSelect({ onSelect, selectedId }: ClientSelectProps) {
   // Если клиент выбран — показываем его
   if (selectedClient) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2">
-        <span className="flex-1 text-sm">
-          {getClientDisplay(selectedClient)}
-        </span>
-        <button
-          onClick={handleClear}
-          className="rounded-full p-1 hover:bg-neutral-200"
-          type="button"
-        >
-          <X className="h-4 w-4 text-neutral-400" />
-        </button>
-      </div>
+      <>
+        <div className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2">
+          <span className="flex-1 text-sm">
+            {getClientDisplay(selectedClient)}
+          </span>
+          <button
+            onClick={handleClear}
+            className="rounded-full p-1 hover:bg-neutral-200"
+            type="button"
+          >
+            <X className="h-4 w-4 text-neutral-400" />
+          </button>
+        </div>
+
+        <AddClientModal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          onSuccess={handleClientAdded}
+          shopId={shopId}
+        />
+      </>
     );
   }
 
   return (
-    <div className="space-y-2">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Поиск по имени, фамилии или телефону..."
-          className="pl-9"
-        />
+    <>
+      <div className="space-y-2">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Поиск по имени, фамилии или телефону..."
+            className="pl-9"
+          />
+        </div>
+
+        {loading && (
+          <div className="text-sm text-neutral-400">Поиск...</div>
+        )}
+
+        {!loading && clients.length > 0 && (
+          <div className="max-h-48 overflow-y-auto rounded-lg border border-neutral-200">
+            {clients.map((c) => (
+              <button
+                key={c.telegram_id}
+                onClick={() => handleSelect(c)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-neutral-50 border-b border-neutral-100 last:border-b-0"
+              >
+                {c.is_guest ? (
+                  <UserRound className="h-4 w-4 text-neutral-400 shrink-0" />
+                ) : (
+                  <User className="h-4 w-4 text-blue-500 shrink-0" />
+                )}
+                <span className="flex-1 text-left truncate">
+                  {getClientName(c)}
+                </span>
+                {c.phone && (
+                  <span className="text-xs text-neutral-400 shrink-0">
+                    {c.phone}
+                  </span>
+                )}
+                {c.is_guest && (
+                  <span className="text-xs text-neutral-400 shrink-0 ml-1">
+                    Гость
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {!loading && query.trim().length >= 2 && clients.length === 0 && (
+          <div className="flex items-center gap-2 text-sm text-neutral-500">
+            <span>Клиент не найден.</span>
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="flex items-center gap-1 rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700 transition"
+              type="button"
+            >
+              <Plus className="h-3 w-3" />
+              Создать
+            </button>
+          </div>
+        )}
+
+        {query.trim().length > 0 && query.trim().length < 2 && (
+          <div className="text-sm text-neutral-400">
+            Введите минимум 2 символа для поиска
+          </div>
+        )}
       </div>
 
-      {loading && (
-        <div className="text-sm text-neutral-400">Поиск...</div>
-      )}
-
-      {!loading && clients.length > 0 && (
-        <div className="max-h-48 overflow-y-auto rounded-lg border border-neutral-200">
-          {clients.map((c) => (
-            <button
-              key={c.telegram_id}
-              onClick={() => handleSelect(c)}
-              className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-neutral-50 border-b border-neutral-100 last:border-b-0"
-            >
-              {c.is_guest ? (
-                <UserRound className="h-4 w-4 text-neutral-400 shrink-0" />
-              ) : (
-                <User className="h-4 w-4 text-blue-500 shrink-0" />
-              )}
-              <span className="flex-1 text-left truncate">
-                {getClientName(c)}
-              </span>
-              {c.phone && (
-                <span className="text-xs text-neutral-400 shrink-0">
-                  {c.phone}
-                </span>
-              )}
-              {c.is_guest && (
-                <span className="text-xs text-neutral-400 shrink-0 ml-1">
-                  Гость
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {!loading && query.trim().length >= 2 && clients.length === 0 && (
-        <div className="text-sm text-neutral-500">
-          Клиент не найден. Попробуйте изменить запрос.
-        </div>
-      )}
-
-      {query.trim().length > 0 && query.trim().length < 2 && (
-        <div className="text-sm text-neutral-400">
-          Введите минимум 2 символа для поиска
-        </div>
-      )}
-    </div>
+      <AddClientModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSuccess={handleClientAdded}
+        shopId={shopId}
+      />
+    </>
   );
 }
