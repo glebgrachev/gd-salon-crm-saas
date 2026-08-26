@@ -89,7 +89,10 @@ export function ClientSelect({ onSelect, selectedId }: ClientSelectProps) {
   };
 
   const handleClientAdded = (clientId: number) => {
-    // Обновляем выбранного клиента
+    // ✅ Закрываем модалку добавления клиента
+    setIsAddModalOpen(false);
+    
+    // Загружаем созданного клиента и выбираем его
     fetch(`/api/admin/clients/search?q=${clientId}&shopId=${shopId}&exact=true`)
       .then((res) => res.json())
       .then((data) => {
