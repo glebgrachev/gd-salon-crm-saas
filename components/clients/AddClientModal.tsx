@@ -17,11 +17,13 @@ export function AddClientModal({
   onSuccess, 
   shopId 
 }: AddClientModalProps) {
+  console.log('🔍 AddClientModal: рендер, isOpen =', isOpen, 'shopId =', shopId);
+  
   const [isLoading, setIsLoading] = useState(false);
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
 
   const handleSubmit = async (data: { firstName: string; lastName: string; phone: string }) => {
-    console.log('🔍 AddClientModal: создание клиента', { data, shopId });
+    console.log('🔍 AddClientModal: handleSubmit вызван', { data, shopId });
     setIsLoading(true);
     setDuplicateError(null);
     
@@ -48,7 +50,6 @@ export function AddClientModal({
       if (result.ok) {
         console.log('✅ AddClientModal: клиент создан, clientId =', result.clientId);
         onSuccess(result.clientId);
-        // НЕ закрываем модалку здесь — пусть onSuccess решает
       } else {
         console.error('❌ AddClientModal: ошибка создания', result.error);
         alert(result.error || "Не удалось создать клиента");
@@ -61,7 +62,6 @@ export function AddClientModal({
     }
   };
 
-  // Сбрасываем ошибку при открытии/закрытии
   const handleClose = () => {
     console.log('🔍 AddClientModal: закрытие');
     setDuplicateError(null);
