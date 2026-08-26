@@ -17,7 +17,7 @@ export default async function ClientsPage() {
 
   const shopId = admin?.shop_id ?? 0;
 
-  // 👇 ЗАГРУЖАЕМ ВАЛЮТУ САЛОНА
+  // Загружаем валюту и модули салона
   const { data: shopData } = await supabase
     .from("shops")
     .select("currency_id, modules")
@@ -36,17 +36,17 @@ export default async function ClientsPage() {
 
   const clientLimit = shopData?.modules?.clients ?? -1;
 
-  // 3. Считаем текущих клиентов
+  // Считаем текущих клиентов (включая гостей)
   const { count: clientsCount } = await supabase
     .from("users")
     .select("*", { count: 'exact', head: true })
     .eq("shop_id", shopId);
 
-  // 4. Загружаем данные ТОЛЬКО для этого салона
+  // Загружаем данные ТОЛЬКО для этого салона
   const [{ data: users }, { data: bookings }, { data: segments }] = await Promise.all([
     supabase
       .from("users")
-      .select("telegram_id, first_name, last_name, username, phone, created_at")
+      .select("telegram_id, first_name, last_name, username, phone, created_at, is_guest")
       .eq("shop_id", shopId)
       .order("created_at", { ascending: false }),
     supabase
@@ -73,20 +73,24 @@ export default async function ClientsPage() {
     segMap.set(s.client_id, s);
   }
 
-  const rows: ClientRow[] = ((users as Omit<ClientRow, "bookings" | "spent" | "segment" | "last_visit" | "days_since_last" | "paid_visits">[]) ?? []).map(
-    (u) => {
-      const seg = segMap.get(u.telegram_id);
-      return {
-        ...u,
-        bookings: stats.get(u.telegram_id)?.count ?? 0,
-        spent: stats.get(u.telegram_id)?.spent ?? 0,
-        segment: seg?.segment ?? "no_visits",
-        last_visit: seg?.last_visit ?? null,
-        days_since_last: seg?.days_since_last ?? null,
-        paid_visits: seg?.visits ?? 0,
-      };
-    },
-  );
+  const rows: ClientRow[] = ((users as any[]) ?? []).map((u) => {
+    const seg = segMap.get(u.telegram_id);
+    return {
+      telegram_id: u.telegram_id,
+      first_name: u.first_name,
+      last_name: u.last_name,
+      username: u.username,
+      phone: u.phone,
+      is_guest: u.is_guest ?? false,
+      created_at: u.created_at,
+      bookings: stats.get(u.telegram_id)?.count ?? 0,
+      spent: stats.get(u.telegram_id)?.spent ?? 0,
+      segment: seg?.segment ?? "no_visits",
+      last_visit: seg?.last_visit ?? null,
+      days_since_last: seg?.days_since_last ?? null,
+      paid_visits: seg?.visits ?? 0,
+    };
+  });
 
   return (
     <ClientsClient 
@@ -94,7 +98,7 @@ export default async function ClientsPage() {
       shopId={shopId}
       clientLimit={clientLimit}
       clientsCount={clientsCount ?? 0}
-      currency={currency} // 👈 ПЕРЕДАЕМ ВАЛЮТУ
+      currency={currency}
     />
   );
 }
