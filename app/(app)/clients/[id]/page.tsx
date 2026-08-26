@@ -2,7 +2,7 @@
 
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, User, UserRound } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import StatusSelect from "./status-select";
 import RetentionResetButton from "./retention-reset";
@@ -42,7 +42,7 @@ export default async function ClientPage({
 
   const shopId = admin?.shop_id ?? 0;
 
-  // Загружаем валюту салона
+  // 👇 Загружаем валюту салона
   const { data: shop } = await supabase
     .from("shops")
     .select("currency_id")
@@ -59,11 +59,11 @@ export default async function ClientPage({
     currency = currencyData;
   }
 
-  // ✅ Ищем клиента по telegram_id (может быть отрицательным для гостей)
+  // 2. Проверяем, что клиент принадлежит этому салону
   const { data: client } = await supabase
     .from("users")
-    .select("id, telegram_id, first_name, last_name, username, phone, created_at, shop_id, is_guest")
-    .eq("telegram_id", parseInt(id))
+    .select("telegram_id, first_name, last_name, username, phone, created_at, shop_id, is_guest")
+    .eq("telegram_id", id)
     .maybeSingle();
 
   if (!client) notFound();
@@ -87,14 +87,14 @@ export default async function ClientPage({
     .select(
       "id, starts_at, status, price_snapshot, shop_id, specialist:specialists ( full_name ), service:services ( name )",
     )
-    .eq("client_id", client.telegram_id)
+    .eq("client_id", id)
     .eq("shop_id", shopId)
     .order("starts_at", { ascending: false });
 
   const { data: loyalty } = await supabase
     .from("loyalty_accounts")
     .select("balance, total_earned, total_spent")
-    .eq("client_id", client.telegram_id)
+    .eq("client_id", id)
     .eq("shop_id", shopId)
     .maybeSingle();
   const points = Number(loyalty?.balance ?? 0);
@@ -102,7 +102,7 @@ export default async function ClientPage({
   const { data: seg } = await supabase
     .from("v_client_segments")
     .select("segment, last_visit, days_since_last, visits, retention_notified_at")
-    .eq("client_id", client.telegram_id)
+    .eq("client_id", id)
     .eq("shop_id", shopId)
     .maybeSingle();
 
@@ -113,15 +113,15 @@ export default async function ClientPage({
   );
   const spent = done.reduce((s, b) => s + (b.price_snapshot ?? 0), 0);
 
+  // 👇 Функция форматирования с валютой
   const formatPrice = (amount: number) => {
     if (!currency) return `${Math.round(amount).toLocaleString('ru-RU')} ₽`;
     return `${Math.round(amount).toLocaleString('ru-RU')} ${currency.symbol}`;
   };
 
-  // Формируем имя
   const fullName =
     [client.first_name, client.last_name].filter(Boolean).join(" ").trim() ||
-    (client.phone ? `Гость: ${client.phone}` : "Без имени");
+    (client.username ? "@" + client.username : "Без имени");
 
   return (
     <div className="mx-auto max-w-3xl px-8 py-8">
@@ -132,32 +132,12 @@ export default async function ClientPage({
         <ArrowLeft size={15} /> Все клиенты
       </Link>
 
-      <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold tracking-tight text-neutral-900">
-          {fullName}
-        </h1>
-        {client.is_guest ? (
-          <span className="inline-flex items-center gap-1 rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-500">
-            <UserRound className="h-3 w-3" />
-            Гость
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
-            <User className="h-3 w-3" />
-            Telegram
-          </span>
-        )}
-      </div>
-      
+      <h1 className="text-lg font-semibold tracking-tight text-neutral-900">
+        {fullName}
+      </h1>
       <div className="mt-1 flex flex-wrap gap-x-4 text-sm text-neutral-500">
-        {/* Показываем телефон для всех, кто его указал */}
+        {client.username && <span>@{client.username}</span>}
         {client.phone && <span>{client.phone}</span>}
-        
-        {/* Для Telegram-пользователей показываем username */}
-        {!client.is_guest && client.username && (
-          <span className="text-neutral-400">@{client.username}</span>
-        )}
-        
         <span className="text-neutral-400">
           с {fmtDateTime(client.created_at)}
         </span>
@@ -215,7 +195,7 @@ export default async function ClientPage({
             </span>
             {(seg.segment === "sleeping" || seg.segment === "lost") && (
               <RetentionResetButton
-                clientId={client.telegram_id}
+                clientId={parseInt(id)}
                 alreadySent={!!seg.retention_notified_at}
                 shopModules={shopModules}
               />
