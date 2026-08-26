@@ -12,7 +12,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { AlertTriangle, ArrowRight } from "lucide-react";
+import { AlertTriangle, ArrowRight, User, UserRound, Plus } from "lucide-react";
+import { AddClientModal } from "@/components/clients/AddClientModal";
 
 export type ClientRow = {
   telegram_id: number;
@@ -20,6 +21,7 @@ export type ClientRow = {
   last_name: string | null;
   username: string | null;
   phone: string | null;
+  is_guest: boolean;
   created_at: string;
   bookings: number;
   spent: number;
@@ -46,7 +48,10 @@ type Currency = {
 
 function name(c: ClientRow) {
   const full = [c.first_name, c.last_name].filter(Boolean).join(" ").trim();
-  return full || (c.username ? "@" + c.username : "Без имени");
+  if (full) return full;
+  if (c.username) return "@" + c.username;
+  if (c.phone) return `Гость: ${c.phone}`;
+  return "Без имени";
 }
 
 function fmtDate(iso: string) {
@@ -69,19 +74,20 @@ export default function ClientsClient({
   shopId,
   clientLimit,
   clientsCount,
-  currency, // 👈 Принимаем валюту
+  currency,
 }: { 
   initial: ClientRow[];
   shopId: number;
   clientLimit: number;
   clientsCount: number;
-  currency: Currency | null; // 👈 Добавляем тип
+  currency: Currency | null;
 }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [seg, setSeg] = useState<string>("all");
+  const [type, setType] = useState<"all" | "telegram" | "guest">("all");
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // 👇 Функция форматирования с валютой
   const formatPrice = (amount: number) => {
     if (amount == null) return "—";
     if (!currency) return `${Math.round(amount).toLocaleString('ru-RU')} ₽`;
@@ -90,7 +96,14 @@ export default function ClientsClient({
 
   const query = q.trim().toLowerCase();
   const visible = initial.filter((c) => {
+    // Фильтр по типу
+    if (type === "telegram" && c.is_guest) return false;
+    if (type === "guest" && !c.is_guest) return false;
+    
+    // Фильтр по сегменту
     if (seg !== "all" && c.segment !== seg) return false;
+    
+    // Поиск
     if (!query) return true;
     return [name(c), c.username, c.phone]
       .filter(Boolean)
@@ -105,6 +118,10 @@ export default function ClientsClient({
   const isLimitReached = clientLimit !== -1 && clientsCount >= clientLimit;
   const isNearLimit = clientLimit !== -1 && clientsCount >= Math.floor(clientLimit * 0.7) && !isLimitReached;
 
+  const handleClientAdded = () => {
+    router.refresh();
+  };
+
   return (
     <div className="mx-auto max-w-5xl px-8 py-8">
       <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -116,7 +133,6 @@ export default function ClientsClient({
             База клиентов с записями и суммой по каждому.
           </p>
           
-          {/* Индикатор лимита */}
           {clientLimit !== -1 && (
             <div className="mt-1 flex items-center gap-2 text-xs">
               <span className="text-neutral-400">
@@ -143,26 +159,74 @@ export default function ClientsClient({
           )}
         </div>
         
-        {/* Кнопка "Выбрать тариф" — справа */}
-        {(isNearLimit || isLimitReached) && (
-          <Link 
-            href="/tariffs"
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsModalOpen(true)}
             className="flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 transition"
           >
-            Выбрать тариф
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        )}
+            <Plus className="h-4 w-4" />
+            Добавить клиента
+          </button>
+          
+          {(isNearLimit || isLimitReached) && (
+            <Link 
+              href="/tariffs"
+              className="flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 transition"
+            >
+              Выбрать тариф
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          )}
+        </div>
       </header>
 
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="max-w-xs flex-1">
+      <div className="mb-4 flex flex-col gap-3">
+        {/* Поиск */}
+        <div className="max-w-xs">
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Поиск по имени, @username, телефону"
           />
         </div>
+
+        {/* Ряд 1: Фильтр по типу клиента */}
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            onClick={() => setType("all")}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+              type === "all" 
+                ? "bg-neutral-900 text-white" 
+                : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+            }`}
+          >
+            Все · {initial.length}
+          </button>
+          <button
+            onClick={() => setType("telegram")}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+              type === "telegram" 
+                ? "bg-blue-600 text-white" 
+                : "bg-blue-50 text-blue-600 hover:bg-blue-100"
+            }`}
+          >
+            <User className="mr-1 inline h-3 w-3" />
+            Telegram · {initial.filter(c => !c.is_guest).length}
+          </button>
+          <button
+            onClick={() => setType("guest")}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+              type === "guest" 
+                ? "bg-neutral-600 text-white" 
+                : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+            }`}
+          >
+            <UserRound className="mr-1 inline h-3 w-3" />
+            Гости · {initial.filter(c => c.is_guest).length}
+          </button>
+        </div>
+
+        {/* Ряд 2: Фильтр по сегментам */}
         <div className="flex flex-wrap gap-1.5">
           <button
             onClick={() => setSeg("all")}
@@ -170,7 +234,7 @@ export default function ClientsClient({
               seg === "all" ? "bg-neutral-900 text-white" : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
             }`}
           >
-            Все · {initial.length}
+            Все сегменты · {initial.length}
           </button>
           {(["new", "regular", "sleeping", "lost", "no_visits"] as const).map((k) => {
             const s = SEGMENTS[k];
@@ -201,7 +265,7 @@ export default function ClientsClient({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Имя</TableHead>
+                <TableHead>Клиент</TableHead>
                 <TableHead>Сегмент</TableHead>
                 <TableHead>Контакты</TableHead>
                 <TableHead className="text-right">Записей</TableHead>
@@ -219,7 +283,21 @@ export default function ClientsClient({
                     className="cursor-pointer"
                   >
                     <TableCell className="font-medium text-neutral-900">
-                      {name(c)}
+                      <div className="flex items-center gap-2">
+                        {name(c)}
+                        {c.is_guest && (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-neutral-100 px-2 py-0.5 text-[10px] font-medium text-neutral-500">
+                            <UserRound className="h-3 w-3" />
+                            Гость
+                          </span>
+                        )}
+                        {!c.is_guest && c.telegram_id && (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-600">
+                            <User className="h-3 w-3" />
+                            Telegram
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${s.cls}`}>
@@ -227,15 +305,23 @@ export default function ClientsClient({
                       </span>
                     </TableCell>
                     <TableCell className="text-neutral-600">
-                      {c.username && (
-                        <span className="text-neutral-500">@{c.username}</span>
-                      )}
-                      {c.phone && (
-                        <span className="block text-xs text-neutral-400">
-                          {c.phone}
+                      {c.is_guest ? (
+                        <span className="block text-sm text-neutral-600">
+                          {c.phone || "—"}
                         </span>
+                      ) : (
+                        <>
+                          {c.username && (
+                            <span className="text-neutral-500">@{c.username}</span>
+                          )}
+                          {c.phone && (
+                            <span className="block text-xs text-neutral-400">
+                              {c.phone}
+                            </span>
+                          )}
+                          {!c.username && !c.phone && "—"}
+                        </>
                       )}
-                      {!c.username && !c.phone && "—"}
                     </TableCell>
                     <TableCell className="text-right text-neutral-700">
                       {c.bookings}
@@ -262,6 +348,13 @@ export default function ClientsClient({
           </Table>
         </div>
       )}
+
+      <AddClientModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={handleClientAdded}
+        shopId={shopId}
+      />
     </div>
   );
 }
