@@ -32,6 +32,10 @@ type BookingFormProps = {
 
 export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
   const { shopId } = useShop();
+  
+  // 👇 ЛОГ 1: Проверяем, что shopId получен
+  console.log('🔍 BookingForm: shopId =', shopId);
+  
   const [data, setData] = useState<BookingFormData>({
     clientId: null,
     serviceId: "",
@@ -48,13 +52,17 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
 
   // Загружаем услуги
   useEffect(() => {
+    console.log('🔍 BookingForm useEffect: shopId =', shopId);
     if (shopId) {
       loadServices();
+    } else {
+      console.log('⚠️ BookingForm: shopId отсутствует, загрузка услуг пропущена');
     }
   }, [shopId]);
 
-  // При выборе услуги — загружаем мастеров для неё (как в fetchServiceMasters)
+  // При выборе услуги — загружаем мастеров для неё
   useEffect(() => {
+    console.log('🔍 BookingForm: serviceId changed =', data.serviceId);
     if (data.serviceId && shopId) {
       loadSpecialistsForService(data.serviceId);
     } else {
@@ -63,17 +71,30 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
   }, [data.serviceId, shopId]);
 
   const loadServices = async () => {
-    if (!shopId) return;
+    console.log('🔍 loadServices вызвана, shopId =', shopId);
+    
+    if (!shopId) {
+      console.log('❌ shopId отсутствует, загрузка услуг невозможна');
+      return;
+    }
+    
     setLoadingServices(true);
     try {
-      // Используем тот же подход, что и в приложении
+      console.log('🔍 Загрузка услуг для shopId:', shopId);
       const res = await fetch(`/api/admin/services?shopId=${shopId}`);
+      console.log('🔍 Ответ от API services:', res.status, res.statusText);
+      
       const result = await res.json();
+      console.log('🔍 Результат загрузки услуг:', result);
+      
       if (result.ok) {
         setServices(result.services);
+        console.log('✅ Загружено услуг:', result.services?.length || 0);
+      } else {
+        console.error('❌ Ошибка в ответе:', result);
       }
     } catch (error) {
-      console.error("Ошибка загрузки услуг:", error);
+      console.error("❌ Ошибка загрузки услуг:", error);
     } finally {
       setLoadingServices(false);
     }
@@ -83,7 +104,6 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
     if (!shopId) return;
     setLoadingSpecialists(true);
     try {
-      // Используем логику fetchServiceMasters из приложения
       const res = await fetch(
         `/api/admin/specialists?shopId=${shopId}&serviceId=${serviceId}`
       );
