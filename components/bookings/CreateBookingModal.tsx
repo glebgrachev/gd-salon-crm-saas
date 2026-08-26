@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { BookingForm } from "./BookingForm";
 
@@ -18,6 +19,12 @@ export function CreateBookingModal({
   shopId,
 }: CreateBookingModalProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
 
   const handleSubmit = async (data: {
     clientId: number;
@@ -56,9 +63,9 @@ export function CreateBookingModal({
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
         <div className="mb-4 flex items-center justify-between">
@@ -78,6 +85,7 @@ export function CreateBookingModal({
           isLoading={isLoading}
         />
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

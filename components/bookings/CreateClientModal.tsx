@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X, CheckCircle } from "lucide-react";
 import { ClientForm } from "@/components/clients/ClientForm";
 
@@ -20,6 +21,12 @@ export function CreateClientModal({
   const [isLoading, setIsLoading] = useState(false);
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
 
   const handleSubmit = async (data: { firstName: string; lastName: string; phone: string }) => {
     console.log('🔍 CreateClientModal: создание клиента', { data, shopId });
@@ -75,9 +82,9 @@ export function CreateClientModal({
     onClose();
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
-  return (
+  return createPortal(
     <div 
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
       onClick={(e) => {
@@ -122,6 +129,7 @@ export function CreateClientModal({
           key={duplicateError ? 'with-error' : 'normal'}
         />
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
