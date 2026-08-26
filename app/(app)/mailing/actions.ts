@@ -38,17 +38,21 @@ export async function previewRecipients(segments: string[]) {
   let data: { client_id: number }[] = [];
 
   if (hasAll) {
+    // ✅ Исключаем гостей и тех, у кого нет telegram_id
     const { data: allClients, error: allError } = await supabase
       .from("users")
       .select("telegram_id")
       .eq("shop_id", shopId)
-      .eq("promo_opt_out", false);
+      .eq("promo_opt_out", false)
+      .eq("is_guest", false)  // 👈 Исключаем гостей
+      .not("telegram_id", "is", null); // 👈 Только с Telegram
 
     if (allError) return { ok: false, error: allError.message };
     data = allClients.map(c => ({ client_id: c.telegram_id }));
   }
 
   if (otherSegs.length > 0) {
+    // ✅ Для сегментов тоже исключаем гостей через JOIN с users
     const { data: segData, error: segError } = await supabase
       .from("v_client_segments")
       .select("client_id")
@@ -57,16 +61,33 @@ export async function previewRecipients(segments: string[]) {
 
     if (segError) return { ok: false, error: segError.message };
 
-    if (hasAll) {
-      const allIds = new Set(data.map(c => c.client_id));
-      for (const item of (segData ?? [])) {
-        if (!allIds.has(item.client_id)) {
-          data.push(item);
-          allIds.add(item.client_id);
+    // ✅ Фильтруем: только те, кто не гость и есть в users с telegram_id
+    const clientIds = (segData ?? []).map(s => s.client_id);
+    if (clientIds.length > 0) {
+      const { data: validUsers, error: usersError } = await supabase
+        .from("users")
+        .select("telegram_id")
+        .eq("shop_id", shopId)
+        .eq("is_guest", false)
+        .not("telegram_id", "is", null)
+        .in("telegram_id", clientIds);
+
+      if (usersError) return { ok: false, error: usersError.message };
+
+      const validIds = new Set(validUsers.map(u => u.telegram_id));
+      const filteredData = (segData ?? []).filter(s => validIds.has(s.client_id));
+
+      if (hasAll) {
+        const allIds = new Set(data.map(c => c.client_id));
+        for (const item of filteredData) {
+          if (!allIds.has(item.client_id)) {
+            data.push(item);
+            allIds.add(item.client_id);
+          }
         }
+      } else {
+        data = filteredData;
       }
-    } else {
-      data = segData ?? [];
     }
   }
 
@@ -97,7 +118,7 @@ export async function sendBroadcast(params: {
   if (!text) return { ok: false, error: "empty_text" };
   if (text.length > 3500) return { ok: false, error: "text_too_long" };
 
-  // Получаем получателей
+  // Получаем получателей (только реальных пользователей, не гостей)
   const { data: recData, error: recErr } = await admin.rpc(
     "broadcast_recipients_for_segments",
     { p_segments: segs }
@@ -105,9 +126,10 @@ export async function sendBroadcast(params: {
 
   if (recErr) return { ok: false, error: recErr.message };
 
+  // ✅ Фильтруем: только положительные telegram_id (не гости)
   const recipients = ((recData as { client_id: number }[]) ?? [])
     .map((r) => r.client_id)
-    .filter(id => id > 0);
+    .filter(id => id > 0); // 👈 Отрицательные ID — это гости
 
   if (recipients.length === 0) {
     return { ok: false, error: "no_recipients", total: 0 };

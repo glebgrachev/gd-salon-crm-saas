@@ -29,24 +29,28 @@ export default async function MailingPage() {
     .eq("shop_id", shopId)
     .order("created_at", { ascending: false });
 
-  // 4. 👇 СЧИТАЕМ РЕАЛЬНЫХ ПОЛЬЗОВАТЕЛЕЙ
-  // Получаем всех пользователей салона
+  // 4. 👇 СЧИТАЕМ ТОЛЬКО РЕАЛЬНЫХ ПОЛЬЗОВАТЕЛЕЙ (НЕ ГОСТЕЙ)
+  // Получаем всех пользователей салона, исключая гостей
   const { data: allUsers } = await supabase
     .from("users")
-    .select("telegram_id, promo_opt_out")
-    .eq("shop_id", shopId);
+    .select("telegram_id, promo_opt_out, is_guest")
+    .eq("shop_id", shopId)
+    .eq("is_guest", false)  // 👈 Исключаем гостей
+    .not("telegram_id", "is", null); // 👈 Только с Telegram
 
-  const totalUsers = allUsers?.filter(u => u.promo_opt_out === false).length || 0;
+  // Фильтруем по promo_opt_out
+  const realUsers = allUsers?.filter(u => u.promo_opt_out === false) || [];
+  const totalUsers = realUsers.length;
 
-  // 5. Пытаемся получить сегменты из v_client_segments
+  // 5. Получаем сегменты только для реальных пользователей
   const { data: segments } = await supabase
     .from("v_client_segments")
-    .select("segment, count")
+    .select("client_id, segment")
     .eq("shop_id", shopId);
 
   // 6. Формируем segmentCounts
   const segmentCounts: Record<string, number> = {
-    all: totalUsers, // 👈 Берем из реальных пользователей
+    all: totalUsers,
     new: 0,
     regular: 0,
     sleeping: 0,
@@ -54,32 +58,21 @@ export default async function MailingPage() {
     no_visits: 0,
   };
 
-  // Заполняем из v_client_segments если есть
-  segments?.forEach((s: any) => {
-    if (s.segment in segmentCounts && s.segment !== 'all') {
-      segmentCounts[s.segment as keyof typeof segmentCounts] = Number(s.count) || 0;
+  // Фильтруем сегменты: только для реальных пользователей
+  const realUserIds = new Set(realUsers.map(u => u.telegram_id));
+  
+  (segments || []).forEach((s: any) => {
+    // Проверяем, что пользователь реальный (не гость)
+    if (realUserIds.has(s.client_id)) {
+      const seg = s.segment || "no_visits";
+      if (seg in segmentCounts && seg !== 'all') {
+        segmentCounts[seg as keyof typeof segmentCounts] = (segmentCounts[seg as keyof typeof segmentCounts] || 0) + 1;
+      }
     }
   });
 
-  // Если сегментов нет, но есть пользователи - распределяем их
-  if (totalUsers > 0 && segments?.length === 0) {
-    // Все пользователи попадают в "Все"
-    segmentCounts.all = totalUsers;
-    // Можно также раскидать по сегментам если есть поле segment в users
-    const { data: usersWithSegments } = await supabase
-      .from("users")
-      .select("segment")
-      .eq("shop_id", shopId)
-      .eq("promo_opt_out", false);
-    
-    usersWithSegments?.forEach((u: any) => {
-      if (u.segment && u.segment in segmentCounts && u.segment !== 'all') {
-        segmentCounts[u.segment as keyof typeof segmentCounts] = (segmentCounts[u.segment as keyof typeof segmentCounts] || 0) + 1;
-      }
-    });
-  }
-
   console.log('📊 MailingPage: segmentCounts =', segmentCounts);
+  console.log('📊 MailingPage: realUsers =', realUsers.length);
 
   return (
     <MailingClient 
