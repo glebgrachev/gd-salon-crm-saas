@@ -25,6 +25,8 @@ export function AddClientModal({
     setDuplicateError(null);
     
     try {
+      console.log('📤 Отправка запроса на создание клиента:', data);
+      
       const response = await fetch("/api/admin/clients", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -34,13 +36,19 @@ export function AddClientModal({
         }),
       });
 
+      console.log('📥 Ответ от сервера:', {
+        status: response.status,
+        statusText: response.statusText,
+      });
+
       const result = await response.json();
+      console.log('📦 Тело ответа:', result);
       
-      if (response.status === 409 && result.error === "duplicate") {
-        // ⚠️ Дубликат — показываем предупреждение, но не закрываем
-        setDuplicateError(`Клиент с номером ${data.phone} уже существует`);
+      // ⚠️ Проверяем на дубликат по статусу или по полю error
+      if (response.status === 409 || result.error === "duplicate") {
+        setDuplicateError(result.message || `Клиент с номером ${data.phone} уже существует`);
         setIsLoading(false);
-        return;
+        return; // ❌ НЕ закрываем модалку
       }
       
       if (result.ok) {
@@ -51,10 +59,17 @@ export function AddClientModal({
         alert(result.error || "Не удалось создать клиента");
       }
     } catch (error) {
+      console.error('❌ Ошибка при создании клиента:', error);
       alert("Ошибка при создании клиента");
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Сбрасываем ошибку при открытии/закрытии
+  const handleClose = () => {
+    setDuplicateError(null);
+    onClose();
   };
 
   if (!isOpen) return null;
@@ -67,7 +82,7 @@ export function AddClientModal({
             Добавить клиента
           </h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="rounded-full p-1 hover:bg-neutral-100"
           >
             <X className="h-5 w-5 text-neutral-500" />
@@ -84,6 +99,7 @@ export function AddClientModal({
           onSubmit={handleSubmit}
           isLoading={isLoading}
           submitLabel="Добавить клиента"
+          key={duplicateError ? 'with-error' : 'normal'} // 👈 Принудительно обновляем форму
         />
       </div>
     </div>
