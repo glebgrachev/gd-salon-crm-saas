@@ -45,6 +45,8 @@ export default function OrderDetail({ order }: { order: OrderRow }) {
   }
 
   const c = order.client;
+  console.log('🔍 OrderDetail: client =', c);
+  console.log('🔍 OrderDetail: is_guest =', c?.is_guest);
   
   // ✅ Ссылка на Telegram только для реальных пользователей (не гостей)
   const tg = c && !c.is_guest && c.username
