@@ -23,7 +23,7 @@ type BookingFormData = {
   serviceId: string;
   specialistId: string;
   startsAt: string;
-  shopId: number; // 👈 ДОБАВЛЯЕМ
+  shopId: number;
 };
 
 type BookingFormProps = {
@@ -38,7 +38,7 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
     serviceId: "",
     specialistId: "",
     startsAt: "",
-    shopId: shopId || 0, // 👈 ДОБАВЛЯЕМ
+    shopId: shopId || 0,
   });
 
   const [services, setServices] = useState<Service[]>([]);
@@ -97,6 +97,15 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
     }
   };
 
+  // ✅ Сбрасываем ошибку для конкретного поля при изменении
+  const handleFieldChange = (field: keyof BookingFormData, value: any) => {
+    setData({ ...data, [field]: value });
+    // Убираем ошибку для этого поля
+    if (errors[field]) {
+      setErrors({ ...errors, [field]: "" });
+    }
+  };
+
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (!data.clientId) newErrors.clientId = "Выберите клиента";
@@ -110,7 +119,6 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (validate()) {
-      // ✅ Передаём все данные, включая shopId
       onSubmit({
         ...data,
         shopId: shopId || 0,
@@ -125,7 +133,7 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
           Клиент <span className="text-red-500">*</span>
         </label>
         <ClientSelect
-          onSelect={(id) => setData({ ...data, clientId: id })}
+          onSelect={(id) => handleFieldChange("clientId", id)}
           selectedId={data.clientId}
         />
         {errors.clientId && (
@@ -140,7 +148,9 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
         <select
           value={data.serviceId}
           onChange={(e) => {
-            setData({ ...data, serviceId: e.target.value, specialistId: "", startsAt: "" });
+            handleFieldChange("serviceId", e.target.value);
+            handleFieldChange("specialistId", "");
+            handleFieldChange("startsAt", "");
           }}
           className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
           disabled={loadingServices}
@@ -164,7 +174,8 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
         <select
           value={data.specialistId}
           onChange={(e) => {
-            setData({ ...data, specialistId: e.target.value, startsAt: "" });
+            handleFieldChange("specialistId", e.target.value);
+            handleFieldChange("startsAt", "");
           }}
           className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
           disabled={loadingSpecialists || !data.serviceId}
@@ -192,7 +203,7 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
       <div>
         <DateTimePicker
           value={data.startsAt}
-          onChange={(val) => setData({ ...data, startsAt: val })}
+          onChange={(val) => handleFieldChange("startsAt", val)}
           error={errors.startsAt}
           specialistId={data.specialistId}
           serviceId={data.serviceId}
