@@ -46,6 +46,7 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
   const [loadingServices, setLoadingServices] = useState(false);
   const [loadingSpecialists, setLoadingSpecialists] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitted, setSubmitted] = useState(false);
 
   // Загружаем услуги
   useEffect(() => {
@@ -109,13 +110,18 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // ✅ Валидация только при отправке формы
+    setSubmitted(true);
     if (validate()) {
       onSubmit({
         ...data,
         shopId: shopId || 0,
       });
     }
+  };
+
+  // ✅ Показываем ошибку только если была попытка отправки
+  const showError = (field: keyof BookingFormData) => {
+    return submitted && errors[field];
   };
 
   return (
@@ -125,10 +131,15 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
           Клиент <span className="text-red-500">*</span>
         </label>
         <ClientSelect
-          onSelect={(id) => setData({ ...data, clientId: id })}
+          onSelect={(id) => {
+            setData({ ...data, clientId: id });
+            if (submitted) {
+              setSubmitted(false);
+            }
+          }}
           selectedId={data.clientId}
         />
-        {errors.clientId && (
+        {showError("clientId") && (
           <p className="mt-1 text-xs text-red-500">{errors.clientId}</p>
         )}
       </div>
@@ -141,6 +152,9 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
           value={data.serviceId}
           onChange={(e) => {
             setData({ ...data, serviceId: e.target.value, specialistId: "", startsAt: "" });
+            if (submitted) {
+              setSubmitted(false);
+            }
           }}
           className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
           disabled={loadingServices}
@@ -152,7 +166,7 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
             </option>
           ))}
         </select>
-        {errors.serviceId && (
+        {showError("serviceId") && (
           <p className="mt-1 text-xs text-red-500">{errors.serviceId}</p>
         )}
       </div>
@@ -165,6 +179,9 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
           value={data.specialistId}
           onChange={(e) => {
             setData({ ...data, specialistId: e.target.value, startsAt: "" });
+            if (submitted) {
+              setSubmitted(false);
+            }
           }}
           className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
           disabled={loadingSpecialists || !data.serviceId}
@@ -184,7 +201,7 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
             </option>
           ))}
         </select>
-        {errors.specialistId && (
+        {showError("specialistId") && (
           <p className="mt-1 text-xs text-red-500">{errors.specialistId}</p>
         )}
       </div>
@@ -192,8 +209,13 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
       <div>
         <DateTimePicker
           value={data.startsAt}
-          onChange={(val) => setData({ ...data, startsAt: val })}
-          error={errors.startsAt}
+          onChange={(val) => {
+            setData({ ...data, startsAt: val });
+            if (submitted) {
+              setSubmitted(false);
+            }
+          }}
+          error={showError("startsAt") ? errors.startsAt : undefined}
           specialistId={data.specialistId}
           serviceId={data.serviceId}
           shopId={shopId}
