@@ -28,10 +28,8 @@ type Filter = "all" | BookingStatus;
 
 export default function OrdersClient({
   initialOrders,
-  shopId,
 }: {
   initialOrders: OrderRow[];
-  shopId: number;
 }) {
   const { formatPrice } = useShop();
   const router = useRouter();
@@ -39,7 +37,7 @@ export default function OrdersClient({
   const [filter, setFilter] = useState<Filter>("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // realtime: любое изменение броней — перезапрашиваем серверные данные
+  // realtime
   useEffect(() => {
     const channel = supabase
       .channel("bookings-feed")
@@ -183,7 +181,6 @@ export default function OrdersClient({
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={handleBookingCreated}
-        shopId={shopId}
       />
     </div>
   );

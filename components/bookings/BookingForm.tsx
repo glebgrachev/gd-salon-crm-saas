@@ -3,11 +3,13 @@
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { ClientSelect } from "./ClientSelect";
+import { useShop } from "@/contexts/ShopContext";
 
 type Service = {
   id: string;
   name: string;
   duration_min: number;
+  price: number;
 };
 
 type Specialist = {
@@ -23,12 +25,12 @@ type BookingFormData = {
 };
 
 type BookingFormProps = {
-  shopId: number;
   onSubmit: (data: BookingFormData) => void;
   isLoading?: boolean;
 };
 
-export function BookingForm({ shopId, onSubmit, isLoading }: BookingFormProps) {
+export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
+  const { shopId } = useShop(); // 👈 Берём shopId из контекста
   const [data, setData] = useState<BookingFormData>({
     clientId: null,
     serviceId: "",
@@ -38,35 +40,46 @@ export function BookingForm({ shopId, onSubmit, isLoading }: BookingFormProps) {
 
   const [services, setServices] = useState<Service[]>([]);
   const [specialists, setSpecialists] = useState<Specialist[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingServices, setLoadingServices] = useState(false);
+  const [loadingSpecialists, setLoadingSpecialists] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    loadServices();
-    loadSpecialists();
-  }, []);
+    if (shopId) {
+      loadServices();
+      loadSpecialists();
+    }
+  }, [shopId]);
 
   const loadServices = async () => {
+    if (!shopId) return;
+    setLoadingServices(true);
     try {
       const res = await fetch(`/api/admin/services?shopId=${shopId}`);
-      const data = await res.json();
-      if (data.ok) {
-        setServices(data.services);
+      const result = await res.json();
+      if (result.ok) {
+        setServices(result.services);
       }
     } catch (error) {
       console.error("Ошибка загрузки услуг:", error);
+    } finally {
+      setLoadingServices(false);
     }
   };
 
   const loadSpecialists = async () => {
+    if (!shopId) return;
+    setLoadingSpecialists(true);
     try {
       const res = await fetch(`/api/admin/specialists?shopId=${shopId}`);
-      const data = await res.json();
-      if (data.ok) {
-        setSpecialists(data.specialists);
+      const result = await res.json();
+      if (result.ok) {
+        setSpecialists(result.specialists);
       }
     } catch (error) {
       console.error("Ошибка загрузки мастеров:", error);
+    } finally {
+      setLoadingSpecialists(false);
     }
   };
 
@@ -87,6 +100,10 @@ export function BookingForm({ shopId, onSubmit, isLoading }: BookingFormProps) {
     }
   };
 
+  // Минимальная дата — сейчас
+  const now = new Date();
+  const minDateTime = now.toISOString().slice(0, 16);
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
@@ -94,7 +111,6 @@ export function BookingForm({ shopId, onSubmit, isLoading }: BookingFormProps) {
           Клиент <span className="text-red-500">*</span>
         </label>
         <ClientSelect
-          shopId={shopId}
           onSelect={(id) => setData({ ...data, clientId: id })}
           selectedId={data.clientId}
         />
@@ -110,9 +126,10 @@ export function BookingForm({ shopId, onSubmit, isLoading }: BookingFormProps) {
         <select
           value={data.serviceId}
           onChange={(e) => setData({ ...data, serviceId: e.target.value })}
-          className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
+          disabled={loadingServices}
         >
-          <option value="">Выберите услугу</option>
+          <option value="">{loadingServices ? "Загрузка..." : "Выберите услугу"}</option>
           {services.map((s) => (
             <option key={s.id} value={s.id}>
               {s.name} ({s.duration_min} мин)
@@ -131,9 +148,10 @@ export function BookingForm({ shopId, onSubmit, isLoading }: BookingFormProps) {
         <select
           value={data.specialistId}
           onChange={(e) => setData({ ...data, specialistId: e.target.value })}
-          className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
+          disabled={loadingSpecialists}
         >
-          <option value="">Выберите мастера</option>
+          <option value="">{loadingSpecialists ? "Загрузка..." : "Выберите мастера"}</option>
           {specialists.map((s) => (
             <option key={s.id} value={s.id}>
               {s.full_name}
@@ -153,6 +171,7 @@ export function BookingForm({ shopId, onSubmit, isLoading }: BookingFormProps) {
           type="datetime-local"
           value={data.startsAt}
           onChange={(e) => setData({ ...data, startsAt: e.target.value })}
+          min={minDateTime}
           className={errors.startsAt ? "border-red-500" : ""}
         />
         {errors.startsAt && (
@@ -163,7 +182,7 @@ export function BookingForm({ shopId, onSubmit, isLoading }: BookingFormProps) {
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+        className="w-full rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50 transition"
       >
         {isLoading ? "Создание..." : "Создать запись"}
       </button>

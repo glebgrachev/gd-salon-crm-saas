@@ -8,14 +8,12 @@ type CreateBookingModalProps = {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  shopId: number;
 };
 
 export function CreateBookingModal({
   isOpen,
   onClose,
   onSuccess,
-  shopId,
 }: CreateBookingModalProps) {
   const [isLoading, setIsLoading] = useState(false);
 
@@ -33,7 +31,6 @@ export function CreateBookingModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...data,
-          shopId,
         }),
       });
 
@@ -56,21 +53,20 @@ export function CreateBookingModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-neutral-900">
             Создать запись
           </h2>
           <button
             onClick={onClose}
-            className="rounded-full p-1 hover:bg-neutral-100"
+            className="rounded-full p-1 hover:bg-neutral-100 transition"
           >
             <X className="h-5 w-5 text-neutral-500" />
           </button>
         </div>
 
         <BookingForm
-          shopId={shopId}
           onSubmit={handleSubmit}
           isLoading={isLoading}
         />

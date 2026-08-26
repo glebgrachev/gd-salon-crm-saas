@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Search, User, UserRound, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { useShop } from "@/contexts/ShopContext";
 
 type Client = {
   telegram_id: number;
@@ -13,12 +14,12 @@ type Client = {
 };
 
 type ClientSelectProps = {
-  shopId: number;
   onSelect: (clientId: number) => void;
   selectedId?: number | null;
 };
 
-export function ClientSelect({ shopId, onSelect, selectedId }: ClientSelectProps) {
+export function ClientSelect({ onSelect, selectedId }: ClientSelectProps) {
+  const { shopId } = useShop(); // 👈 Берём shopId из контекста
   const [query, setQuery] = useState("");
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(false);
@@ -26,7 +27,7 @@ export function ClientSelect({ shopId, onSelect, selectedId }: ClientSelectProps
 
   // Загружаем выбранного клиента
   useEffect(() => {
-    if (selectedId) {
+    if (selectedId && shopId) {
       fetch(`/api/admin/clients/search?q=${selectedId}&shopId=${shopId}&exact=true`)
         .then((res) => res.json())
         .then((data) => {
@@ -39,7 +40,7 @@ export function ClientSelect({ shopId, onSelect, selectedId }: ClientSelectProps
   }, [selectedId, shopId]);
 
   const searchClients = useCallback(async () => {
-    if (!query.trim() || query.trim().length < 2) {
+    if (!query.trim() || query.trim().length < 2 || !shopId) {
       setClients([]);
       return;
     }
