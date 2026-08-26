@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Input } from "@/components/ui/input";
 import { ClientSelect } from "./ClientSelect";
 import { DateTimePicker } from "./DateTimePicker";
 import { useShop } from "@/contexts/ShopContext";
@@ -24,6 +23,7 @@ type BookingFormData = {
   serviceId: string;
   specialistId: string;
   startsAt: string;
+  shopId: number; // 👈 ДОБАВЛЯЕМ
 };
 
 type BookingFormProps = {
@@ -38,6 +38,7 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
     serviceId: "",
     specialistId: "",
     startsAt: "",
+    shopId: shopId || 0, // 👈 ДОБАВЛЯЕМ
   });
 
   const [services, setServices] = useState<Service[]>([]);
@@ -109,7 +110,11 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (validate()) {
-      onSubmit(data);
+      // ✅ Передаём все данные, включая shopId
+      onSubmit({
+        ...data,
+        shopId: shopId || 0,
+      });
     }
   };
 

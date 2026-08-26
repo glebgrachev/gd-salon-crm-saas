@@ -24,6 +24,7 @@ export function CreateBookingModal({
     serviceId: string;
     specialistId: string;
     startsAt: string;
+    shopId: number;
   }) => {
     setIsLoading(true);
 
@@ -32,8 +33,11 @@ export function CreateBookingModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...data,
-          shopId, // ✅ Передаём shopId
+          clientId: data.clientId,
+          serviceId: data.serviceId,
+          specialistId: data.specialistId,
+          startsAt: data.startsAt,
+          shopId: data.shopId,
         }),
       });
 
