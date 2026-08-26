@@ -21,12 +21,11 @@ export function AddClientModal({
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
 
   const handleSubmit = async (data: { firstName: string; lastName: string; phone: string }) => {
+    console.log('🔍 AddClientModal: создание клиента', { data, shopId });
     setIsLoading(true);
     setDuplicateError(null);
     
     try {
-      console.log('📤 Отправка запроса на создание клиента:', data);
-      
       const response = await fetch("/api/admin/clients", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -36,30 +35,26 @@ export function AddClientModal({
         }),
       });
 
-      console.log('📥 Ответ от сервера:', {
-        status: response.status,
-        statusText: response.statusText,
-      });
-
+      console.log('🔍 AddClientModal: статус ответа', response.status);
       const result = await response.json();
-      console.log('📦 Тело ответа:', result);
-      
-      // ⚠️ Проверяем на дубликат по статусу или по полю error
-      if (response.status === 409 || result.error === "duplicate") {
-        setDuplicateError(result.message || `Клиент с номером ${data.phone} уже существует`);
+      console.log('🔍 AddClientModal: результат', result);
+
+      if (response.status === 409 && result.error === "duplicate") {
+        setDuplicateError(`Клиент с номером ${data.phone} уже существует`);
         setIsLoading(false);
-        return; // ❌ НЕ закрываем модалку
+        return;
       }
       
       if (result.ok) {
-        // ✅ Успешно создан
+        console.log('✅ AddClientModal: клиент создан, clientId =', result.clientId);
         onSuccess(result.clientId);
-        onClose();
+        // НЕ закрываем модалку здесь — пусть onSuccess решает
       } else {
+        console.error('❌ AddClientModal: ошибка создания', result.error);
         alert(result.error || "Не удалось создать клиента");
       }
     } catch (error) {
-      console.error('❌ Ошибка при создании клиента:', error);
+      console.error('❌ AddClientModal: исключение', error);
       alert("Ошибка при создании клиента");
     } finally {
       setIsLoading(false);
@@ -68,6 +63,7 @@ export function AddClientModal({
 
   // Сбрасываем ошибку при открытии/закрытии
   const handleClose = () => {
+    console.log('🔍 AddClientModal: закрытие');
     setDuplicateError(null);
     onClose();
   };
@@ -99,7 +95,7 @@ export function AddClientModal({
           onSubmit={handleSubmit}
           isLoading={isLoading}
           submitLabel="Добавить клиента"
-          key={duplicateError ? 'with-error' : 'normal'} // 👈 Принудительно обновляем форму
+          key={duplicateError ? 'with-error' : 'normal'}
         />
       </div>
     </div>
