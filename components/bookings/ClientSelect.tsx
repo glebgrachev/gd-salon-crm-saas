@@ -161,6 +161,7 @@ export function ClientSelect({ onSelect, selectedId }: ClientSelectProps) {
           </button>
         </div>
 
+        {/* ✅ Только одна модалка */}
         <AddClientModal
           isOpen={isAddModalOpen}
           onClose={() => {
@@ -246,6 +247,7 @@ export function ClientSelect({ onSelect, selectedId }: ClientSelectProps) {
         )}
       </div>
 
+      {/* ✅ Только одна модалка */}
       <AddClientModal
         isOpen={isAddModalOpen}
         onClose={() => {
