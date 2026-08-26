@@ -1,3 +1,4 @@
+import { createAdmin } from "@/lib/supabase/admin";
 import { json } from "@/lib/cors";
 
 export const runtime = "nodejs";
@@ -15,30 +16,24 @@ export async function GET(req: Request) {
   }
 
   try {
-    // Формируем URL для внутреннего API day-slots
-    const apiUrl = new URL(`${process.env.API_URL}/api/day-slots`);
-    apiUrl.searchParams.set("shop_id", shopId);
-    apiUrl.searchParams.set("specialist", specialist);
-    apiUrl.searchParams.set("service", service);
-    apiUrl.searchParams.set("date", date);
-    // Для админки передаём пустой initData
-    apiUrl.searchParams.set("initData", "");
+    const admin = createAdmin();
 
-    console.log("🔍 [Admin] Запрос слотов:", apiUrl.toString());
-
-    const response = await fetch(apiUrl.toString(), {
-      headers: {
-        "Content-Type": "application/json",
-      },
+    // Вызываем RPC функцию напрямую
+    const { data, error } = await admin.rpc("get_day_slots", {
+      p_specialist_id: specialist,
+      p_service_id: service,
+      p_date: date,
+      p_tz: "Europe/Moscow",
+      p_busy_ranges: null,
     });
 
-    if (!response.ok) {
-      console.error("❌ [Admin] Ошибка получения слотов:", response.status);
-      return json({ error: "Ошибка получения слотов" }, response.status);
+    if (error) {
+      console.error("❌ [Admin] Ошибка RPC:", error);
+      return json({ error: error.message }, 500);
     }
 
-    const result = await response.json();
-    return json({ ok: true, slots: result.slots || [] });
+    console.log("✅ [Admin] Загружено слотов:", data?.length || 0);
+    return json({ ok: true, slots: data ?? [] });
   } catch (error) {
     console.error("❌ [Admin] Ошибка получения слотов:", error);
     return json({ error: "Внутренняя ошибка сервера" }, 500);
