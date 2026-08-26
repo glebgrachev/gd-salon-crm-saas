@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { ClientSelect } from "./ClientSelect";
+import { DateTimePicker } from "./DateTimePicker";
 import { useShop } from "@/contexts/ShopContext";
 
 type Service = {
@@ -32,10 +33,6 @@ type BookingFormProps = {
 
 export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
   const { shopId } = useShop();
-  
-  // 👇 ЛОГ 1: Проверяем, что shopId получен
-  console.log('🔍 BookingForm: shopId =', shopId);
-  
   const [data, setData] = useState<BookingFormData>({
     clientId: null,
     serviceId: "",
@@ -44,7 +41,6 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
   });
 
   const [services, setServices] = useState<Service[]>([]);
-  const [specialists, setSpecialists] = useState<Specialist[]>([]);
   const [filteredSpecialists, setFilteredSpecialists] = useState<Specialist[]>([]);
   const [loadingServices, setLoadingServices] = useState(false);
   const [loadingSpecialists, setLoadingSpecialists] = useState(false);
@@ -52,17 +48,13 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
 
   // Загружаем услуги
   useEffect(() => {
-    console.log('🔍 BookingForm useEffect: shopId =', shopId);
     if (shopId) {
       loadServices();
-    } else {
-      console.log('⚠️ BookingForm: shopId отсутствует, загрузка услуг пропущена');
     }
   }, [shopId]);
 
   // При выборе услуги — загружаем мастеров для неё
   useEffect(() => {
-    console.log('🔍 BookingForm: serviceId changed =', data.serviceId);
     if (data.serviceId && shopId) {
       loadSpecialistsForService(data.serviceId);
     } else {
@@ -71,30 +63,16 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
   }, [data.serviceId, shopId]);
 
   const loadServices = async () => {
-    console.log('🔍 loadServices вызвана, shopId =', shopId);
-    
-    if (!shopId) {
-      console.log('❌ shopId отсутствует, загрузка услуг невозможна');
-      return;
-    }
-    
+    if (!shopId) return;
     setLoadingServices(true);
     try {
-      console.log('🔍 Загрузка услуг для shopId:', shopId);
       const res = await fetch(`/api/admin/services?shopId=${shopId}`);
-      console.log('🔍 Ответ от API services:', res.status, res.statusText);
-      
       const result = await res.json();
-      console.log('🔍 Результат загрузки услуг:', result);
-      
       if (result.ok) {
         setServices(result.services);
-        console.log('✅ Загружено услуг:', result.services?.length || 0);
-      } else {
-        console.error('❌ Ошибка в ответе:', result);
       }
     } catch (error) {
-      console.error("❌ Ошибка загрузки услуг:", error);
+      console.error("Ошибка загрузки услуг:", error);
     } finally {
       setLoadingServices(false);
     }
@@ -123,7 +101,7 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
     if (!data.clientId) newErrors.clientId = "Выберите клиента";
     if (!data.serviceId) newErrors.serviceId = "Выберите услугу";
     if (!data.specialistId) newErrors.specialistId = "Выберите мастера";
-    if (!data.startsAt) newErrors.startsAt = "Выберите дату и время";
+    if (!data.startsAt) newErrors.startsAt = "Выберите время";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -134,10 +112,6 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
       onSubmit(data);
     }
   };
-
-  // Минимальная дата — сейчас
-  const now = new Date();
-  const minDateTime = now.toISOString().slice(0, 16);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -184,7 +158,10 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
         </label>
         <select
           value={data.specialistId}
-          onChange={(e) => setData({ ...data, specialistId: e.target.value })}
+          onChange={(e) => {
+            setData({ ...data, specialistId: e.target.value });
+            setData(prev => ({ ...prev, startsAt: "" })); // Сбрасываем время
+          }}
           className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
           disabled={loadingSpecialists || !data.serviceId}
         >
@@ -209,19 +186,14 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-neutral-700">
-          Дата и время <span className="text-red-500">*</span>
-        </label>
-        <Input
-          type="datetime-local"
+        <DateTimePicker
           value={data.startsAt}
-          onChange={(e) => setData({ ...data, startsAt: e.target.value })}
-          min={minDateTime}
-          className={errors.startsAt ? "border-red-500" : ""}
+          onChange={(val) => setData({ ...data, startsAt: val })}
+          error={errors.startsAt}
+          specialistId={data.specialistId}
+          serviceId={data.serviceId}
+          shopId={shopId}
         />
-        {errors.startsAt && (
-          <p className="mt-1 text-xs text-red-500">{errors.startsAt}</p>
-        )}
       </div>
 
       <button
