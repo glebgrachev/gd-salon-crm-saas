@@ -93,7 +93,8 @@ export function DateTimePicker({
         date: selectedDate,
       });
 
-      const res = await fetch(`/api/day-slots?${params.toString()}`);
+      // ✅ Используем админский API
+      const res = await fetch(`/api/admin/day-slots?${params.toString()}`);
       const result = await res.json();
       
       console.log("🔍 Загружены слоты:", result);
