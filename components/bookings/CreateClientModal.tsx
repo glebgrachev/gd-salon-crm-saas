@@ -1,32 +1,30 @@
 "use client";
 
 import { useState } from "react";
-import { X, CheckCircle } from "lucide-react";
-import { ClientForm } from "./ClientForm";
+import { X } from "lucide-react";
+import { ClientForm } from "@/components/clients/ClientForm";
 
-type AddClientModalProps = {
+type CreateClientModalProps = {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (clientId: number) => void;
   shopId: number;
 };
 
-export function AddClientModal({ 
-  isOpen, 
-  onClose, 
-  onSuccess, 
-  shopId 
-}: AddClientModalProps) {
+export function CreateClientModal({
+  isOpen,
+  onClose,
+  onSuccess,
+  shopId,
+}: CreateClientModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const handleSubmit = async (data: { firstName: string; lastName: string; phone: string }) => {
-    console.log('🔍 AddClientModal: создание клиента', { data, shopId });
+    console.log('🔍 CreateClientModal: создание клиента', { data, shopId });
     setIsLoading(true);
     setDuplicateError(null);
-    setSuccessMessage(null);
-    
+
     try {
       const response = await fetch("/api/admin/clients", {
         method: "POST",
@@ -37,67 +35,48 @@ export function AddClientModal({
         }),
       });
 
-      console.log('🔍 AddClientModal: статус ответа', response.status);
+      console.log('🔍 CreateClientModal: статус ответа', response.status);
       const result = await response.json();
-      console.log('🔍 AddClientModal: результат', result);
+      console.log('🔍 CreateClientModal: результат', result);
 
       if (response.status === 409 && result.error === "duplicate") {
         setDuplicateError(`Клиент с номером ${data.phone} уже существует`);
         setIsLoading(false);
         return;
       }
-      
+
       if (result.ok) {
-        console.log('✅ AddClientModal: клиент создан, clientId =', result.clientId);
-        setSuccessMessage(`✅ Клиент "${data.firstName} ${data.lastName}" успешно создан!`);
-        
-        // Закрываем через 1.5 секунды
-        setTimeout(() => {
-          onSuccess(result.clientId);
-          onClose(); // ✅ Закрываем модалку
-        }, 1500);
+        console.log('✅ CreateClientModal: клиент создан, clientId =', result.clientId);
+        onSuccess(result.clientId);
+        onClose();
       } else {
-        console.error('❌ AddClientModal: ошибка создания', result.error);
+        console.error('❌ CreateClientModal: ошибка создания', result.error);
         alert(result.error || "Не удалось создать клиента");
-        setIsLoading(false);
       }
     } catch (error) {
-      console.error('❌ AddClientModal: исключение', error);
+      console.error('❌ CreateClientModal: исключение', error);
       alert("Ошибка при создании клиента");
+    } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleClose = () => {
-    console.log('🔍 AddClientModal: закрытие');
-    setDuplicateError(null);
-    setSuccessMessage(null);
-    onClose();
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-neutral-900">
             Добавить клиента
           </h2>
           <button
-            onClick={handleClose}
+            onClick={onClose}
             className="rounded-full p-1 hover:bg-neutral-100"
           >
             <X className="h-5 w-5 text-neutral-500" />
           </button>
         </div>
-
-        {successMessage && (
-          <div className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-600 border border-emerald-200 flex items-center gap-2">
-            <CheckCircle className="h-4 w-4" />
-            {successMessage}
-          </div>
-        )}
 
         {duplicateError && (
           <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-600 border border-red-200">
@@ -107,9 +86,8 @@ export function AddClientModal({
 
         <ClientForm
           onSubmit={handleSubmit}
-          isLoading={isLoading || !!successMessage} // ✅ Блокируем форму при успехе
+          isLoading={isLoading}
           submitLabel="Добавить клиента"
-          key={duplicateError ? 'with-error' : 'normal'}
         />
       </div>
     </div>

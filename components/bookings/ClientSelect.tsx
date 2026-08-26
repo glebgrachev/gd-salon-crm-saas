@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Search, User, UserRound, X, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useShop } from "@/contexts/ShopContext";
-import { AddClientModal } from "@/components/clients/AddClientModal";
+import { CreateClientModal } from "./CreateClientModal";
 
 type Client = {
   telegram_id: number;
@@ -25,7 +25,7 @@ export function ClientSelect({ onSelect, selectedId }: ClientSelectProps) {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   console.log('🔍 ClientSelect: shopId =', shopId);
   console.log('🔍 ClientSelect: selectedId =', selectedId);
@@ -33,11 +33,9 @@ export function ClientSelect({ onSelect, selectedId }: ClientSelectProps) {
   // Загружаем выбранного клиента
   useEffect(() => {
     if (selectedId && shopId) {
-      console.log('🔍 ClientSelect: загрузка выбранного клиента', selectedId);
       fetch(`/api/admin/clients/search?q=${selectedId}&shopId=${shopId}&exact=true`)
         .then((res) => res.json())
         .then((data) => {
-          console.log('🔍 ClientSelect: выбранный клиент', data);
           if (data.ok && data.clients.length > 0) {
             setSelectedClient(data.clients[0]);
           }
@@ -52,14 +50,12 @@ export function ClientSelect({ onSelect, selectedId }: ClientSelectProps) {
       return;
     }
 
-    console.log('🔍 ClientSelect: поиск', { query, shopId });
     setLoading(true);
     try {
       const res = await fetch(
         `/api/admin/clients/search?q=${encodeURIComponent(query.trim())}&shopId=${shopId}`
       );
       const data = await res.json();
-      console.log('🔍 ClientSelect: результаты поиска', data);
       if (data.ok) {
         setClients(data.clients);
       } else {
@@ -73,16 +69,12 @@ export function ClientSelect({ onSelect, selectedId }: ClientSelectProps) {
     }
   }, [query, shopId]);
 
-  // Дебаунс для поиска
   useEffect(() => {
-    const timer = setTimeout(() => {
-      searchClients();
-    }, 300);
+    const timer = setTimeout(() => searchClients(), 300);
     return () => clearTimeout(timer);
   }, [searchClients]);
 
   const handleSelect = (client: Client) => {
-    console.log('🔍 ClientSelect: выбран клиент', client);
     setSelectedClient(client);
     setQuery("");
     setClients([]);
@@ -90,44 +82,36 @@ export function ClientSelect({ onSelect, selectedId }: ClientSelectProps) {
   };
 
   const handleClear = () => {
-    console.log('🔍 ClientSelect: сброс выбора');
     setSelectedClient(null);
     setQuery("");
     setClients([]);
     onSelect(0);
   };
 
-  const handleClientAdded = (clientId: number) => {
-    console.log('🔍 ClientSelect: handleClientAdded clientId =', clientId);
+  const handleClientCreated = (clientId: number) => {
+    console.log('🔍 ClientSelect: клиент создан, clientId =', clientId);
     
     if (!clientId) {
       console.error('❌ ClientSelect: clientId не передан');
-      setIsAddModalOpen(false);
+      setIsCreateModalOpen(false);
       return;
     }
     
-    // Закрываем модалку добавления клиента
-    setIsAddModalOpen(false);
+    setIsCreateModalOpen(false);
     
-    // Загружаем созданного клиента и выбираем его
     fetch(`/api/admin/clients/search?q=${clientId}&shopId=${shopId}&exact=true`)
       .then((res) => res.json())
       .then((data) => {
-        console.log('🔍 ClientSelect: загружен созданный клиент', data);
         if (data.ok && data.clients.length > 0) {
           const client = data.clients[0];
           setSelectedClient(client);
           setQuery("");
           setClients([]);
           onSelect(client.telegram_id);
-          console.log('✅ ClientSelect: клиент выбран в форме', client);
-        } else {
-          console.error('❌ ClientSelect: клиент не найден после создания');
+          console.log('✅ ClientSelect: клиент выбран', client);
         }
       })
-      .catch((error) => {
-        console.error('❌ ClientSelect: ошибка загрузки клиента', error);
-      });
+      .catch(console.error);
   };
 
   const getClientName = (c: Client) => {
@@ -147,31 +131,18 @@ export function ClientSelect({ onSelect, selectedId }: ClientSelectProps) {
   // Если клиент выбран — показываем его
   if (selectedClient) {
     return (
-      <>
-        <div className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2">
-          <span className="flex-1 text-sm">
-            {getClientDisplay(selectedClient)}
-          </span>
-          <button
-            onClick={handleClear}
-            className="rounded-full p-1 hover:bg-neutral-200"
-            type="button"
-          >
-            <X className="h-4 w-4 text-neutral-400" />
-          </button>
-        </div>
-
-        {/* ✅ Только одна модалка */}
-        <AddClientModal
-          isOpen={isAddModalOpen}
-          onClose={() => {
-            console.log('🔍 ClientSelect: закрытие модалки добавления клиента');
-            setIsAddModalOpen(false);
-          }}
-          onSuccess={handleClientAdded}
-          shopId={shopId}
-        />
-      </>
+      <div className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2">
+        <span className="flex-1 text-sm">
+          {getClientDisplay(selectedClient)}
+        </span>
+        <button
+          onClick={handleClear}
+          className="rounded-full p-1 hover:bg-neutral-200"
+          type="button"
+        >
+          <X className="h-4 w-4 text-neutral-400" />
+        </button>
+      </div>
     );
   }
 
@@ -188,9 +159,7 @@ export function ClientSelect({ onSelect, selectedId }: ClientSelectProps) {
           />
         </div>
 
-        {loading && (
-          <div className="text-sm text-neutral-400">Поиск...</div>
-        )}
+        {loading && <div className="text-sm text-neutral-400">Поиск...</div>}
 
         {!loading && clients.length > 0 && (
           <div className="max-h-48 overflow-y-auto rounded-lg border border-neutral-200">
@@ -229,7 +198,7 @@ export function ClientSelect({ onSelect, selectedId }: ClientSelectProps) {
             <button
               onClick={() => {
                 console.log('🔍 ClientSelect: открытие модалки создания клиента');
-                setIsAddModalOpen(true);
+                setIsCreateModalOpen(true);
               }}
               className="flex items-center gap-1 rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700 transition"
               type="button"
@@ -247,14 +216,14 @@ export function ClientSelect({ onSelect, selectedId }: ClientSelectProps) {
         )}
       </div>
 
-      {/* ✅ Только одна модалка */}
-      <AddClientModal
-        isOpen={isAddModalOpen}
+      {/* ✅ Отдельная модалка для создания клиента внутри заказа */}
+      <CreateClientModal
+        isOpen={isCreateModalOpen}
         onClose={() => {
           console.log('🔍 ClientSelect: закрытие модалки создания клиента');
-          setIsAddModalOpen(false);
+          setIsCreateModalOpen(false);
         }}
-        onSuccess={handleClientAdded}
+        onSuccess={handleClientCreated}
         shopId={shopId}
       />
     </>
