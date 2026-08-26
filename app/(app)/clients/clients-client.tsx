@@ -266,6 +266,7 @@ export default function ClientsClient({
             <TableHeader>
               <TableRow>
                 <TableHead>Клиент</TableHead>
+                <TableHead>Тип</TableHead>
                 <TableHead>Сегмент</TableHead>
                 <TableHead>Контакты</TableHead>
                 <TableHead className="text-right">Записей</TableHead>
@@ -283,21 +284,20 @@ export default function ClientsClient({
                     className="cursor-pointer"
                   >
                     <TableCell className="font-medium text-neutral-900">
-                      <div className="flex items-center gap-2">
-                        {name(c)}
-                        {c.is_guest && (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-neutral-100 px-2 py-0.5 text-[10px] font-medium text-neutral-500">
-                            <UserRound className="h-3 w-3" />
-                            Гость
-                          </span>
-                        )}
-                        {!c.is_guest && c.telegram_id && (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-600">
-                            <User className="h-3 w-3" />
-                            Telegram
-                          </span>
-                        )}
-                      </div>
+                      {name(c)}
+                    </TableCell>
+                    <TableCell>
+                      {c.is_guest ? (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-500">
+                          <UserRound className="h-3 w-3" />
+                          Гость
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
+                          <User className="h-3 w-3" />
+                          Telegram
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${s.cls}`}>
