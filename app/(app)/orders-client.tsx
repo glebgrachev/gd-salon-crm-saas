@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { useShop } from "@/contexts/ShopContext"; // 👈 Добавляем импорт
+import { useShop } from "@/contexts/ShopContext";
+import { CreateBookingModal } from "@/components/bookings/CreateBookingModal";
 import {
   OrderRow,
   BookingStatus,
@@ -26,13 +28,16 @@ type Filter = "all" | BookingStatus;
 
 export default function OrdersClient({
   initialOrders,
+  shopId,
 }: {
   initialOrders: OrderRow[];
+  shopId: number;
 }) {
-  const { formatPrice, currency } = useShop(); // 👈 Добавляем валюту
+  const { formatPrice } = useShop();
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [filter, setFilter] = useState<Filter>("all");
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // realtime: любое изменение броней — перезапрашиваем серверные данные
   useEffect(() => {
@@ -68,15 +73,28 @@ export default function OrdersClient({
     (o) => filter === "all" || o.status === filter,
   );
 
+  const handleBookingCreated = () => {
+    router.refresh();
+  };
+
   return (
     <div className="mx-auto max-w-5xl px-8 py-8">
-      <header className="mb-6">
-        <h1 className="text-xl font-semibold tracking-tight text-neutral-900">
-          Записи
-        </h1>
-        <p className="mt-1 text-sm text-neutral-500">
-          Записи клиентов. Обновляются в реальном времени.
-        </p>
+      <header className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-neutral-900">
+            Записи
+          </h1>
+          <p className="mt-1 text-sm text-neutral-500">
+            Записи клиентов. Обновляются в реальном времени.
+          </p>
+        </div>
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 transition"
+        >
+          <Plus className="h-4 w-4" />
+          Создать запись
+        </button>
       </header>
 
       <div className="mb-4 flex flex-wrap items-center gap-1">
@@ -152,7 +170,7 @@ export default function OrdersClient({
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right text-neutral-600">
-                    {formatPrice(o.price_snapshot)} {/* 👈 Динамическая цена */}
+                    {formatPrice(o.price_snapshot)}
                   </TableCell>
                 </TableRow>
               ))}
@@ -160,6 +178,13 @@ export default function OrdersClient({
           </Table>
         </div>
       )}
+
+      <CreateBookingModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={handleBookingCreated}
+        shopId={shopId}
+      />
     </div>
   );
 }
