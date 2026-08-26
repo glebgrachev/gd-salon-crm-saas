@@ -93,11 +93,8 @@ export function DateTimePicker({
         date: selectedDate,
       });
 
-      // ✅ Используем админский API
       const res = await fetch(`/api/admin/day-slots?${params.toString()}`);
       const result = await res.json();
-      
-      console.log("🔍 Загружены слоты:", result);
       
       if (result.ok) {
         setSlots(result.slots || []);
@@ -112,7 +109,7 @@ export function DateTimePicker({
     }
   };
 
-  // При выборе слота — обновляем значение
+  // При выборе слота — обновляем значение (передаём как есть)
   const handleSlotSelect = (slotStart: string) => {
     setSelectedSlot(slotStart);
     onChange(slotStart);

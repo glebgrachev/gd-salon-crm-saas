@@ -135,7 +135,7 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
         <select
           value={data.serviceId}
           onChange={(e) => {
-            setData({ ...data, serviceId: e.target.value, specialistId: "" });
+            setData({ ...data, serviceId: e.target.value, specialistId: "", startsAt: "" });
           }}
           className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
           disabled={loadingServices}
@@ -159,8 +159,7 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
         <select
           value={data.specialistId}
           onChange={(e) => {
-            setData({ ...data, specialistId: e.target.value });
-            setData(prev => ({ ...prev, startsAt: "" })); // Сбрасываем время
+            setData({ ...data, specialistId: e.target.value, startsAt: "" });
           }}
           className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
           disabled={loadingSpecialists || !data.serviceId}

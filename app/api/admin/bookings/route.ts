@@ -14,11 +14,11 @@ export async function POST(req: Request) {
 
   const admin = createAdmin();
 
-  // Проверяем, что клиент существует
+  // 1. Проверяем, что клиент существует
   const { data: client, error: clientError } = await admin
     .from("users")
     .select("telegram_id")
-    .eq("telegram_id", clientId)
+    .eq("telegram_id", Number(clientId))
     .eq("shop_id", Number(shopId))
     .maybeSingle();
 
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     return json({ error: "Клиент не найден" }, 404);
   }
 
-  // Проверяем, что услуга существует
+  // 2. Проверяем, что услуга существует и получаем длительность
   const { data: service, error: serviceError } = await admin
     .from("services")
     .select("id, duration_min")
@@ -38,15 +38,27 @@ export async function POST(req: Request) {
     return json({ error: "Услуга не найдена" }, 404);
   }
 
-  // Вычисляем ends_at
+  // 3. Проверяем, что мастер существует
+  const { data: specialist, error: specialistError } = await admin
+    .from("specialists")
+    .select("id")
+    .eq("id", specialistId)
+    .eq("shop_id", Number(shopId))
+    .maybeSingle();
+
+  if (specialistError || !specialist) {
+    return json({ error: "Мастер не найден" }, 404);
+  }
+
+  // 4. Вычисляем ends_at
   const startsAtDate = new Date(startsAt);
   const endsAtDate = new Date(startsAtDate.getTime() + service.duration_min * 60 * 1000);
 
-  // Создаём запись
+  // 5. Создаём запись
   const { data: booking, error } = await admin
     .from("bookings")
     .insert({
-      client_id: clientId,
+      client_id: Number(clientId),
       service_id: serviceId,
       specialist_id: specialistId,
       starts_at: startsAtDate.toISOString(),
