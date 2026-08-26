@@ -31,7 +31,6 @@ export default async function ClientPage({
   const { id } = await params;
   const supabase = await createClient();
 
-  // 1. Получаем пользователя и shop_id
   const { data: { user } } = await supabase.auth.getUser();
 
   const { data: admin } = await supabase
@@ -42,7 +41,6 @@ export default async function ClientPage({
 
   const shopId = admin?.shop_id ?? 0;
 
-  // 👇 Загружаем валюту салона
   const { data: shop } = await supabase
     .from("shops")
     .select("currency_id")
@@ -59,7 +57,6 @@ export default async function ClientPage({
     currency = currencyData;
   }
 
-  // 2. Проверяем, что клиент принадлежит этому салону
   const { data: client } = await supabase
     .from("users")
     .select("telegram_id, first_name, last_name, username, phone, created_at, shop_id, is_guest")
@@ -72,7 +69,6 @@ export default async function ClientPage({
     notFound();
   }
 
-  // 3. Загружаем модули салона
   const { data: shopData } = await supabase
     .from("shops")
     .select("modules")
@@ -81,7 +77,6 @@ export default async function ClientPage({
 
   const shopModules = shopData?.modules ?? null;
 
-  // 4. Загружаем данные только для этого салона
   const { data: bookingsData } = await supabase
     .from("bookings")
     .select(
@@ -113,7 +108,6 @@ export default async function ClientPage({
   );
   const spent = done.reduce((s, b) => s + (b.price_snapshot ?? 0), 0);
 
-  // 👇 Функция форматирования с валютой
   const formatPrice = (amount: number) => {
     if (!currency) return `${Math.round(amount).toLocaleString('ru-RU')} ₽`;
     return `${Math.round(amount).toLocaleString('ru-RU')} ${currency.symbol}`;
@@ -121,7 +115,7 @@ export default async function ClientPage({
 
   const fullName =
     [client.first_name, client.last_name].filter(Boolean).join(" ").trim() ||
-    (client.username ? "@" + client.username : "Без имени");
+    (client.phone ? `Гость: ${client.phone}` : "Без имени");
 
   return (
     <div className="mx-auto max-w-3xl px-8 py-8">
@@ -132,25 +126,39 @@ export default async function ClientPage({
         <ArrowLeft size={15} /> Все клиенты
       </Link>
 
-      <h1 className="text-lg font-semibold tracking-tight text-neutral-900">
-        {fullName}
-      </h1>
+      {/* Заголовок с бейджем (без иконок) */}
+      <div className="flex items-center gap-3">
+        <h1 className="text-lg font-semibold tracking-tight text-neutral-900">
+          {fullName}
+        </h1>
+        {client.is_guest ? (
+          <span className="inline-flex rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-500">
+            Гость
+          </span>
+        ) : (
+          <span className="inline-flex rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
+            Telegram
+          </span>
+        )}
+      </div>
+
+      {/* Контакты — без @guest_xxx для гостей */}
       <div className="mt-1 flex flex-wrap gap-x-4 text-sm text-neutral-500">
-        {client.username && <span>@{client.username}</span>}
         {client.phone && <span>{client.phone}</span>}
+        {!client.is_guest && client.username && (
+          <span className="text-neutral-400">@{client.username}</span>
+        )}
         <span className="text-neutral-400">
           с {fmtDateTime(client.created_at)}
         </span>
       </div>
 
-      {/* аналитика */}
       <div className="mt-6 grid grid-cols-3 gap-3">
         <Stat label="Всего записей" value={String(total)} />
         <Stat label="Завершено/оплачено" value={String(done.length)} />
         <Stat label="Потрачено" value={formatPrice(spent)} />
       </div>
 
-      {/* баллы лояльности */}
       <div className="mt-3 flex items-center justify-between rounded-xl border border-pink-200 bg-pink-50 p-4">
         <div>
           <div className="text-xs text-pink-500">Баллы лояльности</div>
@@ -162,7 +170,6 @@ export default async function ClientPage({
         </div>
       </div>
 
-      {/* сегмент возвращаемости */}
       {seg && (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-white p-4">
           <div className="flex flex-wrap items-center gap-3">
@@ -204,7 +211,6 @@ export default async function ClientPage({
         </div>
       )}
 
-      {/* история */}
       <h2 className="mt-8 mb-3 text-sm font-semibold text-neutral-900">
         История записей
       </h2>
