@@ -18,9 +18,11 @@ export function AddClientModal({
   shopId 
 }: AddClientModalProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
 
   const handleSubmit = async (data: { firstName: string; lastName: string; phone: string }) => {
     setIsLoading(true);
+    setDuplicateError(null);
     
     try {
       const response = await fetch("/api/admin/clients", {
@@ -34,7 +36,15 @@ export function AddClientModal({
 
       const result = await response.json();
       
+      if (response.status === 409 && result.error === "duplicate") {
+        // ⚠️ Дубликат — показываем предупреждение, но не закрываем
+        setDuplicateError(`Клиент с номером ${data.phone} уже существует`);
+        setIsLoading(false);
+        return;
+      }
+      
       if (result.ok) {
+        // ✅ Успешно создан
         onSuccess(result.clientId);
         onClose();
       } else {
@@ -63,6 +73,12 @@ export function AddClientModal({
             <X className="h-5 w-5 text-neutral-500" />
           </button>
         </div>
+
+        {duplicateError && (
+          <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-600 border border-red-200">
+            {duplicateError}
+          </div>
+        )}
 
         <ClientForm
           onSubmit={handleSubmit}
