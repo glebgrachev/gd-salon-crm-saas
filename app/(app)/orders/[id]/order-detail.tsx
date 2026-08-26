@@ -47,9 +47,9 @@ export default function OrderDetail({ order }: { order: OrderRow }) {
   const c = order.client;
   
   // ✅ Ссылка на Telegram только для реальных пользователей (не гостей)
-  const tg = !c?.is_guest && c?.username
+  const tg = c && !c.is_guest && c.username
     ? `https://t.me/${c.username}`
-    : !c?.is_guest && c
+    : c && !c.is_guest
       ? `tg://user?id=${c.telegram_id}`
       : null;
 
@@ -109,6 +109,9 @@ export default function OrderDetail({ order }: { order: OrderRow }) {
           <span className="text-neutral-900">{clientName(c)}</span>
           {c?.username && !c?.is_guest && (
             <span className="ml-2 text-neutral-400">@{c.username}</span>
+          )}
+          {c?.is_guest && (
+            <span className="ml-2 text-xs text-neutral-400">(Гость)</span>
           )}
         </Row>
 
