@@ -15,6 +15,7 @@ type Service = {
 type Specialist = {
   id: string;
   full_name: string;
+  price?: number;
 };
 
 type BookingFormData = {
@@ -30,7 +31,7 @@ type BookingFormProps = {
 };
 
 export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
-  const { shopId } = useShop(); // 👈 Берём shopId из контекста
+  const { shopId } = useShop();
   const [data, setData] = useState<BookingFormData>({
     clientId: null,
     serviceId: "",
@@ -40,21 +41,32 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
 
   const [services, setServices] = useState<Service[]>([]);
   const [specialists, setSpecialists] = useState<Specialist[]>([]);
+  const [filteredSpecialists, setFilteredSpecialists] = useState<Specialist[]>([]);
   const [loadingServices, setLoadingServices] = useState(false);
   const [loadingSpecialists, setLoadingSpecialists] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Загружаем услуги
   useEffect(() => {
     if (shopId) {
       loadServices();
-      loadSpecialists();
     }
   }, [shopId]);
+
+  // При выборе услуги — загружаем мастеров для неё (как в fetchServiceMasters)
+  useEffect(() => {
+    if (data.serviceId && shopId) {
+      loadSpecialistsForService(data.serviceId);
+    } else {
+      setFilteredSpecialists([]);
+    }
+  }, [data.serviceId, shopId]);
 
   const loadServices = async () => {
     if (!shopId) return;
     setLoadingServices(true);
     try {
+      // Используем тот же подход, что и в приложении
       const res = await fetch(`/api/admin/services?shopId=${shopId}`);
       const result = await res.json();
       if (result.ok) {
@@ -67,14 +79,17 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
     }
   };
 
-  const loadSpecialists = async () => {
+  const loadSpecialistsForService = async (serviceId: string) => {
     if (!shopId) return;
     setLoadingSpecialists(true);
     try {
-      const res = await fetch(`/api/admin/specialists?shopId=${shopId}`);
+      // Используем логику fetchServiceMasters из приложения
+      const res = await fetch(
+        `/api/admin/specialists?shopId=${shopId}&serviceId=${serviceId}`
+      );
       const result = await res.json();
       if (result.ok) {
-        setSpecialists(result.specialists);
+        setFilteredSpecialists(result.specialists);
       }
     } catch (error) {
       console.error("Ошибка загрузки мастеров:", error);
@@ -125,14 +140,16 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
         </label>
         <select
           value={data.serviceId}
-          onChange={(e) => setData({ ...data, serviceId: e.target.value })}
+          onChange={(e) => {
+            setData({ ...data, serviceId: e.target.value, specialistId: "" });
+          }}
           className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
           disabled={loadingServices}
         >
           <option value="">{loadingServices ? "Загрузка..." : "Выберите услугу"}</option>
           {services.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.name} ({s.duration_min} мин)
+              {s.name} ({s.duration_min} мин) — {s.price} ₽
             </option>
           ))}
         </select>
@@ -149,12 +166,20 @@ export function BookingForm({ onSubmit, isLoading }: BookingFormProps) {
           value={data.specialistId}
           onChange={(e) => setData({ ...data, specialistId: e.target.value })}
           className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
-          disabled={loadingSpecialists}
+          disabled={loadingSpecialists || !data.serviceId}
         >
-          <option value="">{loadingSpecialists ? "Загрузка..." : "Выберите мастера"}</option>
-          {specialists.map((s) => (
+          <option value="">
+            {!data.serviceId 
+              ? "Сначала выберите услугу" 
+              : loadingSpecialists 
+                ? "Загрузка..." 
+                : filteredSpecialists.length === 0
+                  ? "Нет мастеров для этой услуги"
+                  : "Выберите мастера"}
+          </option>
+          {filteredSpecialists.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.full_name}
+              {s.full_name} {s.price ? `(${s.price} ₽)` : ""}
             </option>
           ))}
         </select>
