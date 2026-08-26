@@ -152,6 +152,8 @@ export function ClientForm({
   isLoading = false,
   submitLabel = "Добавить клиента"
 }: ClientFormProps) {
+  console.log('🔍 ClientForm: рендер, submitLabel =', submitLabel);
+  
   const [data, setData] = useState<ClientFormData>({
     firstName: initialData.firstName || "",
     lastName: initialData.lastName || "",
@@ -192,8 +194,12 @@ export function ClientForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('🔍 ClientForm: handleSubmit вызван, данные:', data);
     if (validate()) {
+      console.log('✅ ClientForm: валидация прошла, вызываем onSubmit');
       onSubmit(data);
+    } else {
+      console.log('❌ ClientForm: ошибки валидации:', errors);
     }
   };
 
@@ -262,7 +268,7 @@ export function ClientForm({
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+        className="w-full rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50 transition"
       >
         {isLoading ? "Сохранение..." : submitLabel}
       </button>
