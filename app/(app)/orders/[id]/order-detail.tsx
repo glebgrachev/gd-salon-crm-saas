@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { ArrowLeft, Phone, Clock, Scissors, User } from "lucide-react";
 import { toast } from "sonner";
-import { useShop } from "@/contexts/ShopContext"; // 👈 Добавляем импорт
+import { useShop } from "@/contexts/ShopContext";
 import {
   OrderRow,
   BookingStatus,
@@ -26,7 +26,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 
 export default function OrderDetail({ order }: { order: OrderRow }) {
-  const { formatPrice, currency } = useShop(); // 👈 Добавляем валюту
+  const { formatPrice, currency } = useShop();
   const [status, setStatus] = useState<BookingStatus>(order.status);
   const [pending, startTransition] = useTransition();
 
@@ -45,9 +45,11 @@ export default function OrderDetail({ order }: { order: OrderRow }) {
   }
 
   const c = order.client;
-  const tg = c?.username
+  
+  // ✅ Ссылка на Telegram только для реальных пользователей (не гостей)
+  const tg = !c?.is_guest && c?.username
     ? `https://t.me/${c.username}`
-    : c
+    : !c?.is_guest && c
       ? `tg://user?id=${c.telegram_id}`
       : null;
 
@@ -105,7 +107,7 @@ export default function OrderDetail({ order }: { order: OrderRow }) {
 
         <Row icon={<User size={16} />} label="Клиент">
           <span className="text-neutral-900">{clientName(c)}</span>
-          {c?.username && (
+          {c?.username && !c?.is_guest && (
             <span className="ml-2 text-neutral-400">@{c.username}</span>
           )}
         </Row>
@@ -119,7 +121,7 @@ export default function OrderDetail({ order }: { order: OrderRow }) {
         <div className="flex items-center justify-between border-t border-neutral-200 pt-4">
           <span className="text-sm text-neutral-500">Стоимость</span>
           <span className="text-base font-semibold text-neutral-900">
-            {formatPrice(order.price_snapshot)} {/* 👈 Динамическая цена */}
+            {formatPrice(order.price_snapshot)}
           </span>
         </div>
 
@@ -136,6 +138,7 @@ export default function OrderDetail({ order }: { order: OrderRow }) {
               Подтверждение прихода не получено
             </span>
           )}
+          {/* ✅ Кнопка Telegram только для реальных пользователей */}
           {tg && (
             <a
               href={tg}
