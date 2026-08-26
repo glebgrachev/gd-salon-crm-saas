@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Search, User, UserRound, Plus } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Search, User, UserRound, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 type Client = {
@@ -22,35 +22,100 @@ export function ClientSelect({ shopId, onSelect, selectedId }: ClientSelectProps
   const [query, setQuery] = useState("");
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(false);
-  const [showCreate, setShowCreate] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 
+  // Загружаем выбранного клиента
   useEffect(() => {
-    if (query.length >= 2) {
-      searchClients();
-    } else {
-      setClients([]);
+    if (selectedId) {
+      fetch(`/api/admin/clients/search?q=${selectedId}&shopId=${shopId}&exact=true`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.ok && data.clients.length > 0) {
+            setSelectedClient(data.clients[0]);
+          }
+        })
+        .catch(console.error);
     }
-  }, [query]);
+  }, [selectedId, shopId]);
 
-  const searchClients = async () => {
+  const searchClients = useCallback(async () => {
+    if (!query.trim() || query.trim().length < 2) {
+      setClients([]);
+      return;
+    }
+
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/clients/search?q=${encodeURIComponent(query)}&shopId=${shopId}`);
+      const res = await fetch(
+        `/api/admin/clients/search?q=${encodeURIComponent(query.trim())}&shopId=${shopId}`
+      );
       const data = await res.json();
       if (data.ok) {
         setClients(data.clients);
+      } else {
+        setClients([]);
       }
     } catch (error) {
       console.error("Ошибка поиска клиентов:", error);
+      setClients([]);
     } finally {
       setLoading(false);
     }
+  }, [query, shopId]);
+
+  // Дебаунс для поиска
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchClients();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchClients]);
+
+  const handleSelect = (client: Client) => {
+    setSelectedClient(client);
+    setQuery("");
+    setClients([]);
+    onSelect(client.telegram_id);
+  };
+
+  const handleClear = () => {
+    setSelectedClient(null);
+    setQuery("");
+    setClients([]);
+    onSelect(0);
   };
 
   const getClientName = (c: Client) => {
-    const name = [c.first_name, c.last_name].filter(Boolean).join(" ");
-    return name || c.phone || "Без имени";
+    const parts = [];
+    if (c.first_name) parts.push(c.first_name);
+    if (c.last_name) parts.push(c.last_name);
+    return parts.join(" ") || "Без имени";
   };
+
+  const getClientDisplay = (c: Client) => {
+    const name = getClientName(c);
+    const phone = c.phone ? ` ${c.phone}` : "";
+    const guest = c.is_guest ? " 🟢 Гость" : "";
+    return `${name}${phone}${guest}`;
+  };
+
+  // Если клиент выбран — показываем его
+  if (selectedClient) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2">
+        <span className="flex-1 text-sm">
+          {getClientDisplay(selectedClient)}
+        </span>
+        <button
+          onClick={handleClear}
+          className="rounded-full p-1 hover:bg-neutral-200"
+          type="button"
+        >
+          <X className="h-4 w-4 text-neutral-400" />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
@@ -59,7 +124,7 @@ export function ClientSelect({ shopId, onSelect, selectedId }: ClientSelectProps
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Поиск по имени или телефону..."
+          placeholder="Поиск по имени, фамилии или телефону..."
           className="pl-9"
         />
       </div>
@@ -73,43 +138,41 @@ export function ClientSelect({ shopId, onSelect, selectedId }: ClientSelectProps
           {clients.map((c) => (
             <button
               key={c.telegram_id}
-              onClick={() => {
-                onSelect(c.telegram_id);
-                setQuery("");
-                setClients([]);
-              }}
-              className={`flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-neutral-50 ${
-                selectedId === c.telegram_id ? "bg-neutral-100" : ""
-              }`}
+              onClick={() => handleSelect(c)}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-neutral-50 border-b border-neutral-100 last:border-b-0"
             >
               {c.is_guest ? (
-                <UserRound className="h-4 w-4 text-neutral-400" />
+                <UserRound className="h-4 w-4 text-neutral-400 shrink-0" />
               ) : (
-                <User className="h-4 w-4 text-blue-500" />
+                <User className="h-4 w-4 text-blue-500 shrink-0" />
               )}
-              <span className="flex-1 text-left">
+              <span className="flex-1 text-left truncate">
                 {getClientName(c)}
               </span>
               {c.phone && (
-                <span className="text-xs text-neutral-400">{c.phone}</span>
+                <span className="text-xs text-neutral-400 shrink-0">
+                  {c.phone}
+                </span>
               )}
               {c.is_guest && (
-                <span className="text-xs text-neutral-400">Гость</span>
+                <span className="text-xs text-neutral-400 shrink-0 ml-1">
+                  Гость
+                </span>
               )}
             </button>
           ))}
         </div>
       )}
 
-      {!loading && query.length >= 2 && clients.length === 0 && (
+      {!loading && query.trim().length >= 2 && clients.length === 0 && (
         <div className="text-sm text-neutral-500">
-          Клиент не найден.{" "}
-          <button
-            onClick={() => setShowCreate(true)}
-            className="text-blue-600 hover:underline"
-          >
-            Создать нового
-          </button>
+          Клиент не найден. Попробуйте изменить запрос.
+        </div>
+      )}
+
+      {query.trim().length > 0 && query.trim().length < 2 && (
+        <div className="text-sm text-neutral-400">
+          Введите минимум 2 символа для поиска
         </div>
       )}
     </div>
