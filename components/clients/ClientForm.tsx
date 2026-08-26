@@ -27,22 +27,18 @@ function formatPhoneDisplay(value: string): string {
     const rest = clean.slice(3);
     let result = '+375';
     if (rest.length > 0) {
-      // Код оператора (2 цифры)
       const code = rest.slice(0, 2);
       result += ' ' + code;
     }
     if (rest.length > 2) {
-      // Первая часть номера (3 цифры)
       const part1 = rest.slice(2, 5);
       result += ' ' + part1;
     }
     if (rest.length > 5) {
-      // Вторая часть (2 цифры)
       const part2 = rest.slice(5, 7);
       result += '-' + part2;
     }
     if (rest.length > 7) {
-      // Третья часть (2 цифры)
       const part3 = rest.slice(7, 9);
       result += '-' + part3;
     }
@@ -54,22 +50,18 @@ function formatPhoneDisplay(value: string): string {
     const rest = clean.slice(1);
     let result = '+7';
     if (rest.length > 0) {
-      // Код оператора (3 цифры)
       const code = rest.slice(0, 3);
       result += ' ' + code;
     }
     if (rest.length > 3) {
-      // Первая часть номера (3 цифры)
       const part1 = rest.slice(3, 6);
       result += ' ' + part1;
     }
     if (rest.length > 6) {
-      // Вторая часть (2 цифры)
       const part2 = rest.slice(6, 8);
       result += '-' + part2;
     }
     if (rest.length > 8) {
-      // Третья часть (2 цифры)
       const part3 = rest.slice(8, 10);
       result += '-' + part3;
     }
@@ -122,7 +114,6 @@ function formatPhoneDisplay(value: string): string {
     return result;
   }
   
-  // Если что-то пошло не так, возвращаем как есть
   return '+' + clean;
 }
 
@@ -171,13 +162,8 @@ export function ClientForm({
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
-    // Убираем все нецифровые символы, но сохраняем + на случай, если пользователь вводит вручную
     const digits = raw.replace(/[^\d+]/g, '');
-    
-    // Если пользователь вводит +, оставляем только цифры
     const cleanDigits = digits.replace(/\D/g, '');
-    
-    // Форматируем для отображения
     const formatted = formatPhoneDisplay(cleanDigits);
     setData({ ...data, phone: formatted });
   };
@@ -261,7 +247,7 @@ export function ClientForm({
           id="phone"
           value={data.phone}
           onChange={handlePhoneChange}
-          placeholder="+375 29 123-45-67 или +7 999 123-45-67"
+          placeholder="+"
           maxLength={20}
           className={errors.phone ? "border-red-500" : ""}
         />
