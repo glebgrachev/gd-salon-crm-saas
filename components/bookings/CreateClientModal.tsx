@@ -64,8 +64,19 @@ export function CreateClientModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+    <div 
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50"
+      onClick={(e) => {
+        // Закрываем только если клик по фону
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div 
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-neutral-900">
             Добавить клиента
@@ -88,6 +99,7 @@ export function CreateClientModal({
           onSubmit={handleSubmit}
           isLoading={isLoading}
           submitLabel="Добавить клиента"
+          key={duplicateError ? 'with-error' : 'normal'}  // ✅ Добавили key
         />
       </div>
     </div>
