@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 type ClientFormData = {
   firstName: string;
@@ -57,7 +56,9 @@ export function ClientForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <Label htmlFor="firstName">Имя *</Label>
+        <label htmlFor="firstName" className="block text-sm font-medium text-neutral-700">
+          Имя <span className="text-red-500">*</span>
+        </label>
         <Input
           id="firstName"
           value={data.firstName}
@@ -71,7 +72,9 @@ export function ClientForm({
       </div>
 
       <div>
-        <Label htmlFor="lastName">Фамилия</Label>
+        <label htmlFor="lastName" className="block text-sm font-medium text-neutral-700">
+          Фамилия
+        </label>
         <Input
           id="lastName"
           value={data.lastName}
@@ -81,7 +84,9 @@ export function ClientForm({
       </div>
 
       <div>
-        <Label htmlFor="phone">Телефон *</Label>
+        <label htmlFor="phone" className="block text-sm font-medium text-neutral-700">
+          Телефон <span className="text-red-500">*</span>
+        </label>
         <Input
           id="phone"
           value={data.phone}
