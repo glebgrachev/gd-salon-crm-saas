@@ -43,8 +43,8 @@ type BookingRow = {
 
 type Column = {
   id: BookingStatus;
-  title: string;        // множественное число для заголовка
-  titleSingular: string; // единственное число для карточки
+  title: string;
+  titleSingular: string;
   color: string;
   icon: React.ReactNode;
   barColor: string;
@@ -55,7 +55,7 @@ const COLUMNS: Record<BookingStatus, Column> = {
     id: "new",
     title: "Новые",
     titleSingular: "Новая",
-    color: STATUS.new.className,
+    color: "text-amber-600",
     icon: <Clock className="h-4 w-4" />,
     barColor: "bg-amber-400",
   },
@@ -63,7 +63,7 @@ const COLUMNS: Record<BookingStatus, Column> = {
     id: "confirmed",
     title: "Подтверждены",
     titleSingular: "Подтверждена",
-    color: STATUS.confirmed.className,
+    color: "text-blue-600",
     icon: <Calendar className="h-4 w-4" />,
     barColor: "bg-blue-400",
   },
@@ -71,7 +71,7 @@ const COLUMNS: Record<BookingStatus, Column> = {
     id: "completed",
     title: "Завершены",
     titleSingular: "Завершена",
-    color: STATUS.completed.className,
+    color: "text-neutral-600",
     icon: <CheckCircle className="h-4 w-4" />,
     barColor: "bg-neutral-400",
   },
@@ -79,7 +79,7 @@ const COLUMNS: Record<BookingStatus, Column> = {
     id: "paid",
     title: "Оплачены",
     titleSingular: "Оплачена",
-    color: STATUS.paid.className,
+    color: "text-emerald-600",
     icon: <CreditCard className="h-4 w-4" />,
     barColor: "bg-emerald-400",
   },
@@ -87,7 +87,7 @@ const COLUMNS: Record<BookingStatus, Column> = {
     id: "cancelled",
     title: "Отменены",
     titleSingular: "Отменена",
-    color: STATUS.cancelled.className,
+    color: "text-red-600",
     icon: <XCircle className="h-4 w-4" />,
     barColor: "bg-red-400",
   },
@@ -125,7 +125,7 @@ function BookingCard({
         ${isDragOverlay ? "shadow-2xl scale-105 rotate-1" : "hover:border-neutral-300"}
       `}
     >
-      {/* Вертикальная цветная полоска */}
+      {/* Вертикальная цветная полоска — цвет соответствует статусу */}
       <div className={`absolute left-0 top-0 bottom-0 w-1 ${column.barColor}`} />
       
       <div className="pl-3">
@@ -133,7 +133,6 @@ function BookingCard({
           <div className="font-medium text-sm text-neutral-900 truncate flex-1">
             {booking.service?.name || "Услуга"}
           </div>
-          {/* Статус в карточке — скруглённый с отступами */}
           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${column.color} bg-opacity-10 bg-neutral-100`}>
             {column.titleSingular}
           </span>
@@ -213,7 +212,7 @@ function Column({
 
   return (
     <div className="flex-1 min-w-[200px]">
-      {/* Заголовок колонки — без подложки, только цвет */}
+      {/* Заголовок колонки */}
       <div className="flex items-center justify-between mb-3 px-1">
         <div className="flex items-center gap-2">
           <span className={column.color}>{column.icon}</span>
@@ -226,7 +225,6 @@ function Column({
         </span>
       </div>
 
-      {/* Список карточек на светлом фоне */}
       <div className="rounded-lg bg-neutral-50/80 p-3 min-h-[120px]">
         <SortableContext items={bookings.map(b => b.id)} strategy={verticalListSortingStrategy}>
           {bookings.map((booking) => (
