@@ -46,24 +46,22 @@ export default function OrdersClient({
   const [filter, setFilter] = useState<Filter>("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
   
-  // ✅ Читаем viewMode из URL
+  // ✅ Канбан по умолчанию
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const mode = searchParams.get("view") as ViewMode;
-    return mode === "kanban" ? "kanban" : "table";
+    return mode === "table" ? "table" : "kanban";
   });
   
-  // ✅ Читаем timeFilter из URL
   const [timeFilter, setTimeFilter] = useState<TimeFilterValue>(() => {
     const tf = searchParams.get("time") as TimeFilterValue;
     return tf || "all";
   });
 
-  // ✅ Сохраняем viewMode и timeFilter в URL
   const updateUrlParams = (mode: ViewMode, time: TimeFilterValue) => {
     const params = new URLSearchParams(searchParams.toString());
     
-    if (mode === "kanban") {
-      params.set("view", "kanban");
+    if (mode === "table") {
+      params.set("view", "table");
     } else {
       params.delete("view");
     }
@@ -87,7 +85,6 @@ export default function OrdersClient({
     updateUrlParams(viewMode, time);
   };
 
-  // realtime
   useEffect(() => {
     const channel = supabase
       .channel("bookings-feed")
@@ -102,7 +99,6 @@ export default function OrdersClient({
     };
   }, [supabase, router]);
 
-  // Фильтрация по времени
   const filteredByTime = useMemo(() => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -164,7 +160,6 @@ export default function OrdersClient({
     router.refresh();
   };
 
-  // ✅ Строим параметры для перехода в детальный заказ
   const getOrderDetailUrl = (orderId: string) => {
     const params = new URLSearchParams();
     params.set("from", viewMode);
