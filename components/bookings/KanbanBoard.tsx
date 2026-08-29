@@ -23,16 +23,13 @@ import { CSS } from "@dnd-kit/utilities";
 import { 
   Clock, 
   Calendar, 
-  User, 
-  Scissors, 
   CheckCircle, 
-  XCircle, 
   CreditCard,
-  AlertCircle
+  XCircle
 } from "lucide-react";
 import { toast } from "sonner";
 
-type BookingStatus = "new" | "confirmed" | "paid" | "completed" | "cancelled" | "hold";
+type BookingStatus = "new" | "confirmed" | "paid" | "completed" | "cancelled";
 
 type BookingRow = {
   id: string;
@@ -63,17 +60,17 @@ const COLUMNS: Record<BookingStatus, Column> = {
     color: "text-blue-600",
     icon: <Calendar className="h-4 w-4" />,
   },
-  paid: {
-    id: "paid",
-    title: "Оплачены",
-    color: "text-emerald-600",
-    icon: <CreditCard className="h-4 w-4" />,
-  },
   completed: {
     id: "completed",
     title: "Завершены",
     color: "text-neutral-600",
     icon: <CheckCircle className="h-4 w-4" />,
+  },
+  paid: {
+    id: "paid",
+    title: "Оплачены",
+    color: "text-emerald-600",
+    icon: <CreditCard className="h-4 w-4" />,
   },
   cancelled: {
     id: "cancelled",
@@ -81,24 +78,16 @@ const COLUMNS: Record<BookingStatus, Column> = {
     color: "text-red-600",
     icon: <XCircle className="h-4 w-4" />,
   },
-  hold: {
-    id: "hold",
-    title: "На удержании",
-    color: "text-orange-600",
-    icon: <AlertCircle className="h-4 w-4" />,
-  },
 };
 
-const COLUMN_ORDER: BookingStatus[] = ["new", "confirmed", "paid", "completed", "cancelled", "hold"];
+const COLUMN_ORDER: BookingStatus[] = ["new", "confirmed", "completed", "paid", "cancelled"];
 
-// Цвета для вертикальных полосок
 const STATUS_BAR_COLORS: Record<BookingStatus, string> = {
   new: "bg-amber-400",
   confirmed: "bg-blue-400",
-  paid: "bg-emerald-400",
   completed: "bg-neutral-400",
+  paid: "bg-emerald-400",
   cancelled: "bg-red-400",
-  hold: "bg-orange-400",
 };
 
 type KanbanBoardProps = {
@@ -108,7 +97,15 @@ type KanbanBoardProps = {
 };
 
 // Компонент карточки записи с вертикальной полоской
-function BookingCard({ booking, isDragOverlay }: { booking: BookingRow; isDragOverlay?: boolean }) {
+function BookingCard({ 
+  booking, 
+  isDragOverlay,
+  onClick 
+}: { 
+  booking: BookingRow; 
+  isDragOverlay?: boolean;
+  onClick?: () => void;
+}) {
   const clientName = [booking.client?.first_name, booking.client?.last_name]
     .filter(Boolean)
     .join(" ") || "Без имени";
@@ -118,12 +115,12 @@ function BookingCard({ booking, isDragOverlay }: { booking: BookingRow; isDragOv
 
   return (
     <div
+      onClick={onClick}
       className={`
-        relative rounded-lg border border-neutral-200 bg-white p-3 shadow-sm hover:shadow-md transition-shadow overflow-hidden
-        ${isDragOverlay ? "shadow-2xl scale-105 rotate-1" : ""}
+        relative rounded-lg border border-neutral-200 bg-white p-3 shadow-sm hover:shadow-md transition-shadow overflow-hidden cursor-pointer
+        ${isDragOverlay ? "shadow-2xl scale-105 rotate-1" : "hover:border-neutral-300"}
       `}
     >
-      {/* Вертикальная цветная полоска */}
       <div className={`absolute left-0 top-0 bottom-0 w-1 ${barColor}`} />
       
       <div className="pl-3">
@@ -161,8 +158,10 @@ function BookingCard({ booking, isDragOverlay }: { booking: BookingRow; isDragOv
 // Компонент карточки с поддержкой drag-and-drop
 function SortableBookingCard({
   booking,
+  onClick,
 }: {
   booking: BookingRow;
+  onClick?: () => void;
 }) {
   const {
     attributes,
@@ -187,26 +186,27 @@ function SortableBookingCard({
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <BookingCard booking={booking} />
+      <BookingCard booking={booking} onClick={onClick} isDragOverlay={isDragging} />
     </div>
   );
 }
 
-// Компонент колонки — без цветной подложки, только заголовок и светлый фон
+// Компонент колонки
 function Column({
   id,
   bookings,
   count,
+  router,
 }: {
   id: BookingStatus;
   bookings: BookingRow[];
   count: number;
+  router: any;
 }) {
   const column = COLUMNS[id];
 
   return (
     <div className="flex-1 min-w-[200px]">
-      {/* Заголовок колонки */}
       <div className="flex items-center justify-between mb-3 px-1">
         <div className="flex items-center gap-2">
           <span className={column.color}>{column.icon}</span>
@@ -219,13 +219,13 @@ function Column({
         </span>
       </div>
 
-      {/* Список карточек на светлом фоне */}
       <div className="rounded-lg bg-neutral-50/80 p-3 min-h-[120px]">
         <SortableContext items={bookings.map(b => b.id)} strategy={verticalListSortingStrategy}>
           {bookings.map((booking) => (
             <SortableBookingCard
               key={booking.id}
               booking={booking}
+              onClick={() => router.push(`/orders/${booking.id}`)}
             />
           ))}
         </SortableContext>
@@ -261,7 +261,6 @@ export function KanbanBoard({ initialBookings, onStatusChange }: KanbanBoardProp
     setBookings(initialBookings);
   }, [initialBookings]);
 
-  // Группируем записи по статусам
   const groupedBookings = bookings.reduce((acc, booking) => {
     const status = booking.status as BookingStatus;
     if (!acc[status]) acc[status] = [];
@@ -269,7 +268,6 @@ export function KanbanBoard({ initialBookings, onStatusChange }: KanbanBoardProp
     return acc;
   }, {} as Record<BookingStatus, BookingRow[]>);
 
-  // Убеждаемся, что все колонки присутствуют
   const allColumns = COLUMN_ORDER.reduce((acc, status) => {
     acc[status] = groupedBookings[status] || [];
     return acc;
@@ -293,7 +291,6 @@ export function KanbanBoard({ initialBookings, onStatusChange }: KanbanBoardProp
     const activeId = active.id as string;
     const overId = over.id as string;
 
-    // Определяем, куда перетащили
     const overBooking = bookings.find((b) => b.id === overId);
     const overColumn = COLUMN_ORDER.find((c) => `column-${c}` === overId);
 
@@ -314,7 +311,6 @@ export function KanbanBoard({ initialBookings, onStatusChange }: KanbanBoardProp
 
     if (booking.status === newStatus) return;
 
-    // Оптимистично обновляем UI
     const updatedBookings = bookings.map((b) =>
       b.id === activeId ? { ...b, status: newStatus! } : b
     );
@@ -337,13 +333,14 @@ export function KanbanBoard({ initialBookings, onStatusChange }: KanbanBoardProp
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="grid grid-cols-6 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         {COLUMN_ORDER.map((status) => (
           <Column
             key={status}
             id={status}
             bookings={allColumns[status] || []}
             count={allColumns[status]?.length || 0}
+            router={router}
           />
         ))}
       </div>
