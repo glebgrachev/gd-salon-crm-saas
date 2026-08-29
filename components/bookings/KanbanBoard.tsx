@@ -125,7 +125,6 @@ function BookingCard({
         ${isDragOverlay ? "shadow-2xl scale-105 rotate-1" : "hover:border-neutral-300"}
       `}
     >
-      {/* Вертикальная цветная полоска */}
       <div className={`absolute left-0 top-0 bottom-0 w-1 ${column.barColor}`} />
       
       <div className="pl-3">
@@ -202,17 +201,18 @@ function Column({
   bookings,
   count,
   router,
+  timeFilter,
 }: {
   id: BookingStatus;
   bookings: BookingRow[];
   count: number;
   router: any;
+  timeFilter: string;
 }) {
   const column = COLUMNS[id];
 
   return (
     <div className="flex-1 min-w-[200px]">
-      {/* Заголовок колонки */}
       <div className="flex items-center justify-between mb-3 px-1">
         <div className="flex items-center gap-2">
           <span className={column.color}>{column.icon}</span>
@@ -231,7 +231,7 @@ function Column({
             <SortableBookingCard
               key={booking.id}
               booking={booking}
-              onClick={() => router.push(`/orders/${booking.id}?from=kanban`)}
+              onClick={() => router.push(`/orders/${booking.id}?from=kanban&time=${timeFilter}`)}
             />
           ))}
         </SortableContext>
@@ -246,7 +246,7 @@ function Column({
 }
 
 // Основной компонент
-export function KanbanBoard({ initialBookings, onStatusChange }: KanbanBoardProps) {
+export function KanbanBoard({ initialBookings, onStatusChange, timeFilter }: KanbanBoardProps) {
   const router = useRouter();
   const [bookings, setBookings] = useState(initialBookings);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -347,6 +347,7 @@ export function KanbanBoard({ initialBookings, onStatusChange }: KanbanBoardProp
             bookings={allColumns[status] || []}
             count={allColumns[status]?.length || 0}
             router={router}
+            timeFilter={timeFilter}
           />
         ))}
       </div>
