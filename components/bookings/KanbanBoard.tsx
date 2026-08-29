@@ -43,54 +43,57 @@ type BookingRow = {
 
 type Column = {
   id: BookingStatus;
-  title: string;
+  title: string;        // множественное число для заголовка
+  titleSingular: string; // единственное число для карточки
   color: string;
   icon: React.ReactNode;
+  barColor: string;
 };
 
 const COLUMNS: Record<BookingStatus, Column> = {
   new: {
     id: "new",
-    title: "Новая",
+    title: "Новые",
+    titleSingular: "Новая",
     color: STATUS.new.className,
     icon: <Clock className="h-4 w-4" />,
+    barColor: "bg-amber-400",
   },
   confirmed: {
     id: "confirmed",
-    title: "Подтверждена",
+    title: "Подтверждены",
+    titleSingular: "Подтверждена",
     color: STATUS.confirmed.className,
     icon: <Calendar className="h-4 w-4" />,
+    barColor: "bg-blue-400",
   },
   completed: {
     id: "completed",
-    title: "Завершена",
+    title: "Завершены",
+    titleSingular: "Завершена",
     color: STATUS.completed.className,
     icon: <CheckCircle className="h-4 w-4" />,
+    barColor: "bg-neutral-400",
   },
   paid: {
     id: "paid",
-    title: "Оплачена",
+    title: "Оплачены",
+    titleSingular: "Оплачена",
     color: STATUS.paid.className,
     icon: <CreditCard className="h-4 w-4" />,
+    barColor: "bg-emerald-400",
   },
   cancelled: {
     id: "cancelled",
-    title: "Отменена",
+    title: "Отменены",
+    titleSingular: "Отменена",
     color: STATUS.cancelled.className,
     icon: <XCircle className="h-4 w-4" />,
+    barColor: "bg-red-400",
   },
 };
 
 const COLUMN_ORDER: BookingStatus[] = ["new", "confirmed", "completed", "paid", "cancelled"];
-
-// ✅ Цвета полосок синхронизируем с STATUS
-const STATUS_BAR_COLORS: Record<BookingStatus, string> = {
-  new: "bg-amber-400",
-  confirmed: "bg-blue-400",
-  completed: "bg-neutral-400",
-  paid: "bg-emerald-400",
-  cancelled: "bg-red-400",
-};
 
 type KanbanBoardProps = {
   initialBookings: BookingRow[];
@@ -98,6 +101,7 @@ type KanbanBoardProps = {
   timeFilter: "today" | "week" | "month" | "year" | "all";
 };
 
+// Компонент карточки записи
 function BookingCard({ 
   booking, 
   isDragOverlay,
@@ -111,8 +115,7 @@ function BookingCard({
     .filter(Boolean)
     .join(" ") || "Без имени";
 
-  const statusColumn = COLUMNS[booking.status];
-  const barColor = STATUS_BAR_COLORS[booking.status] || "bg-neutral-300";
+  const column = COLUMNS[booking.status];
 
   return (
     <div
@@ -122,15 +125,17 @@ function BookingCard({
         ${isDragOverlay ? "shadow-2xl scale-105 rotate-1" : "hover:border-neutral-300"}
       `}
     >
-      <div className={`absolute left-0 top-0 bottom-0 w-1 ${barColor}`} />
+      {/* Вертикальная цветная полоска */}
+      <div className={`absolute left-0 top-0 bottom-0 w-1 ${column.barColor}`} />
       
       <div className="pl-3">
         <div className="flex items-start justify-between gap-2">
           <div className="font-medium text-sm text-neutral-900 truncate flex-1">
             {booking.service?.name || "Услуга"}
           </div>
-          <span className={`text-[10px] font-medium ${statusColumn?.color || "text-neutral-400"}`}>
-            {statusColumn?.title || booking.status}
+          {/* Статус в карточке — скруглённый с отступами */}
+          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${column.color} bg-opacity-10 bg-neutral-100`}>
+            {column.titleSingular}
           </span>
         </div>
         <div className="text-xs text-neutral-500 mt-1 truncate">
@@ -156,6 +161,7 @@ function BookingCard({
   );
 }
 
+// Компонент карточки с поддержкой drag-and-drop
 function SortableBookingCard({
   booking,
   onClick,
@@ -191,6 +197,7 @@ function SortableBookingCard({
   );
 }
 
+// Компонент колонки
 function Column({
   id,
   bookings,
@@ -206,6 +213,7 @@ function Column({
 
   return (
     <div className="flex-1 min-w-[200px]">
+      {/* Заголовок колонки — без подложки, только цвет */}
       <div className="flex items-center justify-between mb-3 px-1">
         <div className="flex items-center gap-2">
           <span className={column.color}>{column.icon}</span>
@@ -218,6 +226,7 @@ function Column({
         </span>
       </div>
 
+      {/* Список карточек на светлом фоне */}
       <div className="rounded-lg bg-neutral-50/80 p-3 min-h-[120px]">
         <SortableContext items={bookings.map(b => b.id)} strategy={verticalListSortingStrategy}>
           {bookings.map((booking) => (
@@ -238,6 +247,7 @@ function Column({
   );
 }
 
+// Основной компонент
 export function KanbanBoard({ initialBookings, onStatusChange }: KanbanBoardProps) {
   const router = useRouter();
   const [bookings, setBookings] = useState(initialBookings);
