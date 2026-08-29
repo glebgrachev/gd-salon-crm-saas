@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, LayoutList, LayoutGrid } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useShop } from "@/contexts/ShopContext";
@@ -40,13 +40,29 @@ export default function OrdersClient({
 }) {
   const { formatPrice } = useShop();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = useMemo(() => createClient(), []);
   const [filter, setFilter] = useState<Filter>("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("table");
+  
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const mode = searchParams.get("view") as ViewMode;
+    return mode === "kanban" ? "kanban" : "table";
+  });
+  
   const [timeFilter, setTimeFilter] = useState<"today" | "week" | "month" | "year" | "all">("all");
 
-  // realtime: любое изменение броней — перезапрашиваем серверные данные
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+    const params = new URLSearchParams(searchParams.toString());
+    if (mode === "kanban") {
+      params.set("view", "kanban");
+    } else {
+      params.delete("view");
+    }
+    router.push(`?${params.toString()}`, { scroll: false });
+  };
+
   useEffect(() => {
     const channel = supabase
       .channel("bookings-feed")
@@ -61,7 +77,6 @@ export default function OrdersClient({
     };
   }, [supabase, router]);
 
-  // Фильтрация по времени
   const filteredByTime = useMemo(() => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -73,17 +88,12 @@ export default function OrdersClient({
     return initialOrders.filter((o) => {
       const date = new Date(o.starts_at);
       switch (timeFilter) {
-        case "today":
-          return date >= today;
-        case "week":
-          return date >= weekStart;
-        case "month":
-          return date >= monthStart;
-        case "year":
-          return date >= yearStart;
+        case "today": return date >= today;
+        case "week": return date >= weekStart;
+        case "month": return date >= monthStart;
+        case "year": return date >= yearStart;
         case "all":
-        default:
-          return true;
+        default: return true;
       }
     });
   }, [initialOrders, timeFilter]);
@@ -142,10 +152,9 @@ export default function OrdersClient({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {/* Переключатель вида */}
           <div className="flex rounded-lg border border-neutral-200 bg-white p-0.5">
             <button
-              onClick={() => setViewMode("table")}
+              onClick={() => handleViewModeChange("table")}
               className={`rounded-md px-3 py-1.5 text-sm transition ${
                 viewMode === "table"
                   ? "bg-neutral-900 text-white"
@@ -156,7 +165,7 @@ export default function OrdersClient({
               <LayoutList className="h-4 w-4" />
             </button>
             <button
-              onClick={() => setViewMode("kanban")}
+              onClick={() => handleViewModeChange("kanban")}
               className={`rounded-md px-3 py-1.5 text-sm transition ${
                 viewMode === "kanban"
                   ? "bg-neutral-900 text-white"
@@ -178,16 +187,13 @@ export default function OrdersClient({
         </div>
       </header>
 
-      {/* Фильтры */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        {/* Фильтр по времени */}
         <TimeFilter
           value={timeFilter}
           onChange={setTimeFilter}
           counts={timeCounts}
         />
 
-        {/* Фильтр по статусу */}
         <div className="flex flex-wrap items-center gap-1 border-l border-neutral-200 pl-3">
           {(["all", ...FILTER_ORDER] as Filter[]).map((f) => (
             <button
@@ -206,7 +212,6 @@ export default function OrdersClient({
         </div>
       </div>
 
-      {/* Контент */}
       {viewMode === "table" ? (
         <>
           {visible.length === 0 ? (
@@ -230,7 +235,11 @@ export default function OrdersClient({
                   {visible.map((o) => (
                     <TableRow
                       key={o.id}
-                      onClick={() => router.push(`/orders/${o.id}`)}
+                      onClick={() => {
+                        const params = new URLSearchParams(searchParams.toString());
+                        params.set("from", viewMode);
+                        router.push(`/orders/${o.id}?${params.toString()}`);
+                      }}
                       className="cursor-pointer"
                     >
                       <TableCell className="font-medium text-neutral-900">

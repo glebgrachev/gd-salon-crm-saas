@@ -50,31 +50,31 @@ type Column = {
 const COLUMNS: Record<BookingStatus, Column> = {
   new: {
     id: "new",
-    title: "Новые",
+    title: "Новая",
     color: "text-amber-600",
     icon: <Clock className="h-4 w-4" />,
   },
   confirmed: {
     id: "confirmed",
-    title: "Подтверждены",
+    title: "Подтверждена",
     color: "text-blue-600",
     icon: <Calendar className="h-4 w-4" />,
   },
   completed: {
     id: "completed",
-    title: "Завершены",
+    title: "Завершена",
     color: "text-neutral-600",
     icon: <CheckCircle className="h-4 w-4" />,
   },
   paid: {
     id: "paid",
-    title: "Оплачены",
+    title: "Оплачена",
     color: "text-emerald-600",
     icon: <CreditCard className="h-4 w-4" />,
   },
   cancelled: {
     id: "cancelled",
-    title: "Отменены",
+    title: "Отменена",
     color: "text-red-600",
     icon: <XCircle className="h-4 w-4" />,
   },
@@ -96,7 +96,7 @@ type KanbanBoardProps = {
   timeFilter: "today" | "week" | "month" | "year" | "all";
 };
 
-// Компонент карточки записи с вертикальной полоской
+// Компонент карточки записи
 function BookingCard({ 
   booking, 
   isDragOverlay,
@@ -225,7 +225,7 @@ function Column({
             <SortableBookingCard
               key={booking.id}
               booking={booking}
-              onClick={() => router.push(`/orders/${booking.id}`)}
+              onClick={() => router.push(`/orders/${booking.id}?from=kanban`)}
             />
           ))}
         </SortableContext>

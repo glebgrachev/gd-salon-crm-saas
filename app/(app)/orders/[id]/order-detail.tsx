@@ -1,3 +1,5 @@
+// app/(app)/orders/[id]/order-detail.tsx
+
 "use client";
 
 import { useState, useTransition } from "react";
@@ -25,8 +27,14 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
-export default function OrderDetail({ order }: { order: OrderRow }) {
-  const { formatPrice, currency } = useShop();
+export default function OrderDetail({ 
+  order,
+  from = "table"
+}: { 
+  order: OrderRow;
+  from?: string;
+}) {
+  const { formatPrice } = useShop();
   const [status, setStatus] = useState<BookingStatus>(order.status);
   const [pending, startTransition] = useTransition();
 
@@ -45,23 +53,24 @@ export default function OrderDetail({ order }: { order: OrderRow }) {
   }
 
   const c = order.client;
-  console.log('🔍 OrderDetail: client =', c);
-  console.log('🔍 OrderDetail: is_guest =', c?.is_guest);
   
-  // ✅ Ссылка на Telegram только для реальных пользователей (не гостей)
   const tg = c && !c.is_guest && c.username
     ? `https://t.me/${c.username}`
     : c && !c.is_guest
       ? `tg://user?id=${c.telegram_id}`
       : null;
 
+  // ✅ Кнопка "Назад" возвращает в нужный вид
+  const backUrl = from === "kanban" ? "/?view=kanban" : "/";
+
   return (
     <div className="mx-auto max-w-2xl px-8 py-8">
       <Link
-        href="/"
+        href={backUrl}
         className="mb-5 inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-900"
       >
-        <ArrowLeft size={15} /> Все заказы
+        <ArrowLeft size={15} /> 
+        {from === "kanban" ? "Вернуться к доске" : "Все заказы"}
       </Link>
 
       <div className="flex items-start justify-between gap-4">
@@ -143,7 +152,6 @@ export default function OrderDetail({ order }: { order: OrderRow }) {
               Подтверждение прихода не получено
             </span>
           )}
-          {/* ✅ Кнопка Telegram только для реальных пользователей */}
           {tg && (
             <a
               href={tg}

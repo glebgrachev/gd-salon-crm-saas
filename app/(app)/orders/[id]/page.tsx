@@ -1,5 +1,3 @@
-// app/(app)/orders/[id]/page.tsx
-
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import OrderDetail from "./order-detail";
@@ -42,5 +40,5 @@ export default async function OrderPage({
 
   if (!data) notFound();
 
-  return <OrderDetail order={data as unknown as OrderRow} />;
+  return <OrderDetail order={data as unknown as OrderRow} from="table" />;
 }
