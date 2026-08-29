@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import OrdersClient from "./orders-client";
+import OrdersClient from "../orders-client"; // ✅ Поднимаемся на уровень выше
 import type { BookingStatus } from "@/lib/bookings";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ async function updateBookingStatus(bookingId: string, newStatus: BookingStatus) 
     .eq("id", bookingId);
 
   if (error) {
-    console.error("Ошибка обновления статуса:", error);
+    console.error("❌ Ошибка обновления статуса:", error);
     throw new Error(error.message);
   }
 }
