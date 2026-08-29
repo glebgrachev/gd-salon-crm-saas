@@ -44,7 +44,6 @@ type BookingRow = {
 type Column = {
   id: BookingStatus;
   title: string;
-  titleSingular: string;
   color: string;
   icon: React.ReactNode;
   barColor: string;
@@ -54,7 +53,6 @@ const COLUMNS: Record<BookingStatus, Column> = {
   new: {
     id: "new",
     title: "Новые",
-    titleSingular: "Новая",
     color: "text-amber-600",
     icon: <Clock className="h-4 w-4" />,
     barColor: "bg-amber-400",
@@ -62,7 +60,6 @@ const COLUMNS: Record<BookingStatus, Column> = {
   confirmed: {
     id: "confirmed",
     title: "Подтверждены",
-    titleSingular: "Подтверждена",
     color: "text-blue-600",
     icon: <Calendar className="h-4 w-4" />,
     barColor: "bg-blue-400",
@@ -70,7 +67,6 @@ const COLUMNS: Record<BookingStatus, Column> = {
   completed: {
     id: "completed",
     title: "Завершены",
-    titleSingular: "Завершена",
     color: "text-neutral-600",
     icon: <CheckCircle className="h-4 w-4" />,
     barColor: "bg-neutral-400",
@@ -78,7 +74,6 @@ const COLUMNS: Record<BookingStatus, Column> = {
   paid: {
     id: "paid",
     title: "Оплачены",
-    titleSingular: "Оплачена",
     color: "text-emerald-600",
     icon: <CreditCard className="h-4 w-4" />,
     barColor: "bg-emerald-400",
@@ -86,7 +81,6 @@ const COLUMNS: Record<BookingStatus, Column> = {
   cancelled: {
     id: "cancelled",
     title: "Отменены",
-    titleSingular: "Отменена",
     color: "text-red-600",
     icon: <XCircle className="h-4 w-4" />,
     barColor: "bg-red-400",
@@ -101,7 +95,7 @@ type KanbanBoardProps = {
   timeFilter: "today" | "week" | "month" | "year" | "all";
 };
 
-// Компонент карточки записи
+// Компонент карточки записи — без статуса
 function BookingCard({ 
   booking, 
   isDragOverlay,
@@ -125,20 +119,21 @@ function BookingCard({
         ${isDragOverlay ? "shadow-2xl scale-105 rotate-1" : "hover:border-neutral-300"}
       `}
     >
+      {/* Вертикальная цветная полоска — показывает статус */}
       <div className={`absolute left-0 top-0 bottom-0 w-1 ${column.barColor}`} />
       
       <div className="pl-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="font-medium text-sm text-neutral-900 truncate flex-1">
-            {booking.service?.name || "Услуга"}
-          </div>
-          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${column.color} bg-opacity-10 bg-neutral-100`}>
-            {column.titleSingular}
-          </span>
+        {/* Название услуги на всю ширину */}
+        <div className="font-medium text-sm text-neutral-900 truncate">
+          {booking.service?.name || "Услуга"}
         </div>
+        
+        {/* Имя клиента */}
         <div className="text-xs text-neutral-500 mt-1 truncate">
           {clientName}
         </div>
+        
+        {/* Время и мастер */}
         <div className="flex items-center justify-between mt-2 text-xs text-neutral-400">
           <span>
             {new Date(booking.starts_at).toLocaleString("ru-RU", {
