@@ -1,60 +1,46 @@
+// app/(app)/orders/[id]/page.tsx
+
+import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import OrdersClient from "../orders-client"; // ✅ Поднимаемся на уровень выше
-import type { BookingStatus } from "@/lib/bookings";
+import OrderDetail from "./order-detail";
+import type { OrderRow } from "@/lib/bookings";
 
 export const dynamic = "force-dynamic";
 
 const SELECT = `
-  id, status, starts_at, ends_at, created_at, 
-  price_snapshot, shop_id, reschedule_count, orig_starts_at, rescheduled_to,
-  service:services(name, duration_min, price), 
-  specialist:specialists(full_name),
-  client:users(telegram_id, first_name, last_name, username, phone, is_guest)
+  id, starts_at, ends_at, status, price_snapshot, client_confirmed_at, created_at,
+  shop_id,
+  client:users ( telegram_id, first_name, last_name, username, phone, is_guest ),
+  specialist:specialists ( id, full_name ),
+  service:services ( id, name )
 `;
 
-async function updateBookingStatus(bookingId: string, newStatus: BookingStatus) {
-  "use server";
-  const supabase = await createClient();
-  
-  const { error } = await supabase
-    .from("bookings")
-    .update({ status: newStatus })
-    .eq("id", bookingId);
-
-  if (error) {
-    console.error("❌ Ошибка обновления статуса:", error);
-    throw new Error(error.message);
-  }
-}
-
-export default async function OrdersPage() {
+export default async function OrderPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) {
-    return <OrdersClient initialOrders={[]} shopId={0} onStatusChange={updateBookingStatus} />;
-  }
-
   const { data: admin } = await supabase
     .from("admins")
     .select("shop_id")
-    .eq("user_uid", user.id)
+    .eq("user_uid", user?.id)
     .single();
 
   const shopId = admin?.shop_id ?? 0;
 
-  const { data: orders } = await supabase
+  const { data } = await supabase
     .from("bookings")
     .select(SELECT)
+    .eq("id", id)
     .eq("shop_id", shopId)
-    .order("starts_at", { ascending: false });
+    .maybeSingle();
 
-  return (
-    <OrdersClient
-      initialOrders={orders ?? []}
-      shopId={shopId}
-      onStatusChange={updateBookingStatus}
-    />
-  );
+  if (!data) notFound();
+
+  return <OrderDetail order={data as unknown as OrderRow} />;
 }
