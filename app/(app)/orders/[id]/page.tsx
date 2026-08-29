@@ -15,10 +15,13 @@ const SELECT = `
 
 export default async function OrderPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
 }) {
   const { id } = await params;
+  const { from } = await searchParams;
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -40,5 +43,5 @@ export default async function OrderPage({
 
   if (!data) notFound();
 
-  return <OrderDetail order={data as unknown as OrderRow} from="table" />;
+  return <OrderDetail order={data as unknown as OrderRow} from={from || "table"} />;
 }

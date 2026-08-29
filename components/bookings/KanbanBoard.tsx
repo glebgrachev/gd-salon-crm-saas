@@ -28,6 +28,7 @@ import {
   XCircle
 } from "lucide-react";
 import { toast } from "sonner";
+import { STATUS } from "@/lib/bookings";
 
 type BookingStatus = "new" | "confirmed" | "paid" | "completed" | "cancelled";
 
@@ -51,37 +52,38 @@ const COLUMNS: Record<BookingStatus, Column> = {
   new: {
     id: "new",
     title: "Новая",
-    color: "text-amber-600",
+    color: STATUS.new.className,
     icon: <Clock className="h-4 w-4" />,
   },
   confirmed: {
     id: "confirmed",
     title: "Подтверждена",
-    color: "text-blue-600",
+    color: STATUS.confirmed.className,
     icon: <Calendar className="h-4 w-4" />,
   },
   completed: {
     id: "completed",
     title: "Завершена",
-    color: "text-neutral-600",
+    color: STATUS.completed.className,
     icon: <CheckCircle className="h-4 w-4" />,
   },
   paid: {
     id: "paid",
     title: "Оплачена",
-    color: "text-emerald-600",
+    color: STATUS.paid.className,
     icon: <CreditCard className="h-4 w-4" />,
   },
   cancelled: {
     id: "cancelled",
     title: "Отменена",
-    color: "text-red-600",
+    color: STATUS.cancelled.className,
     icon: <XCircle className="h-4 w-4" />,
   },
 };
 
 const COLUMN_ORDER: BookingStatus[] = ["new", "confirmed", "completed", "paid", "cancelled"];
 
+// ✅ Цвета полосок синхронизируем с STATUS
 const STATUS_BAR_COLORS: Record<BookingStatus, string> = {
   new: "bg-amber-400",
   confirmed: "bg-blue-400",
@@ -96,7 +98,6 @@ type KanbanBoardProps = {
   timeFilter: "today" | "week" | "month" | "year" | "all";
 };
 
-// Компонент карточки записи
 function BookingCard({ 
   booking, 
   isDragOverlay,
@@ -155,7 +156,6 @@ function BookingCard({
   );
 }
 
-// Компонент карточки с поддержкой drag-and-drop
 function SortableBookingCard({
   booking,
   onClick,
@@ -191,7 +191,6 @@ function SortableBookingCard({
   );
 }
 
-// Компонент колонки
 function Column({
   id,
   bookings,
@@ -239,7 +238,6 @@ function Column({
   );
 }
 
-// Основной компонент
 export function KanbanBoard({ initialBookings, onStatusChange }: KanbanBoardProps) {
   const router = useRouter();
   const [bookings, setBookings] = useState(initialBookings);
