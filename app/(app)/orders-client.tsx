@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 
 type Filter = "all" | BookingStatus;
 type ViewMode = "table" | "kanban";
+type TimeFilterValue = "today" | "week" | "month" | "year" | "all";
 
 export default function OrdersClient({
   initialOrders,
@@ -45,24 +46,48 @@ export default function OrdersClient({
   const [filter, setFilter] = useState<Filter>("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
   
+  // ✅ Читаем viewMode из URL
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const mode = searchParams.get("view") as ViewMode;
     return mode === "kanban" ? "kanban" : "table";
   });
   
-  const [timeFilter, setTimeFilter] = useState<"today" | "week" | "month" | "year" | "all">("all");
+  // ✅ Читаем timeFilter из URL
+  const [timeFilter, setTimeFilter] = useState<TimeFilterValue>(() => {
+    const tf = searchParams.get("time") as TimeFilterValue;
+    return tf || "all";
+  });
 
-  const handleViewModeChange = (mode: ViewMode) => {
-    setViewMode(mode);
+  // ✅ Сохраняем viewMode и timeFilter в URL
+  const updateUrlParams = (mode: ViewMode, time: TimeFilterValue) => {
     const params = new URLSearchParams(searchParams.toString());
+    
     if (mode === "kanban") {
       params.set("view", "kanban");
     } else {
       params.delete("view");
     }
+    
+    if (time !== "all") {
+      params.set("time", time);
+    } else {
+      params.delete("time");
+    }
+    
     router.push(`?${params.toString()}`, { scroll: false });
   };
 
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+    updateUrlParams(mode, timeFilter);
+  };
+
+  const handleTimeFilterChange = (time: TimeFilterValue) => {
+    setTimeFilter(time);
+    updateUrlParams(viewMode, time);
+  };
+
+  // realtime
   useEffect(() => {
     const channel = supabase
       .channel("bookings-feed")
@@ -77,6 +102,7 @@ export default function OrdersClient({
     };
   }, [supabase, router]);
 
+  // Фильтрация по времени
   const filteredByTime = useMemo(() => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -138,6 +164,16 @@ export default function OrdersClient({
     router.refresh();
   };
 
+  // ✅ Строим параметры для перехода в детальный заказ
+  const getOrderDetailUrl = (orderId: string) => {
+    const params = new URLSearchParams();
+    params.set("from", viewMode);
+    if (timeFilter !== "all") {
+      params.set("time", timeFilter);
+    }
+    return `/orders/${orderId}?${params.toString()}`;
+  };
+
   return (
     <div className="mx-auto max-w-7xl px-8 py-8">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -190,7 +226,7 @@ export default function OrdersClient({
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <TimeFilter
           value={timeFilter}
-          onChange={setTimeFilter}
+          onChange={handleTimeFilterChange}
           counts={timeCounts}
         />
 
@@ -235,11 +271,7 @@ export default function OrdersClient({
                   {visible.map((o) => (
                     <TableRow
                       key={o.id}
-                      onClick={() => {
-                        const params = new URLSearchParams(searchParams.toString());
-                        params.set("from", viewMode);
-                        router.push(`/orders/${o.id}?${params.toString()}`);
-                      }}
+                      onClick={() => router.push(getOrderDetailUrl(o.id))}
                       className="cursor-pointer"
                     >
                       <TableCell className="font-medium text-neutral-900">

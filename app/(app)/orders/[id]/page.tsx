@@ -18,10 +18,10 @@ export default async function OrderPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ from?: string }>;
+  searchParams: Promise<{ from?: string; time?: string }>;
 }) {
   const { id } = await params;
-  const { from } = await searchParams;
+  const { from, time } = await searchParams;
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -43,5 +43,5 @@ export default async function OrderPage({
 
   if (!data) notFound();
 
-  return <OrderDetail order={data as unknown as OrderRow} from={from || "table"} />;
+  return <OrderDetail order={data as unknown as OrderRow} from={from || "table"} time={time || "all"} />;
 }

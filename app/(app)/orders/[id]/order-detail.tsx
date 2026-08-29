@@ -29,10 +29,12 @@ import { Badge } from "@/components/ui/badge";
 
 export default function OrderDetail({ 
   order,
-  from = "table"
+  from = "table",
+  time = "all"
 }: { 
   order: OrderRow;
   from?: string;
+  time?: string;
 }) {
   const { formatPrice } = useShop();
   const [status, setStatus] = useState<BookingStatus>(order.status);
@@ -60,8 +62,10 @@ export default function OrderDetail({
       ? `tg://user?id=${c.telegram_id}`
       : null;
 
-  // ✅ Кнопка "Назад" возвращает в нужный вид
-  const backUrl = from === "kanban" ? "/?view=kanban" : "/";
+  // ✅ Строим URL для возврата с сохранением фильтров
+  const backUrl = from === "kanban" 
+    ? `/?view=kanban${time !== "all" ? `&time=${time}` : ""}`
+    : `/${time !== "all" ? `?time=${time}` : ""}`;
 
   return (
     <div className="mx-auto max-w-2xl px-8 py-8">

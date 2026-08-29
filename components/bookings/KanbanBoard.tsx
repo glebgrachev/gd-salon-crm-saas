@@ -125,7 +125,7 @@ function BookingCard({
         ${isDragOverlay ? "shadow-2xl scale-105 rotate-1" : "hover:border-neutral-300"}
       `}
     >
-      {/* Вертикальная цветная полоска — цвет соответствует статусу */}
+      {/* Вертикальная цветная полоска */}
       <div className={`absolute left-0 top-0 bottom-0 w-1 ${column.barColor}`} />
       
       <div className="pl-3">
