@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -14,18 +14,25 @@ import {
   defaultDropAnimationSideEffects,
 } from "@dnd-kit/core";
 import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Clock, Calendar, User, Scissors, ChevronRight } from "lucide-react";
+import { 
+  Clock, 
+  Calendar, 
+  User, 
+  Scissors, 
+  CheckCircle, 
+  XCircle, 
+  CreditCard,
+  AlertCircle
+} from "lucide-react";
 import { toast } from "sonner";
 
-// Типы
-type BookingStatus = "new" | "confirmed" | "completed" | "cancelled" | "no_show";
+type BookingStatus = "new" | "confirmed" | "paid" | "completed" | "cancelled" | "hold";
 
 type BookingRow = {
   id: string;
@@ -40,7 +47,6 @@ type Column = {
   id: BookingStatus;
   title: string;
   color: string;
-  bgColor: string;
   icon: React.ReactNode;
 };
 
@@ -49,37 +55,50 @@ const COLUMNS: Record<BookingStatus, Column> = {
     id: "new",
     title: "Новые",
     color: "text-amber-600",
-    bgColor: "bg-amber-50 border-amber-200",
     icon: <Clock className="h-4 w-4" />,
   },
   confirmed: {
     id: "confirmed",
     title: "Подтверждены",
     color: "text-blue-600",
-    bgColor: "bg-blue-50 border-blue-200",
     icon: <Calendar className="h-4 w-4" />,
+  },
+  paid: {
+    id: "paid",
+    title: "Оплачены",
+    color: "text-emerald-600",
+    icon: <CreditCard className="h-4 w-4" />,
   },
   completed: {
     id: "completed",
-    title: "Выполнены",
-    color: "text-emerald-600",
-    bgColor: "bg-emerald-50 border-emerald-200",
-    icon: <ChevronRight className="h-4 w-4" />,
+    title: "Завершены",
+    color: "text-neutral-600",
+    icon: <CheckCircle className="h-4 w-4" />,
   },
   cancelled: {
     id: "cancelled",
     title: "Отменены",
     color: "text-red-600",
-    bgColor: "bg-red-50 border-red-200",
-    icon: <User className="h-4 w-4" />,
+    icon: <XCircle className="h-4 w-4" />,
   },
-  no_show: {
-    id: "no_show",
-    title: "Не пришли",
-    color: "text-neutral-500",
-    bgColor: "bg-neutral-50 border-neutral-200",
-    icon: <Scissors className="h-4 w-4" />,
+  hold: {
+    id: "hold",
+    title: "На удержании",
+    color: "text-orange-600",
+    icon: <AlertCircle className="h-4 w-4" />,
   },
+};
+
+const COLUMN_ORDER: BookingStatus[] = ["new", "confirmed", "paid", "completed", "cancelled", "hold"];
+
+// Цвета для вертикальных полосок
+const STATUS_BAR_COLORS: Record<BookingStatus, string> = {
+  new: "bg-amber-400",
+  confirmed: "bg-blue-400",
+  paid: "bg-emerald-400",
+  completed: "bg-neutral-400",
+  cancelled: "bg-red-400",
+  hold: "bg-orange-400",
 };
 
 type KanbanBoardProps = {
@@ -88,39 +107,52 @@ type KanbanBoardProps = {
   timeFilter: "today" | "week" | "month" | "year" | "all";
 };
 
-// Компонент карточки записи
+// Компонент карточки записи с вертикальной полоской
 function BookingCard({ booking, isDragOverlay }: { booking: BookingRow; isDragOverlay?: boolean }) {
   const clientName = [booking.client?.first_name, booking.client?.last_name]
     .filter(Boolean)
     .join(" ") || "Без имени";
 
+  const statusColumn = COLUMNS[booking.status];
+  const barColor = STATUS_BAR_COLORS[booking.status] || "bg-neutral-300";
+
   return (
     <div
       className={`
-        rounded-lg border border-neutral-200 bg-white p-3 shadow-sm hover:shadow-md transition-shadow
+        relative rounded-lg border border-neutral-200 bg-white p-3 shadow-sm hover:shadow-md transition-shadow overflow-hidden
         ${isDragOverlay ? "shadow-2xl scale-105 rotate-1" : ""}
       `}
     >
-      <div className="font-medium text-sm text-neutral-900 truncate">
-        {booking.service?.name || "Услуга"}
-      </div>
-      <div className="text-xs text-neutral-500 mt-1">
-        {clientName}
-      </div>
-      <div className="flex items-center justify-between mt-2 text-xs text-neutral-400">
-        <span>
-          {new Date(booking.starts_at).toLocaleString("ru-RU", {
-            day: "2-digit",
-            month: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </span>
-        {booking.specialist?.full_name && (
-          <span className="truncate max-w-[80px]">
-            {booking.specialist.full_name}
+      {/* Вертикальная цветная полоска */}
+      <div className={`absolute left-0 top-0 bottom-0 w-1 ${barColor}`} />
+      
+      <div className="pl-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="font-medium text-sm text-neutral-900 truncate flex-1">
+            {booking.service?.name || "Услуга"}
+          </div>
+          <span className={`text-[10px] font-medium ${statusColumn?.color || "text-neutral-400"}`}>
+            {statusColumn?.title || booking.status}
           </span>
-        )}
+        </div>
+        <div className="text-xs text-neutral-500 mt-1 truncate">
+          {clientName}
+        </div>
+        <div className="flex items-center justify-between mt-2 text-xs text-neutral-400">
+          <span>
+            {new Date(booking.starts_at).toLocaleString("ru-RU", {
+              day: "2-digit",
+              month: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </span>
+          {booking.specialist?.full_name && (
+            <span className="truncate max-w-[80px]">
+              {booking.specialist.full_name}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -129,10 +161,8 @@ function BookingCard({ booking, isDragOverlay }: { booking: BookingRow; isDragOv
 // Компонент карточки с поддержкой drag-and-drop
 function SortableBookingCard({
   booking,
-  columnId,
 }: {
   booking: BookingRow;
-  columnId: string;
 }) {
   const {
     attributes,
@@ -146,7 +176,6 @@ function SortableBookingCard({
     data: {
       type: "booking",
       booking,
-      columnId,
     },
   });
 
@@ -163,7 +192,7 @@ function SortableBookingCard({
   );
 }
 
-// Компонент колонки
+// Компонент колонки — без цветной подложки, только заголовок и светлый фон
 function Column({
   id,
   bookings,
@@ -174,49 +203,44 @@ function Column({
   count: number;
 }) {
   const column = COLUMNS[id];
-  const { setNodeRef } = useSortable({
-    id: `column-${id}`,
-    data: { type: "column", columnId: id },
-  });
 
   return (
-    <div ref={setNodeRef} className="flex-1 min-w-[200px]">
-      <div className={`rounded-lg border ${column.bgColor} p-3`}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <span className={column.color}>{column.icon}</span>
-            <span className={`text-sm font-medium ${column.color}`}>
-              {column.title}
-            </span>
-          </div>
-          <span className="text-xs text-neutral-400 bg-white px-2 py-0.5 rounded-full">
-            {count}
+    <div className="flex-1 min-w-[200px]">
+      {/* Заголовок колонки */}
+      <div className="flex items-center justify-between mb-3 px-1">
+        <div className="flex items-center gap-2">
+          <span className={column.color}>{column.icon}</span>
+          <span className={`text-sm font-medium ${column.color}`}>
+            {column.title}
           </span>
         </div>
+        <span className="text-xs text-neutral-400 bg-neutral-100 px-2 py-0.5 rounded-full">
+          {count}
+        </span>
+      </div>
 
-        <div className="space-y-2 min-h-[120px]">
-          <SortableContext items={bookings.map(b => b.id)} strategy={verticalListSortingStrategy}>
-            {bookings.map((booking) => (
-              <SortableBookingCard
-                key={booking.id}
-                booking={booking}
-                columnId={id}
-              />
-            ))}
-          </SortableContext>
-          {bookings.length === 0 && (
-            <div className="text-xs text-neutral-400 text-center py-4 border border-dashed border-neutral-200 rounded-lg">
-              Нет записей
-            </div>
-          )}
-        </div>
+      {/* Список карточек на светлом фоне */}
+      <div className="rounded-lg bg-neutral-50/80 p-3 min-h-[120px]">
+        <SortableContext items={bookings.map(b => b.id)} strategy={verticalListSortingStrategy}>
+          {bookings.map((booking) => (
+            <SortableBookingCard
+              key={booking.id}
+              booking={booking}
+            />
+          ))}
+        </SortableContext>
+        {bookings.length === 0 && (
+          <div className="text-xs text-neutral-400 text-center py-4 border border-dashed border-neutral-200 rounded-lg">
+            Нет записей
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 // Основной компонент
-export function KanbanBoard({ initialBookings, onStatusChange, timeFilter }: KanbanBoardProps) {
+export function KanbanBoard({ initialBookings, onStatusChange }: KanbanBoardProps) {
   const router = useRouter();
   const [bookings, setBookings] = useState(initialBookings);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -239,14 +263,17 @@ export function KanbanBoard({ initialBookings, onStatusChange, timeFilter }: Kan
 
   // Группируем записи по статусам
   const groupedBookings = bookings.reduce((acc, booking) => {
-    const status = booking.status;
+    const status = booking.status as BookingStatus;
     if (!acc[status]) acc[status] = [];
     acc[status].push(booking);
     return acc;
   }, {} as Record<BookingStatus, BookingRow[]>);
 
-  // Все колонки с порядком
-  const columnOrder: BookingStatus[] = ["new", "confirmed", "completed", "cancelled", "no_show"];
+  // Убеждаемся, что все колонки присутствуют
+  const allColumns = COLUMN_ORDER.reduce((acc, status) => {
+    acc[status] = groupedBookings[status] || [];
+    return acc;
+  }, {} as Record<BookingStatus, BookingRow[]>);
 
   const handleDragStart = (event: any) => {
     const { active } = event;
@@ -268,17 +295,15 @@ export function KanbanBoard({ initialBookings, onStatusChange, timeFilter }: Kan
 
     // Определяем, куда перетащили
     const overBooking = bookings.find((b) => b.id === overId);
-    const overColumn = columnOrder.find((c) => `column-${c}` === overId);
+    const overColumn = COLUMN_ORDER.find((c) => `column-${c}` === overId);
 
     if (!overBooking && !overColumn) return;
 
     let newStatus: BookingStatus | null = null;
 
     if (overColumn) {
-      // Перетащили в колонку (на заголовок или пустое место)
       newStatus = overColumn;
     } else if (overBooking) {
-      // Перетащили на другую карточку — берём статус карточки
       newStatus = overBooking.status;
     }
 
@@ -287,7 +312,6 @@ export function KanbanBoard({ initialBookings, onStatusChange, timeFilter }: Kan
     const booking = bookings.find((b) => b.id === activeId);
     if (!booking) return;
 
-    // Если статус не изменился — ничего не делаем
     if (booking.status === newStatus) return;
 
     // Оптимистично обновляем UI
@@ -301,7 +325,6 @@ export function KanbanBoard({ initialBookings, onStatusChange, timeFilter }: Kan
       toast.success(`Запись перемещена в "${COLUMNS[newStatus].title}"`);
       router.refresh();
     } catch (error) {
-      // Откатываем при ошибке
       setBookings(bookings);
       toast.error("Не удалось изменить статус");
     }
@@ -314,13 +337,13 @@ export function KanbanBoard({ initialBookings, onStatusChange, timeFilter }: Kan
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="grid grid-cols-5 gap-4">
-        {columnOrder.map((status) => (
+      <div className="grid grid-cols-6 gap-4">
+        {COLUMN_ORDER.map((status) => (
           <Column
             key={status}
             id={status}
-            bookings={groupedBookings[status] || []}
-            count={groupedBookings[status]?.length || 0}
+            bookings={allColumns[status] || []}
+            count={allColumns[status]?.length || 0}
           />
         ))}
       </div>
